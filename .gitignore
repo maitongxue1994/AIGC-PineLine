@@ -4,6 +4,7 @@ dist-ssr
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+*.zip
 *.local
 .vscode/*
 !.vscode/extensions.json
