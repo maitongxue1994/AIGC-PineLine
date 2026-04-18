@@ -3,7 +3,7 @@
   "name": "aigcpineline0419",
   "compatibility_date": "2026-04-18",
   "assets": {
-    "directory": "./",
+    "directory": "./public",
     "not_found_handling": "single-page-application"
   }
 }
