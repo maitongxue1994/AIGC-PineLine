@@ -24,9 +24,9 @@ export default function Hero() {
             PineLine v0.1 · Cinematic AIGC Pipeline
           </span>
 
-          <h1 className="mt-6 font-display text-display-xl font-semibold text-white">
+          <h1 className="mt-6 font-display text-display-xl font-semibold leading-[1] text-white [word-break:keep-all]">
             从<span className="text-gradient">剧本</span>到<span className="text-gradient">成片</span>，
-            <br className="hidden md:block" />
+            <br />
             只需一条<span className="text-gradient">管线</span>。
           </h1>
 

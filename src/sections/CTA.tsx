@@ -14,7 +14,7 @@ export default function CTA() {
             <Sparkles size={12} className="text-brand" />
             你的下一部片子，从一条管线开始
           </span>
-          <h2 className="relative mt-6 font-display text-display-lg font-semibold text-white">
+          <h2 className="relative mt-6 font-display text-display-lg font-semibold text-white [word-break:keep-all]">
             准备好把<span className="text-gradient">剧本</span>变成<span className="text-gradient">电影</span>了吗？
           </h2>
           <p className="relative mx-auto mt-5 max-w-xl text-ink-1">
