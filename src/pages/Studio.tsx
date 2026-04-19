@@ -20,15 +20,11 @@ import {
   Sparkles,
   Settings2,
   History,
-  MousePointer2,
-  ZoomIn,
-  ZoomOut,
-  Hand,
-  Link2,
 } from 'lucide-react'
 import Logo from '../components/Logo'
-import StoryboardCanvas from '../components/StoryboardCanvas'
 import InspectorPanel from '../components/InspectorPanel'
+import StudioCanvas from '../studio/StudioCanvas'
+import { useStudioStore } from '../studio/store'
 
 const TOOLS = [
   { id: 'script', icon: FileText, label: '剧本' },
@@ -43,7 +39,14 @@ const TOOLS = [
 
 export default function Studio() {
   const [activeTool, setActiveTool] = useState('board')
-  const [selectedNode, setSelectedNode] = useState<string | null>('shot-01')
+  const addScriptNode = useStudioStore((s) => s.addScriptNode)
+  const addImageNode = useStudioStore((s) => s.addImageNode)
+
+  const handleToolClick = (id: string) => {
+    setActiveTool(id)
+    if (id === 'script') addScriptNode()
+    if (id === 'image') addImageNode()
+  }
 
   return (
     <motion.main
@@ -108,7 +111,7 @@ export default function Studio() {
             <button
               key={t.id}
               title={t.label}
-              onClick={() => setActiveTool(t.id)}
+              onClick={() => handleToolClick(t.id)}
               className={`group flex h-10 w-10 flex-col items-center justify-center rounded-xl transition ${
                 activeTool === t.id
                   ? 'bg-white/[0.08] text-white'
@@ -134,13 +137,11 @@ export default function Studio() {
 
             {/* canvas */}
             <section className="relative min-w-0 flex-1 overflow-hidden">
-              <StoryboardCanvas selected={selectedNode} onSelect={setSelectedNode} />
-              <CanvasToolbar />
-              <MiniMap />
+              <StudioCanvas />
             </section>
 
             {/* inspector */}
-            <InspectorPanel nodeId={selectedNode} />
+            <InspectorPanel />
           </div>
 
           {/* bottom timeline */}
@@ -354,53 +355,6 @@ function AssetLibrary() {
           />
         </div>
       ))}
-    </div>
-  )
-}
-
-function CanvasToolbar() {
-  return (
-    <div className="absolute left-1/2 top-4 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/[0.07] bg-bg-2/80 p-1 backdrop-blur">
-      {[
-        { icon: MousePointer2, title: '选择' },
-        { icon: Hand, title: '平移' },
-        { icon: Link2, title: '连线' },
-        { icon: Plus, title: '新节点' },
-      ].map((b, i) => (
-        <button
-          key={i}
-          title={b.title}
-          className={`rounded-full p-2 transition ${
-            i === 0 ? 'bg-white/[0.08] text-white' : 'text-ink-2 hover:text-white'
-          }`}
-        >
-          <b.icon size={13} />
-        </button>
-      ))}
-      <div className="mx-1 h-5 w-px bg-white/10" />
-      <button className="rounded-full p-2 text-ink-2 hover:text-white">
-        <ZoomOut size={13} />
-      </button>
-      <span className="px-1 text-[11px] text-ink-2">68%</span>
-      <button className="rounded-full p-2 text-ink-2 hover:text-white">
-        <ZoomIn size={13} />
-      </button>
-    </div>
-  )
-}
-
-function MiniMap() {
-  return (
-    <div className="absolute bottom-4 right-4 z-10 h-28 w-44 overflow-hidden rounded-lg border border-white/[0.07] bg-bg-2/70 p-2 backdrop-blur">
-      <div className="relative h-full w-full rounded-md bg-bg-0/50">
-        <div className="absolute inset-0 dot-bg opacity-40" />
-        <div className="absolute left-[10%] top-[20%] h-4 w-6 rounded-sm bg-brand/60" />
-        <div className="absolute left-[40%] top-[45%] h-5 w-8 rounded-sm bg-brand-violet/60" />
-        <div className="absolute left-[70%] top-[25%] h-4 w-6 rounded-sm bg-brand-cyan/60" />
-        <div className="absolute left-[70%] top-[65%] h-4 w-6 rounded-sm bg-brand-pink/60" />
-        {/* viewport */}
-        <div className="absolute left-[30%] top-[30%] h-12 w-20 rounded-sm border border-white/80" />
-      </div>
     </div>
   )
 }
