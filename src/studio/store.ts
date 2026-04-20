@@ -27,8 +27,9 @@ type StudioState = {
   selectNode: (id: string | null) => void
   updateNodeParams: (id: string, patch: Partial<PineNodeData['params']>) => void
   updateNodeTitle: (id: string, title: string) => void
-  addScriptNode: () => void
-  addImageNode: () => void
+  updateNodeOutput: (id: string, output: string) => void
+  addScriptNode: (position?: { x: number; y: number }) => string
+  addImageNode: (position?: { x: number; y: number }) => string
   deleteNode: (id: string) => void
   runNode: (id: string) => Promise<void>
 }
@@ -87,41 +88,50 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   updateNodeTitle: (id, title) =>
     set((s) => ({ nodes: mutateNode(s.nodes, id, { title }) })),
 
-  addScriptNode: () =>
-    set((s) => {
-      const id = `script-${Date.now()}`
-      const newNode: PineNode = {
-        id,
-        type: 'script',
-        position: { x: 120 + Math.random() * 80, y: 360 + Math.random() * 80 },
-        data: {
-          kind: 'script',
-          title: '新剧本节点',
-          params: { brief: '', tone: 'cinematic', length: 'short' },
-          output: null,
-          status: 'idle',
-        },
-      }
-      return { nodes: [...s.nodes, newNode], selectedNodeId: id }
-    }),
+  updateNodeOutput: (id, output) =>
+    set((s) => ({ nodes: mutateNode(s.nodes, id, { output }) })),
 
-  addImageNode: () =>
-    set((s) => {
-      const id = `image-${Date.now()}`
-      const newNode: PineNode = {
-        id,
-        type: 'image',
-        position: { x: 600 + Math.random() * 80, y: 360 + Math.random() * 80 },
-        data: {
-          kind: 'image',
-          title: '新概念图',
-          params: { prompt: '', aspectRatio: '16:9' },
-          output: null,
-          status: 'idle',
-        },
-      }
-      return { nodes: [...s.nodes, newNode], selectedNodeId: id }
-    }),
+  addScriptNode: (position) => {
+    const id = `script-${Date.now()}`
+    const newNode: PineNode = {
+      id,
+      type: 'script',
+      position: position ?? {
+        x: 120 + Math.random() * 80,
+        y: 360 + Math.random() * 80,
+      },
+      data: {
+        kind: 'script',
+        title: '新剧本节点',
+        params: { brief: '', tone: 'cinematic', length: 'short' },
+        output: null,
+        status: 'idle',
+      },
+    }
+    set((s) => ({ nodes: [...s.nodes, newNode], selectedNodeId: id }))
+    return id
+  },
+
+  addImageNode: (position) => {
+    const id = `image-${Date.now()}`
+    const newNode: PineNode = {
+      id,
+      type: 'image',
+      position: position ?? {
+        x: 600 + Math.random() * 80,
+        y: 360 + Math.random() * 80,
+      },
+      data: {
+        kind: 'image',
+        title: '新概念图',
+        params: { prompt: '', aspectRatio: '16:9' },
+        output: null,
+        status: 'idle',
+      },
+    }
+    set((s) => ({ nodes: [...s.nodes, newNode], selectedNodeId: id }))
+    return id
+  },
 
   deleteNode: (id) =>
     set((s) => ({

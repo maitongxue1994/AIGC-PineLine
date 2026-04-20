@@ -1,4 +1,4 @@
-import { Sparkles, Play, RotateCcw, Info, Trash2 } from 'lucide-react'
+import { Sparkles, Play, RotateCcw, Info, Trash2, Download, Copy } from 'lucide-react'
 import { useStudioStore } from '../studio/store'
 import type { ImageParams, ScriptParams } from '../studio/types'
 
@@ -7,6 +7,7 @@ export default function InspectorPanel() {
   const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
   const updateNodeTitle = useStudioStore((s) => s.updateNodeTitle)
+  const updateNodeOutput = useStudioStore((s) => s.updateNodeOutput)
   const deleteNode = useStudioStore((s) => s.deleteNode)
   const runNode = useStudioStore((s) => s.runNode)
 
@@ -46,7 +47,9 @@ export default function InspectorPanel() {
           nodeId={node.id}
           params={node.data.params as ScriptParams}
           status={node.data.status}
+          output={node.data.output}
           onChange={(patch) => updateNodeParams(node.id, patch)}
+          onOutputChange={(v) => updateNodeOutput(node.id, v)}
           onRun={() => runNode(node.id)}
           onDelete={() => deleteNode(node.id)}
         />
@@ -57,6 +60,8 @@ export default function InspectorPanel() {
           nodeId={node.id}
           params={node.data.params as ImageParams}
           status={node.data.status}
+          output={node.data.output}
+          title={node.data.title}
           onChange={(patch) => updateNodeParams(node.id, patch)}
           onRun={() => runNode(node.id)}
           onDelete={() => deleteNode(node.id)}
@@ -69,14 +74,18 @@ export default function InspectorPanel() {
 function ScriptInspector({
   params,
   status,
+  output,
   onChange,
+  onOutputChange,
   onRun,
   onDelete,
 }: {
   nodeId: string
   params: ScriptParams
   status: string
+  output: string | null
   onChange: (patch: Partial<ScriptParams>) => void
+  onOutputChange: (v: string) => void
   onRun: () => void
   onDelete: () => void
 }) {
@@ -87,7 +96,7 @@ function ScriptInspector({
           <textarea
             value={params.brief}
             onChange={(e) => onChange({ brief: e.target.value })}
-            rows={6}
+            rows={5}
             placeholder="用一两句话描述场景、人物、氛围…"
             className="w-full resize-none rounded-md border border-white/[0.07] bg-bg-2/60 p-2.5 text-[12px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
           />
@@ -107,14 +116,14 @@ function ScriptInspector({
           />
         </Field>
 
-        <Field label="Length · 长度">
+        <Field label="Length · 场次数量">
           <Select
             value={params.length}
             onChange={(v) => onChange({ length: v as ScriptParams['length'] })}
             options={[
-              ['short', '短 · 1 段落'],
-              ['medium', '中 · 3 段落'],
-              ['long', '长 · 5 段落'],
+              ['short', '短 · 1 个场次'],
+              ['medium', '中 · 3 个场次'],
+              ['long', '长 · 5 个场次'],
             ]}
           />
         </Field>
@@ -125,11 +134,50 @@ function ScriptInspector({
             <div className="mt-0.5 text-[10px] text-ink-2">官方 Coding Plan · 中文首选</div>
           </div>
         </Field>
+
+        <Field
+          label="Output · 剧本正文"
+          trailing={
+            output ? (
+              <div className="flex items-center gap-2 text-[10px] text-ink-2">
+                <span>{output.length} 字</span>
+                <button
+                  type="button"
+                  onClick={() => copyText(output)}
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-ink-2 hover:bg-white/5 hover:text-white"
+                  title="复制"
+                >
+                  <Copy size={11} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadText(output, 'screenplay.txt')}
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-ink-2 hover:bg-white/5 hover:text-white"
+                  title="下载 .txt"
+                >
+                  <Download size={11} />
+                </button>
+              </div>
+            ) : null
+          }
+        >
+          <textarea
+            value={output ?? ''}
+            onChange={(e) => onOutputChange(e.target.value)}
+            rows={14}
+            placeholder={
+              status === 'running'
+                ? 'MiniMax 生成中…'
+                : '运行后剧本会显示在这里；可以手动修改后再传给下游节点。'
+            }
+            className="w-full resize-none rounded-md border border-white/[0.07] bg-bg-2/40 p-2.5 font-mono text-[12px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
+          />
+        </Field>
       </div>
 
       <BottomActions
         status={status}
-        label="生成脚本"
+        label="生成剧本"
         onRun={onRun}
         onDelete={onDelete}
       />
@@ -140,6 +188,8 @@ function ScriptInspector({
 function ImageInspector({
   params,
   status,
+  output,
+  title,
   onChange,
   onRun,
   onDelete,
@@ -147,6 +197,8 @@ function ImageInspector({
   nodeId: string
   params: ImageParams
   status: string
+  output: string | null
+  title: string
   onChange: (patch: Partial<ImageParams>) => void
   onRun: () => void
   onDelete: () => void
@@ -185,6 +237,38 @@ function ImageInspector({
             <div className="mt-0.5 text-[10px] text-ink-2">Nano Banana Pro · 高一致性</div>
           </div>
         </Field>
+
+        <Field
+          label="Output · 生成结果"
+          trailing={
+            output ? (
+              <button
+                type="button"
+                onClick={() => downloadDataUrl(output, `${title || 'pineline'}.png`)}
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-ink-2 hover:bg-white/5 hover:text-white"
+                title="下载 PNG"
+              >
+                <Download size={11} /> 下载
+              </button>
+            ) : null
+          }
+        >
+          {output ? (
+            <a
+              href={output}
+              target="_blank"
+              rel="noreferrer"
+              className="block overflow-hidden rounded-md border border-white/[0.07] bg-bg-2/40"
+              title="点击大图预览（新标签页）"
+            >
+              <img src={output} alt={title} className="h-auto w-full object-contain" />
+            </a>
+          ) : (
+            <div className="flex aspect-video items-center justify-center rounded-md border border-dashed border-white/[0.07] bg-bg-2/30 text-[11px] text-ink-3">
+              {status === 'running' ? '生成中…' : '运行后显示生成图'}
+            </div>
+          )}
+        </Field>
       </div>
 
       <BottomActions
@@ -195,6 +279,31 @@ function ImageInspector({
       />
     </>
   )
+}
+
+function copyText(text: string) {
+  navigator.clipboard?.writeText(text).catch(() => {})
+}
+
+function downloadText(text: string, filename: string) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function downloadDataUrl(dataUrl: string, filename: string) {
+  const a = document.createElement('a')
+  a.href = dataUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 function BottomActions({
@@ -261,11 +370,20 @@ function BottomActions({
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  trailing,
+  children,
+}: {
+  label: string
+  trailing?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <div className="mb-4">
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-ink-2">
-        {label}
+      <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-ink-2">
+        <span>{label}</span>
+        {trailing}
       </div>
       {children}
     </div>

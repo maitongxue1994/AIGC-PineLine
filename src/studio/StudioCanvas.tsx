@@ -1,29 +1,47 @@
-import { useCallback } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
+  useReactFlow,
   type NodeTypes,
+  type OnConnectEnd,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
 import ScriptNode from './nodes/ScriptNode'
 import ImageNode from './nodes/ImageNode'
+import NodePaletteMenu, { type PaletteChoice } from './NodePaletteMenu'
 
 const nodeTypes: NodeTypes = {
   script: ScriptNode,
   image: ImageNode,
 }
 
-export default function StudioCanvas() {
+function StudioCanvasInner() {
   const nodes = useStudioStore((s) => s.nodes)
   const edges = useStudioStore((s) => s.edges)
   const onNodesChange = useStudioStore((s) => s.onNodesChange)
   const onEdgesChange = useStudioStore((s) => s.onEdgesChange)
   const onConnect = useStudioStore((s) => s.onConnect)
+  const addScriptNode = useStudioStore((s) => s.addScriptNode)
+  const addImageNode = useStudioStore((s) => s.addImageNode)
   const selectNode = useStudioStore((s) => s.selectNode)
+
+  const { screenToFlowPosition } = useReactFlow()
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const pendingConnectRef = useRef<{
+    fromNodeId: string
+    fromHandle?: string | null
+    fromType: 'source' | 'target'
+    flowPos: { x: number; y: number }
+  } | null>(null)
+  const [menu, setMenu] = useState<{ screenX: number; screenY: number } | null>(
+    null,
+  )
 
   const handleSelectionChange = useCallback(
     ({ nodes }: { nodes: { id: string }[] }) => {
@@ -32,8 +50,61 @@ export default function StudioCanvas() {
     [selectNode],
   )
 
+  const handleConnectEnd: OnConnectEnd = useCallback(
+    (event, connectionState) => {
+      if (connectionState.isValid) return
+      const fromNode = connectionState.fromNode
+      if (!fromNode) return
+
+      const { clientX, clientY } =
+        'changedTouches' in event ? event.changedTouches[0] : (event as MouseEvent)
+
+      pendingConnectRef.current = {
+        fromNodeId: fromNode.id,
+        fromHandle: connectionState.fromHandle?.id ?? null,
+        fromType: (connectionState.fromHandle?.type as 'source' | 'target') ?? 'source',
+        flowPos: screenToFlowPosition({ x: clientX, y: clientY }),
+      }
+      setMenu({ screenX: clientX, screenY: clientY })
+    },
+    [screenToFlowPosition],
+  )
+
+  const handlePick = useCallback(
+    (choice: PaletteChoice) => {
+      const pending = pendingConnectRef.current
+      if (!pending) {
+        setMenu(null)
+        return
+      }
+      const newId =
+        choice === 'script'
+          ? addScriptNode(pending.flowPos)
+          : addImageNode(pending.flowPos)
+
+      if (pending.fromType === 'source') {
+        onConnect({
+          source: pending.fromNodeId,
+          sourceHandle: pending.fromHandle ?? null,
+          target: newId,
+          targetHandle: null,
+        })
+      } else {
+        onConnect({
+          source: newId,
+          sourceHandle: null,
+          target: pending.fromNodeId,
+          targetHandle: pending.fromHandle ?? null,
+        })
+      }
+      pendingConnectRef.current = null
+      setMenu(null)
+    },
+    [addScriptNode, addImageNode, onConnect],
+  )
+
   return (
-    <div className="h-full w-full bg-bg-0">
+    <div ref={wrapperRef} className="relative h-full w-full bg-bg-0">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -41,6 +112,7 @@ export default function StudioCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectEnd={handleConnectEnd}
         onSelectionChange={handleSelectionChange}
         fitView
         fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
@@ -65,6 +137,26 @@ export default function StudioCanvas() {
           zoomable
         />
       </ReactFlow>
+
+      {menu && (
+        <NodePaletteMenu
+          x={menu.screenX}
+          y={menu.screenY}
+          onPick={handlePick}
+          onClose={() => {
+            pendingConnectRef.current = null
+            setMenu(null)
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+export default function StudioCanvas() {
+  return (
+    <ReactFlowProvider>
+      <StudioCanvasInner />
+    </ReactFlowProvider>
   )
 }

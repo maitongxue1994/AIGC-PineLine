@@ -5,12 +5,14 @@ import type { PineNode, ScriptParams } from '../types'
 
 export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) {
   const runNode = useStudioStore((s) => s.runNode)
+  const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
+  const updateNodeOutput = useStudioStore((s) => s.updateNodeOutput)
   const params = data.params as ScriptParams
   const status = data.status
 
   return (
     <div
-      className={`w-[280px] overflow-hidden rounded-xl border bg-[#0E0E14]/95 shadow-card backdrop-blur transition ${
+      className={`w-[360px] overflow-hidden rounded-xl border bg-[#0E0E14]/95 shadow-card backdrop-blur transition ${
         selected
           ? 'border-white/60 shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_0_30px_-10px_#FF6A3D]'
           : 'border-white/10 hover:border-white/25'
@@ -36,11 +38,19 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
         <StatusBadge status={status} />
       </div>
 
-      {/* params preview */}
+      {/* brief editor */}
       <div className="px-3 py-2">
-        <div className="line-clamp-2 text-[11px] leading-relaxed text-ink-1">
-          {params.brief || <span className="text-ink-3">未填写 brief…</span>}
+        <div className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-ink-3">
+          Brief
         </div>
+        <textarea
+          value={params.brief}
+          onChange={(e) => updateNodeParams(id, { brief: e.target.value })}
+          onMouseDown={(e) => e.stopPropagation()}
+          rows={4}
+          placeholder="一两句话的创意简述…"
+          className="nodrag nowheel w-full resize-none rounded-md border border-white/[0.05] bg-bg-2/50 p-2 text-[11px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
+        />
         <div className="mt-1.5 flex gap-2 text-[10px] text-ink-3">
           <span>{labelOfTone(params.tone)}</span>
           <span>·</span>
@@ -48,12 +58,21 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
         </div>
       </div>
 
-      {/* output preview */}
-      {data.output && (
+      {/* output editor */}
+      {(data.output || status === 'running') && (
         <div className="border-t border-white/[0.06] bg-bg-2/40 px-3 py-2">
-          <div className="line-clamp-4 whitespace-pre-wrap text-[11px] leading-relaxed text-ink-0">
-            {data.output}
+          <div className="mb-1 flex items-center justify-between text-[9px] font-semibold uppercase tracking-widest text-ink-3">
+            <span>剧本</span>
+            {data.output && <span className="normal-case tracking-normal text-ink-2">{data.output.length} 字</span>}
           </div>
+          <textarea
+            value={data.output ?? ''}
+            onChange={(e) => updateNodeOutput(id, e.target.value)}
+            onMouseDown={(e) => e.stopPropagation()}
+            rows={8}
+            placeholder={status === 'running' ? 'MiniMax 生成中…' : ''}
+            className="nodrag nowheel w-full resize-none rounded-md border border-white/[0.05] bg-bg-1/60 p-2 font-mono text-[11px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
+          />
         </div>
       )}
 
@@ -82,7 +101,7 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
           ) : (
             <>
               <Play size={11} fill="#fff" />
-              生成脚本
+              生成剧本
             </>
           )}
         </button>
