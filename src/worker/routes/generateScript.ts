@@ -8,26 +8,30 @@ type Body = {
 }
 
 const TONE_LABEL: Record<NonNullable<Body['tone']>, string> = {
-  cinematic: '电影级 · 强调视听语言、运镜、光影氛围',
-  commercial: '商业广告 · 高记忆点、产品/情绪强化、节奏紧凑',
+  cinematic: '电影级 · 注重人物内心、氛围、视听化动作描写',
+  commercial: '商业广告 · 高记忆点、情绪钩子、节奏紧凑',
   drama: '短剧 · 冲突驱动、人物关系、对白抓人',
   documentary: '纪录片 · 真实质感、观察视角、克制叙事',
 }
 
-const LENGTH_PARAGRAPHS: Record<NonNullable<Body['length']>, number> = {
+const LENGTH_SCENES: Record<NonNullable<Body['length']>, number> = {
   short: 1,
   medium: 3,
   long: 5,
 }
 
 function buildSystemPrompt(tone: NonNullable<Body['tone']>, length: NonNullable<Body['length']>) {
-  const paragraphs = LENGTH_PARAGRAPHS[length]
+  const scenes = LENGTH_SCENES[length]
   const toneDesc = TONE_LABEL[tone]
   return [
-    '你是一位专业影视编剧，擅长把零散创意扩展为可拍摄的分镜脚本。',
-    `请按"${toneDesc}"的风格，把用户简述扩展为 ${paragraphs} 段分镜脚本。`,
-    '每段需包含：① 镜号与景别（如 SC01 · 大远景）② 镜头描述与动作 ③ 关键视觉/光影 ④ 情绪/氛围。',
-    '只输出脚本正文，不要寒暄、不要解释、不要 markdown 标题。',
+    '你是一位专业影视编剧。请把用户的创意简述改写为完整的剧本（screenplay），交给后续分镜师进一步拆分。',
+    `风格：${toneDesc}。请写 ${scenes} 个场次。`,
+    '使用通用剧本格式，每个场次包含：',
+    '1) 场号 + 内/外景（INT./EXT.）+ 地点 + 日/夜',
+    '2) 场景动作描写（人物动作、环境氛围，用叙事化散文，不要写镜号/景别/运镜）',
+    '3) 角色对白（角色名用大写，对白另起一行）',
+    '不要写分镜表、镜号、景别、运镜指令；那是分镜师的工作。',
+    '只输出剧本正文，不要寒暄、不要解释、不要 markdown 标题。',
   ].join('\n')
 }
 
