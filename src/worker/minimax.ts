@@ -1,4 +1,4 @@
-const MINIMAX_ENDPOINT = 'https://api.minimax.io/v1/text/chatcompletion_v2'
+const MINIMAX_ENDPOINT = 'https://api.minimaxi.com/v1/text/chatcompletion_v2'
 const MODEL = 'MiniMax-M2.7'
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
