@@ -1,6 +1,15 @@
 import { Sparkles, Play, RotateCcw, Info, Trash2, Download, Copy } from 'lucide-react'
 import { useStudioStore } from '../studio/store'
-import type { ImageParams, ScriptParams } from '../studio/types'
+import type {
+  CharacterParams,
+  ImageParams,
+  PineNode,
+  PropParams,
+  SceneParams,
+  ScriptParams,
+  ShotParams,
+  StoryboardParams,
+} from '../studio/types'
 
 export default function InspectorPanel() {
   const nodes = useStudioStore((s) => s.nodes)
@@ -63,6 +72,16 @@ export default function InspectorPanel() {
           output={node.data.output}
           title={node.data.title}
           onChange={(patch) => updateNodeParams(node.id, patch)}
+          onRun={() => runNode(node.id)}
+          onDelete={() => deleteNode(node.id)}
+        />
+      )}
+
+      {node && ['storyboard', 'scene', 'character', 'prop', 'shot'].includes(node.data.kind) && (
+        <PipelineInspector
+          node={node}
+          onChangeParams={(patch) => updateNodeParams(node.id, patch)}
+          onOutputChange={(v) => updateNodeOutput(node.id, v)}
           onRun={() => runNode(node.id)}
           onDelete={() => deleteNode(node.id)}
         />
@@ -411,5 +430,321 @@ function Select({
         </option>
       ))}
     </select>
+  )
+}
+
+const ASPECT_OPTIONS: [string, string][] = [
+  ['16:9', '16:9 · 横幅'],
+  ['9:16', '9:16 · 竖幅'],
+  ['1:1', '1:1 · 方图'],
+  ['4:3', '4:3 · 复古电视'],
+  ['3:4', '3:4 · 杂志竖'],
+]
+
+const KIND_LABEL: Record<string, { label: string; runLabel: string }> = {
+  storyboard: { label: '分镜拆分', runLabel: '拆分分镜' },
+  scene: { label: '场景四宫格', runLabel: '生成场景' },
+  character: { label: '角色三视图', runLabel: '生成角色' },
+  prop: { label: '道具三视图', runLabel: '生成道具' },
+  shot: { label: '分镜图（多参考）', runLabel: '生成分镜图' },
+}
+
+function PipelineInspector({
+  node,
+  onChangeParams,
+  onOutputChange,
+  onRun,
+  onDelete,
+}: {
+  node: PineNode
+  onChangeParams: (patch: Record<string, unknown>) => void
+  onOutputChange: (v: string) => void
+  onRun: () => void
+  onDelete: () => void
+}) {
+  const kind = node.data.kind
+  const meta = KIND_LABEL[kind] ?? { label: kind, runLabel: '运行' }
+
+  return (
+    <>
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="mb-3 rounded-md border border-white/[0.06] bg-bg-2/40 px-3 py-2 text-[11px] text-ink-2">
+          类型：<span className="text-ink-0">{meta.label}</span>
+        </div>
+
+        {kind === 'storyboard' && (
+          <StoryboardFields
+            params={node.data.params as StoryboardParams}
+            onChange={onChangeParams}
+          />
+        )}
+        {kind === 'scene' && (
+          <SceneFields
+            params={node.data.params as SceneParams}
+            onChange={onChangeParams}
+          />
+        )}
+        {kind === 'character' && (
+          <DescriptionOnlyFields
+            placeholder="外貌、服装、年龄、气质…"
+            params={node.data.params as CharacterParams}
+            onChange={onChangeParams}
+          />
+        )}
+        {kind === 'prop' && (
+          <DescriptionOnlyFields
+            placeholder="形态、材质、颜色、风格…"
+            params={node.data.params as PropParams}
+            onChange={onChangeParams}
+          />
+        )}
+        {kind === 'shot' && (
+          <ShotFields
+            params={node.data.params as ShotParams}
+            onChange={onChangeParams}
+          />
+        )}
+
+        <Field
+          label="Output · 输出"
+          trailing={
+            node.data.output || (node.data.outputs && node.data.outputs.length) ? (
+              <OutputActions node={node} />
+            ) : null
+          }
+        >
+          <OutputBody node={node} onTextChange={onOutputChange} />
+        </Field>
+      </div>
+
+      <BottomActions
+        status={node.data.status}
+        label={meta.runLabel}
+        onRun={onRun}
+        onDelete={onDelete}
+      />
+    </>
+  )
+}
+
+function StoryboardFields({
+  params,
+  onChange,
+}: {
+  params: StoryboardParams
+  onChange: (patch: Record<string, unknown>) => void
+}) {
+  return (
+    <>
+      <Field label="Mode · 拆分方式">
+        <Select
+          value={params.mode}
+          onChange={(v) => onChange({ mode: v })}
+          options={[
+            ['auto', '自动 · MiniMax 按语义拆'],
+            ['manual', '分隔符 · 用户手动标记'],
+          ]}
+        />
+      </Field>
+      {params.mode === 'manual' && (
+        <Field label="Splitter · 分隔符">
+          <input
+            value={params.splitter}
+            onChange={(e) => onChange({ splitter: e.target.value })}
+            placeholder="例如：=== 或 \n---\n"
+            className="w-full rounded-md border border-white/[0.07] bg-bg-2/60 px-2.5 py-2 text-[12px] text-ink-0 outline-none transition focus:border-white/25"
+          />
+        </Field>
+      )}
+      <Field label="Screenplay · 剧本（可从上游读取）">
+        <textarea
+          value={params.screenplay}
+          onChange={(e) => onChange({ screenplay: e.target.value })}
+          rows={6}
+          placeholder="留空则读取上游 Script 节点输出…"
+          className="w-full resize-none rounded-md border border-white/[0.07] bg-bg-2/60 p-2.5 text-[12px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
+        />
+      </Field>
+    </>
+  )
+}
+
+function SceneFields({
+  params,
+  onChange,
+}: {
+  params: SceneParams
+  onChange: (patch: Record<string, unknown>) => void
+}) {
+  return (
+    <>
+      <Field label="Description · 场景描述">
+        <textarea
+          value={params.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+          rows={5}
+          placeholder="地点、时段、光线、氛围…"
+          className="w-full resize-none rounded-md border border-white/[0.07] bg-bg-2/60 p-2.5 text-[12px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
+        />
+      </Field>
+      <Field label="Aspect Ratio">
+        <Select
+          value={params.aspectRatio}
+          onChange={(v) => onChange({ aspectRatio: v })}
+          options={ASPECT_OPTIONS}
+        />
+      </Field>
+    </>
+  )
+}
+
+function DescriptionOnlyFields({
+  params,
+  placeholder,
+  onChange,
+}: {
+  params: CharacterParams | PropParams
+  placeholder: string
+  onChange: (patch: Record<string, unknown>) => void
+}) {
+  return (
+    <Field label="Description · 描述">
+      <textarea
+        value={params.description}
+        onChange={(e) => onChange({ description: e.target.value })}
+        rows={5}
+        placeholder={placeholder}
+        className="w-full resize-none rounded-md border border-white/[0.07] bg-bg-2/60 p-2.5 text-[12px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
+      />
+    </Field>
+  )
+}
+
+function ShotFields({
+  params,
+  onChange,
+}: {
+  params: ShotParams
+  onChange: (patch: Record<string, unknown>) => void
+}) {
+  return (
+    <>
+      <Field label="Shot Description · 分镜图描述">
+        <textarea
+          value={params.shotDescription}
+          onChange={(e) => onChange({ shotDescription: e.target.value })}
+          rows={5}
+          placeholder="留空会从上游分镜节点取第一条…"
+          className="w-full resize-none rounded-md border border-white/[0.07] bg-bg-2/60 p-2.5 text-[12px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
+        />
+      </Field>
+      <Field label="Aspect Ratio">
+        <Select
+          value={params.aspectRatio}
+          onChange={(v) => onChange({ aspectRatio: v })}
+          options={ASPECT_OPTIONS}
+        />
+      </Field>
+      <div className="mb-4 rounded-md border border-white/[0.06] bg-bg-2/40 px-3 py-2 text-[11px] text-ink-2">
+        多参考：从画布把「场景 / 角色 / 道具」节点连到此节点的左侧 handle，对应输出图会自动作为 Gemini 的参考图。
+      </div>
+    </>
+  )
+}
+
+function OutputActions({ node }: { node: PineNode }) {
+  const isTextLike = node.data.kind === 'storyboard'
+  return (
+    <div className="flex items-center gap-2 text-[10px] text-ink-2">
+      {isTextLike && node.data.output && (
+        <>
+          <button
+            type="button"
+            onClick={() => copyText(node.data.output!)}
+            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-white/5 hover:text-white"
+            title="复制"
+          >
+            <Copy size={11} />
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadText(node.data.output!, 'storyboard.txt')}
+            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-white/5 hover:text-white"
+            title="下载 .txt"
+          >
+            <Download size={11} />
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function OutputBody({
+  node,
+  onTextChange,
+}: {
+  node: PineNode
+  onTextChange: (v: string) => void
+}) {
+  const { kind, output, outputs = [], status, title } = node.data
+
+  if (kind === 'storyboard') {
+    return (
+      <textarea
+        value={output ?? ''}
+        onChange={(e) => onTextChange(e.target.value)}
+        rows={12}
+        placeholder={status === 'running' ? '拆分中…' : '运行后显示分镜列表。'}
+        className="w-full resize-none rounded-md border border-white/[0.07] bg-bg-2/40 p-2.5 font-mono text-[12px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
+      />
+    )
+  }
+
+  if (outputs.length > 0) {
+    const cols = outputs.length === 4 ? 'grid-cols-2' : 'grid-cols-3'
+    return (
+      <div className={`grid ${cols} gap-2`}>
+        {outputs.map((src, i) => (
+          <div key={i} className="relative overflow-hidden rounded-md border border-white/[0.06] bg-bg-2/40">
+            <a href={src} target="_blank" rel="noreferrer" title="点击新标签大图">
+              <img src={src} alt={`${title}-${i + 1}`} className="h-auto w-full object-cover" />
+            </a>
+            <button
+              type="button"
+              onClick={() => downloadDataUrl(src, `${title || 'pineline'}-${i + 1}.png`)}
+              className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white/90 backdrop-blur transition hover:bg-black/80 hover:text-white"
+              title="下载"
+            >
+              <Download size={10} />
+            </button>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (output && output.startsWith('data:image')) {
+    return (
+      <div className="relative overflow-hidden rounded-md border border-white/[0.07] bg-bg-2/40">
+        <a href={output} target="_blank" rel="noreferrer" title="点击新标签大图">
+          <img src={output} alt={title} className="h-auto w-full object-contain" />
+        </a>
+        <button
+          type="button"
+          onClick={() => downloadDataUrl(output, `${title || 'pineline'}.png`)}
+          className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[10px] text-white/90 backdrop-blur transition hover:bg-black/80 hover:text-white"
+          title="下载"
+        >
+          <Download size={11} /> 下载
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex aspect-video items-center justify-center rounded-md border border-dashed border-white/[0.07] bg-bg-2/30 text-[11px] text-ink-3">
+      {status === 'running' ? '生成中…' : '运行后显示输出'}
+    </div>
   )
 }

@@ -1,9 +1,13 @@
 import type {
   ApiError,
+  ImageGridRequest,
+  ImageGridResponse,
   ImageRequest,
   ImageResponse,
   ScriptRequest,
   ScriptResponse,
+  StoryboardRequest,
+  StoryboardResponse,
 } from './types'
 
 async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
@@ -25,4 +29,22 @@ export function generateScript(req: ScriptRequest): Promise<ScriptResponse> {
 
 export function generateImage(req: ImageRequest): Promise<ImageResponse> {
   return postJson<ImageRequest, ImageResponse>('/api/generate/image', req)
+}
+
+export function generateStoryboard(
+  req: StoryboardRequest,
+): Promise<StoryboardResponse> {
+  return postJson<StoryboardRequest, StoryboardResponse>(
+    '/api/generate/storyboard',
+    req,
+  )
+}
+
+export function generateImageGrid(
+  req: ImageGridRequest,
+): Promise<ImageGridResponse> {
+  return postJson<ImageGridRequest, ImageGridResponse>(
+    '/api/generate/image-grid',
+    req,
+  )
 }

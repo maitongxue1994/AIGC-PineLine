@@ -1,6 +1,21 @@
-import { FileText, Image as ImageIcon } from 'lucide-react'
+import {
+  FileText,
+  Image as ImageIcon,
+  Layers,
+  Mountain,
+  User,
+  Package,
+  Camera,
+} from 'lucide-react'
 
-export type PaletteChoice = 'script' | 'image'
+export type PaletteChoice =
+  | 'script'
+  | 'image'
+  | 'storyboard'
+  | 'scene'
+  | 'character'
+  | 'prop'
+  | 'shot'
 
 type Props = {
   x: number
@@ -24,9 +39,44 @@ const ITEMS: {
     icon: <FileText size={14} />,
   },
   {
+    id: 'storyboard',
+    title: '分镜 / Storyboard',
+    desc: '把剧本拆成镜头序列',
+    color: '#FF6A3D',
+    icon: <Layers size={14} />,
+  },
+  {
+    id: 'scene',
+    title: '场景 / Scene',
+    desc: '四宫格视角',
+    color: '#2BE3C2',
+    icon: <Mountain size={14} />,
+  },
+  {
+    id: 'character',
+    title: '角色 / Character',
+    desc: '三视图（前/侧/背）',
+    color: '#F4A64F',
+    icon: <User size={14} />,
+  },
+  {
+    id: 'prop',
+    title: '道具 / Prop',
+    desc: '三视图',
+    color: '#B6FF5F',
+    icon: <Package size={14} />,
+  },
+  {
+    id: 'shot',
+    title: '分镜图 / Shot',
+    desc: '多参考合成一张',
+    color: '#7C5CFF',
+    icon: <Camera size={14} />,
+  },
+  {
     id: 'image',
-    title: '图像 / Image',
-    desc: 'Gemini Nano Banana Pro',
+    title: '通用图像 / Image',
+    desc: '快速单图生成',
     color: '#7C5CFF',
     icon: <ImageIcon size={14} />,
   },
@@ -44,11 +94,11 @@ export default function NodePaletteMenu({ x, y, onPick, onClose }: Props) {
         }}
       />
       <div
-        className="fixed z-50 w-[220px] overflow-hidden rounded-lg border border-white/[0.08] bg-bg-1/95 shadow-2xl backdrop-blur"
+        className="fixed z-50 max-h-[70vh] w-[240px] overflow-y-auto rounded-lg border border-white/[0.08] bg-bg-1/95 shadow-2xl backdrop-blur"
         style={{ left: x, top: y }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-white/[0.06] px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-ink-2">
+        <div className="sticky top-0 border-b border-white/[0.06] bg-bg-1/95 px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-ink-2 backdrop-blur">
           新建节点
         </div>
         <div className="py-1">

@@ -16,6 +16,7 @@ type GeminiResponse = {
 
 export type GeminiImageOptions = {
   referenceImage?: string
+  referenceImages?: string[]
   aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4'
 }
 
@@ -32,8 +33,12 @@ export async function callGeminiImage(
 ): Promise<string> {
   const parts: Part[] = [{ text: prompt }]
 
-  if (opts.referenceImage) {
-    const parsed = parseDataUrl(opts.referenceImage)
+  const refs: string[] = []
+  if (opts.referenceImage) refs.push(opts.referenceImage)
+  if (opts.referenceImages) refs.push(...opts.referenceImages)
+
+  for (const ref of refs) {
+    const parsed = parseDataUrl(ref)
     if (parsed) parts.push({ inlineData: parsed })
   }
 

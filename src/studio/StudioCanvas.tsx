@@ -14,11 +14,21 @@ import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
 import ScriptNode from './nodes/ScriptNode'
 import ImageNode from './nodes/ImageNode'
+import StoryboardNode from './nodes/StoryboardNode'
+import SceneNode from './nodes/SceneNode'
+import CharacterNode from './nodes/CharacterNode'
+import PropNode from './nodes/PropNode'
+import ShotNode from './nodes/ShotNode'
 import NodePaletteMenu, { type PaletteChoice } from './NodePaletteMenu'
 
 const nodeTypes: NodeTypes = {
   script: ScriptNode,
   image: ImageNode,
+  storyboard: StoryboardNode,
+  scene: SceneNode,
+  character: CharacterNode,
+  prop: PropNode,
+  shot: ShotNode,
 }
 
 function StudioCanvasInner() {
@@ -29,6 +39,11 @@ function StudioCanvasInner() {
   const onConnect = useStudioStore((s) => s.onConnect)
   const addScriptNode = useStudioStore((s) => s.addScriptNode)
   const addImageNode = useStudioStore((s) => s.addImageNode)
+  const addStoryboardNode = useStudioStore((s) => s.addStoryboardNode)
+  const addSceneNode = useStudioStore((s) => s.addSceneNode)
+  const addCharacterNode = useStudioStore((s) => s.addCharacterNode)
+  const addPropNode = useStudioStore((s) => s.addPropNode)
+  const addShotNode = useStudioStore((s) => s.addShotNode)
   const selectNode = useStudioStore((s) => s.selectNode)
 
   const { screenToFlowPosition } = useReactFlow()
@@ -77,10 +92,16 @@ function StudioCanvasInner() {
         setMenu(null)
         return
       }
-      const newId =
-        choice === 'script'
-          ? addScriptNode(pending.flowPos)
-          : addImageNode(pending.flowPos)
+      const adders: Record<PaletteChoice, (pos: { x: number; y: number }) => string> = {
+        script: addScriptNode,
+        storyboard: addStoryboardNode,
+        scene: addSceneNode,
+        character: addCharacterNode,
+        prop: addPropNode,
+        shot: addShotNode,
+        image: addImageNode,
+      }
+      const newId = adders[choice](pending.flowPos)
 
       if (pending.fromType === 'source') {
         onConnect({
@@ -100,7 +121,16 @@ function StudioCanvasInner() {
       pendingConnectRef.current = null
       setMenu(null)
     },
-    [addScriptNode, addImageNode, onConnect],
+    [
+      addScriptNode,
+      addImageNode,
+      addStoryboardNode,
+      addSceneNode,
+      addCharacterNode,
+      addPropNode,
+      addShotNode,
+      onConnect,
+    ],
   )
 
   return (
@@ -131,7 +161,18 @@ function StudioCanvasInner() {
         />
         <MiniMap
           className="!border !border-white/[0.07] !bg-bg-2/70"
-          nodeColor={(n) => (n.type === 'script' ? '#FF6A3D' : '#7C5CFF')}
+          nodeColor={(n) => {
+            const colors: Record<string, string> = {
+              script: '#FF6A3D',
+              storyboard: '#FF6A3D',
+              scene: '#2BE3C2',
+              character: '#F4A64F',
+              prop: '#B6FF5F',
+              shot: '#7C5CFF',
+              image: '#7C5CFF',
+            }
+            return colors[n.type ?? ''] ?? '#7C5CFF'
+          }}
           maskColor="rgba(7,7,11,0.6)"
           pannable
           zoomable

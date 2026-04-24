@@ -11,10 +11,11 @@ import {
   Clapperboard,
   Film,
   Image as ImageIcon,
-  Wand2,
+  Mountain,
   Users,
   Music2,
   Layers,
+  Package,
   Plus,
   Search,
   Sparkles,
@@ -27,25 +28,37 @@ import StudioCanvas from '../studio/StudioCanvas'
 import { useStudioStore } from '../studio/store'
 
 const TOOLS = [
-  { id: 'script', icon: FileText, label: '剧本' },
-  { id: 'board',  icon: Clapperboard, label: '分镜' },
-  { id: 'shot',   icon: Film, label: '镜头' },
-  { id: 'image',  icon: ImageIcon, label: '素材' },
-  { id: 'actor',  icon: Users, label: '演员' },
-  { id: 'model',  icon: Wand2, label: '模型' },
-  { id: 'audio',  icon: Music2, label: '音画' },
-  { id: 'assets', icon: Layers, label: '资产' },
+  { id: 'script',     icon: FileText,     label: '剧本' },
+  { id: 'storyboard', icon: Clapperboard, label: '分镜' },
+  { id: 'scene',      icon: Mountain,     label: '场景' },
+  { id: 'shot',       icon: Film,         label: '镜头' },
+  { id: 'character',  icon: Users,        label: '角色' },
+  { id: 'prop',       icon: Package,      label: '道具' },
+  { id: 'image',      icon: ImageIcon,    label: '素材' },
+  { id: 'audio',      icon: Music2,       label: '音画' },
 ]
 
 export default function Studio() {
-  const [activeTool, setActiveTool] = useState('board')
+  const [activeTool, setActiveTool] = useState('storyboard')
   const addScriptNode = useStudioStore((s) => s.addScriptNode)
   const addImageNode = useStudioStore((s) => s.addImageNode)
+  const addStoryboardNode = useStudioStore((s) => s.addStoryboardNode)
+  const addSceneNode = useStudioStore((s) => s.addSceneNode)
+  const addCharacterNode = useStudioStore((s) => s.addCharacterNode)
+  const addPropNode = useStudioStore((s) => s.addPropNode)
+  const addShotNode = useStudioStore((s) => s.addShotNode)
 
   const handleToolClick = (id: string) => {
     setActiveTool(id)
-    if (id === 'script') addScriptNode()
-    if (id === 'image') addImageNode()
+    switch (id) {
+      case 'script':     addScriptNode();     break
+      case 'storyboard': addStoryboardNode(); break
+      case 'scene':      addSceneNode();      break
+      case 'shot':       addShotNode();       break
+      case 'character':  addCharacterNode();  break
+      case 'prop':       addPropNode();       break
+      case 'image':      addImageNode();      break
+    }
   }
 
   return (
