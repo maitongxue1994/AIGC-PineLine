@@ -1,5 +1,7 @@
 import generateScript from './routes/generateScript'
 import generateImage from './routes/generateImage'
+import generateStoryboard from './routes/generateStoryboard'
+import generateImageGrid from './routes/generateImageGrid'
 
 export interface Env {
   ASSETS: Fetcher
@@ -7,19 +9,21 @@ export interface Env {
   GEMINI_API_KEY: string
 }
 
+const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
+  '/api/generate/script': generateScript,
+  '/api/generate/image': generateImage,
+  '/api/generate/storyboard': generateStoryboard,
+  '/api/generate/image-grid': generateImageGrid,
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
-
-    if (url.pathname === '/api/generate/script') {
+    const handler = ROUTES[url.pathname]
+    if (handler) {
       if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 })
-      return generateScript(req, env)
+      return handler(req, env)
     }
-    if (url.pathname === '/api/generate/image') {
-      if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 })
-      return generateImage(req, env)
-    }
-
     return env.ASSETS.fetch(req)
   },
 } satisfies ExportedHandler<Env>
