@@ -79,9 +79,19 @@ export default function GridImageNode({
       <div className="p-3">
         <div className={`grid ${gridCols} gap-1.5`}>
           {outputs.length > 0
-            ? outputs.map((src, i) => (
-                <ImageThumb key={i} src={src} filename={`${data.title}-${i + 1}.png`} />
-              ))
+            ? outputs.map((src, i) =>
+                src ? (
+                  <ImageThumb key={i} src={src} filename={`${data.title}-${i + 1}.png`} />
+                ) : (
+                  <div
+                    key={i}
+                    title={data.outputErrors?.[i] ?? '生成失败'}
+                    className="flex aspect-square items-center justify-center rounded-md border border-red-500/30 bg-red-500/10 text-[9px] text-red-300"
+                  >
+                    失败
+                  </div>
+                ),
+              )
             : Array.from({ length: cols === 2 ? 4 : 3 }).map((_, i) => (
                 <div
                   key={i}

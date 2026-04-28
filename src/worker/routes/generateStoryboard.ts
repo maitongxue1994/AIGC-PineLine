@@ -1,5 +1,6 @@
 import { callMinimaxText } from '../minimax'
 import type { Env } from '../index'
+import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 
 type Body = {
   screenplay?: string
@@ -7,13 +8,6 @@ type Body = {
 }
 
 type ShotItem = { id: string; title: string; description: string }
-
-function jsonError(msg: string, status = 400): Response {
-  return new Response(JSON.stringify({ error: msg }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
 
 const SYSTEM_PROMPT = [
   '你是一位专业的分镜师。请把用户给到的剧本文本拆分成可直接用于生图的分镜序列。',
@@ -50,42 +44,22 @@ function parseModelJson(raw: string): ShotItem[] {
   }))
 }
 
-export default async function generateStoryboard(
-  req: Request,
-  env: Env,
-): Promise<Response> {
-  let body: Body
-  try {
-    body = (await req.json()) as Body
-  } catch {
-    return jsonError('请求体不是合法 JSON')
-  }
+export default function generateStoryboard(req: Request, env: Env): Promise<Response> {
+  return runRoute(async () => {
+    const body = await readJson<Body>(req)
+    const screenplay = body.screenplay?.trim()
+    if (!screenplay) return jsonError('screenplay 不能为空')
 
-  const screenplay = body.screenplay?.trim()
-  if (!screenplay) return jsonError('screenplay 不能为空')
+    const splitter = body.splitter?.trim()
+    if (splitter) {
+      const shots = manualSplit(screenplay, splitter)
+      if (!shots.length) return jsonError('按分隔符拆分后没有内容，请检查 splitter')
+      return jsonOk({ shots })
+    }
 
-  const splitter = body.splitter?.trim()
-
-  if (splitter) {
-    const shots = manualSplit(screenplay, splitter)
-    if (!shots.length) return jsonError('按分隔符拆分后没有内容，请检查 splitter')
-    return new Response(JSON.stringify({ shots }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  if (!env.MINIMAX_API_KEY) {
-    return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
-  }
-
-  try {
+    if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
     const raw = await callMinimaxText(SYSTEM_PROMPT, screenplay, env.MINIMAX_API_KEY)
     const shots = parseModelJson(raw)
-    return new Response(JSON.stringify({ shots }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    return jsonError(msg, 502)
-  }
+    return jsonOk({ shots })
+  })
 }

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import {
   addEdge,
   applyEdgeChanges,
@@ -90,7 +91,7 @@ function collectUpstreamImages(
     const o = src.data.output
     if (o && o.startsWith('data:image')) imgs.push(o)
     for (const extra of src.data.outputs ?? []) {
-      if (extra.startsWith('data:image')) imgs.push(extra)
+      if (extra && extra.startsWith('data:image')) imgs.push(extra)
     }
   }
   return imgs.slice(0, 6)
@@ -145,7 +146,30 @@ function propTriViewPrompts(desc: string): string[] {
   ]
 }
 
-export const useStudioStore = create<StudioState>((set, get) => ({
+function isImageDataUrl(s: string | null | undefined): boolean {
+  return !!s && s.startsWith('data:image')
+}
+
+function stripHeavyOutputs(node: PineNode): PineNode {
+  // localStorage 单 origin 上限 ~5MB；不持久化 base64 图片，文本输出（剧本 / 分镜列表）保留
+  const data = node.data
+  const lightOutput = isImageDataUrl(data.output) ? null : data.output
+  const lightOutputs = data.outputs?.map((x) => (isImageDataUrl(x) ? null : x))
+  return {
+    ...node,
+    data: {
+      ...data,
+      output: lightOutput,
+      outputs: lightOutputs,
+      // 重置 status 避免显示 running 假状态
+      status: data.status === 'running' ? 'idle' : data.status,
+    },
+  }
+}
+
+export const useStudioStore = create<StudioState>()(
+  persist<StudioState>(
+    (set, get) => ({
   nodes: defaultNodes,
   edges: defaultEdges,
   selectedNodeId: 'script-1',
@@ -352,7 +376,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
             nodes: mutateNode(s.nodes, id, {
               status: 'done',
               outputs: res.images,
-              output: res.images[0] ?? null,
+              outputErrors: res.errors,
+              output: res.images.find((x) => !!x) ?? null,
             }),
           }))
           break
@@ -369,7 +394,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
             nodes: mutateNode(s.nodes, id, {
               status: 'done',
               outputs: res.images,
-              output: res.images[0] ?? null,
+              outputErrors: res.errors,
+              output: res.images.find((x) => !!x) ?? null,
             }),
           }))
           break
@@ -386,7 +412,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
             nodes: mutateNode(s.nodes, id, {
               status: 'done',
               outputs: res.images,
-              output: res.images[0] ?? null,
+              outputErrors: res.errors,
+              output: res.images.find((x) => !!x) ?? null,
             }),
           }))
           break
@@ -418,7 +445,20 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       }))
     }
   },
-}))
+    }),
+    {
+      name: 'pineline-studio-v1',
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) =>
+        ({
+          nodes: state.nodes.map(stripHeavyOutputs),
+          edges: state.edges,
+          selectedNodeId: state.selectedNodeId,
+        }) as unknown as StudioState,
+    },
+  ),
+)
 
 function firstShotDescription(text: string | null): string {
   if (!text) return ''

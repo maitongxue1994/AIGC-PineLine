@@ -705,21 +705,31 @@ function OutputBody({
     const cols = outputs.length === 4 ? 'grid-cols-2' : 'grid-cols-3'
     return (
       <div className={`grid ${cols} gap-2`}>
-        {outputs.map((src, i) => (
-          <div key={i} className="relative overflow-hidden rounded-md border border-white/[0.06] bg-bg-2/40">
-            <a href={src} target="_blank" rel="noreferrer" title="点击新标签大图">
-              <img src={src} alt={`${title}-${i + 1}`} className="h-auto w-full object-cover" />
-            </a>
-            <button
-              type="button"
-              onClick={() => downloadDataUrl(src, `${title || 'pineline'}-${i + 1}.png`)}
-              className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white/90 backdrop-blur transition hover:bg-black/80 hover:text-white"
-              title="下载"
+        {outputs.map((src, i) =>
+          src ? (
+            <div key={i} className="relative overflow-hidden rounded-md border border-white/[0.06] bg-bg-2/40">
+              <a href={src} target="_blank" rel="noreferrer" title="点击新标签大图">
+                <img src={src} alt={`${title}-${i + 1}`} className="h-auto w-full object-cover" />
+              </a>
+              <button
+                type="button"
+                onClick={() => downloadDataUrl(src, `${title || 'pineline'}-${i + 1}.png`)}
+                className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white/90 backdrop-blur transition hover:bg-black/80 hover:text-white"
+                title="下载"
+              >
+                <Download size={10} />
+              </button>
+            </div>
+          ) : (
+            <div
+              key={i}
+              title={node.data.outputErrors?.[i] ?? '生成失败'}
+              className="flex aspect-square items-center justify-center rounded-md border border-red-500/30 bg-red-500/10 text-[10px] text-red-300"
             >
-              <Download size={10} />
-            </button>
-          </div>
-        ))}
+              失败
+            </div>
+          ),
+        )}
       </div>
     )
   }

@@ -10,10 +10,15 @@ import type {
   StoryboardResponse,
 } from './types'
 
+const AUTH_TOKEN = (import.meta.env.VITE_PINELINE_API_KEY as string | undefined)?.trim()
+
 async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (AUTH_TOKEN) headers['X-Pineline-Auth'] = AUTH_TOKEN
+
   const res = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   })
   if (!res.ok) {

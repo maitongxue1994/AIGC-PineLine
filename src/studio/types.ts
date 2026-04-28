@@ -69,7 +69,8 @@ export type PineNodeData = {
     | PropParams
     | ShotParams
   output: string | null
-  outputs?: string[]
+  outputs?: (string | null)[]
+  outputErrors?: (string | null)[]
   shots?: ShotItem[]
   status: NodeStatus
   error?: string
@@ -115,7 +116,8 @@ export type ImageGridRequest = {
 }
 
 export type ImageGridResponse = {
-  images: string[]
+  images: (string | null)[]
+  errors?: (string | null)[]
 }
 
 export type ApiError = {

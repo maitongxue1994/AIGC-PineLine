@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from './utils'
+
 const MODEL = 'gemini-3.1-flash-image-preview'
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
@@ -50,7 +52,7 @@ export async function callGeminiImage(
     },
   }
 
-  const res = await fetch(`${ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
+  const res = await fetchWithTimeout(`${ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

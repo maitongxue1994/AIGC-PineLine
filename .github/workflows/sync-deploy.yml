@@ -1,0 +1,64 @@
+name: Sync to deploy/cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install + build
+        env:
+          # 前端打包时把 VITE_PINELINE_API_KEY 注入；保持空则前端不发 X-Pineline-Auth（仅作 origin 防护）
+          VITE_PINELINE_API_KEY: ${{ secrets.VITE_PINELINE_API_KEY }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Snapshot artifacts
+        run: |
+          mkdir -p /tmp/pineline-snap
+          cp -r dist/* /tmp/pineline-snap/
+          mkdir -p /tmp/pineline-snap-worker
+          cp -r src/worker/* /tmp/pineline-snap-worker/
+
+      - name: Sync to deploy/cloudflare
+        env:
+          GH_ACTOR: github-actions[bot]
+          GH_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          git config user.name "$GH_ACTOR"
+          git config user.email "$GH_EMAIL"
+          git fetch origin deploy/cloudflare
+          git switch deploy/cloudflare
+          rm -rf public/assets
+          mkdir -p public/assets
+          cp -r /tmp/pineline-snap/assets/* public/assets/
+          cp /tmp/pineline-snap/index.html public/
+          [ -f /tmp/pineline-snap/favicon.svg ] && cp /tmp/pineline-snap/favicon.svg public/ || true
+          mkdir -p src/worker
+          rsync -a --delete /tmp/pineline-snap-worker/ src/worker/
+          git add public src/worker
+          if git diff --staged --quiet; then
+            echo "No changes to deploy/cloudflare"
+            exit 0
+          fi
+          MSG="deploy: sync from main@${GITHUB_SHA::7}"
+          git commit -m "$MSG"
+          git push origin deploy/cloudflare
