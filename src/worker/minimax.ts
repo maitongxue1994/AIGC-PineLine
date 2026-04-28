@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from './utils'
+
 const MINIMAX_ENDPOINT = 'https://api.minimaxi.com/v1/text/chatcompletion_v2'
 const MODEL = 'MiniMax-M2.7'
 
@@ -18,7 +20,7 @@ export async function callMinimaxText(
     { role: 'user', content: userPrompt },
   ]
 
-  const res = await fetch(MINIMAX_ENDPOINT, {
+  const res = await fetchWithTimeout(MINIMAX_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

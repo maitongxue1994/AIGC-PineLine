@@ -1,5 +1,6 @@
 import { callMinimaxText } from '../minimax'
 import type { Env } from '../index'
+import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 
 type Body = {
   brief?: string
@@ -35,40 +36,20 @@ function buildSystemPrompt(tone: NonNullable<Body['tone']>, length: NonNullable<
   ].join('\n')
 }
 
-function jsonError(msg: string, status = 400): Response {
-  return new Response(JSON.stringify({ error: msg }), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
+export default function generateScript(req: Request, env: Env): Promise<Response> {
+  return runRoute(async () => {
+    const body = await readJson<Body>(req)
+    const brief = body.brief?.trim()
+    if (!brief) return jsonError('brief 不能为空')
+    if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
 
-export default async function generateScript(req: Request, env: Env): Promise<Response> {
-  let body: Body
-  try {
-    body = (await req.json()) as Body
-  } catch {
-    return jsonError('请求体不是合法 JSON')
-  }
-
-  const brief = body.brief?.trim()
-  if (!brief) return jsonError('brief 不能为空')
-
-  if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
-
-  const tone = body.tone ?? 'cinematic'
-  const length = body.length ?? 'short'
-
-  try {
+    const tone = body.tone ?? 'cinematic'
+    const length = body.length ?? 'short'
     const script = await callMinimaxText(
       buildSystemPrompt(tone, length),
       brief,
       env.MINIMAX_API_KEY,
     )
-    return new Response(JSON.stringify({ script }), {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    return jsonError(msg, 502)
-  }
+    return jsonOk({ script })
+  })
 }
