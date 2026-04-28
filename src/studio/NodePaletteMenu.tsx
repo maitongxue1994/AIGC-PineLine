@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import {
   FileText,
   Image as ImageIcon,
@@ -83,6 +84,21 @@ const ITEMS: {
 ]
 
 export default function NodePaletteMenu({ x, y, onPick, onClose }: Props) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ left: x, top: y })
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const { offsetWidth: w, offsetHeight: h } = el
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const margin = 8
+    const left = Math.max(margin, Math.min(x, vw - w - margin))
+    const top = Math.max(margin, Math.min(y, vh - h - margin))
+    setPos({ left, top })
+  }, [x, y])
+
   return (
     <>
       <div
@@ -94,8 +110,9 @@ export default function NodePaletteMenu({ x, y, onPick, onClose }: Props) {
         }}
       />
       <div
+        ref={ref}
         className="fixed z-50 max-h-[70vh] w-[240px] overflow-y-auto rounded-lg border border-white/[0.08] bg-bg-1/95 shadow-2xl backdrop-blur"
-        style={{ left: x, top: y }}
+        style={pos}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 border-b border-white/[0.06] bg-bg-1/95 px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-ink-2 backdrop-blur">

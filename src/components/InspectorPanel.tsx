@@ -46,8 +46,29 @@ export default function InspectorPanel() {
       </div>
 
       {!node && (
-        <div className="flex flex-1 items-center justify-center p-6 text-center text-[12px] text-ink-3">
-          选中画布上的节点以编辑参数，或在左侧工具栏添加新节点。
+        <div className="flex flex-1 flex-col gap-3 px-5 py-6 text-[12px] text-ink-2">
+          <div className="rounded-md border border-white/[0.06] bg-bg-2/40 p-3">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3">
+              快速开始
+            </div>
+            <ol className="ml-3 list-decimal space-y-1 leading-relaxed">
+              <li>左栏选「剧本」，填创意 → 点 ▶ 生成剧本</li>
+              <li>从剧本节点右端口拖一条线到空白 → 选「分镜」</li>
+              <li>分镜节点 ▶ → 拖出「场景/角色/道具」并各自 ▶</li>
+              <li>新建「分镜图」，把上面三类拖进去 → 合成一张</li>
+            </ol>
+          </div>
+          <div className="rounded-md border border-white/[0.06] bg-bg-2/40 p-3 text-[11px] leading-relaxed">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3">
+              快捷键
+            </div>
+            <div>⌘/Ctrl+Enter · 运行选中节点</div>
+            <div>Delete · 删除选中节点</div>
+            <div>Esc · 关闭新建菜单</div>
+          </div>
+          <div className="text-[11px] text-ink-3">
+            选中画布上任一节点即可在此编辑参数与输出。
+          </div>
         </div>
       )}
 
@@ -57,6 +78,7 @@ export default function InspectorPanel() {
           params={node.data.params as ScriptParams}
           status={node.data.status}
           output={node.data.output}
+          error={node.data.error}
           onChange={(patch) => updateNodeParams(node.id, patch)}
           onOutputChange={(v) => updateNodeOutput(node.id, v)}
           onRun={() => runNode(node.id)}
@@ -71,6 +93,7 @@ export default function InspectorPanel() {
           status={node.data.status}
           output={node.data.output}
           title={node.data.title}
+          error={node.data.error}
           onChange={(patch) => updateNodeParams(node.id, patch)}
           onRun={() => runNode(node.id)}
           onDelete={() => deleteNode(node.id)}
@@ -94,6 +117,7 @@ function ScriptInspector({
   params,
   status,
   output,
+  error,
   onChange,
   onOutputChange,
   onRun,
@@ -103,6 +127,7 @@ function ScriptInspector({
   params: ScriptParams
   status: string
   output: string | null
+  error?: string
   onChange: (patch: Partial<ScriptParams>) => void
   onOutputChange: (v: string) => void
   onRun: () => void
@@ -197,6 +222,7 @@ function ScriptInspector({
       <BottomActions
         status={status}
         label="生成剧本"
+        error={error}
         onRun={onRun}
         onDelete={onDelete}
       />
@@ -209,6 +235,7 @@ function ImageInspector({
   status,
   output,
   title,
+  error,
   onChange,
   onRun,
   onDelete,
@@ -218,6 +245,7 @@ function ImageInspector({
   status: string
   output: string | null
   title: string
+  error?: string
   onChange: (patch: Partial<ImageParams>) => void
   onRun: () => void
   onDelete: () => void
@@ -293,6 +321,7 @@ function ImageInspector({
       <BottomActions
         status={status}
         label="生成图片"
+        error={error}
         onRun={onRun}
         onDelete={onDelete}
       />
@@ -328,16 +357,36 @@ function downloadDataUrl(dataUrl: string, filename: string) {
 function BottomActions({
   status,
   label,
+  error,
   onRun,
   onDelete,
 }: {
   status: string
   label: string
+  error?: string
   onRun: () => void
   onDelete: () => void
 }) {
   return (
     <div className="shrink-0 border-t border-white/[0.06] bg-bg-1/90 p-3">
+      {status === 'error' && error && (
+        <div className="mb-2 rounded-md border border-red-500/40 bg-red-500/10 p-2 text-[11px] text-red-200">
+          <div className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-red-300">
+            <span>错误详情</span>
+            <button
+              type="button"
+              onClick={() => copyText(error)}
+              className="rounded px-1 py-0.5 hover:bg-white/5"
+              title="复制错误"
+            >
+              <Copy size={10} />
+            </button>
+          </div>
+          <div className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[10.5px] leading-snug">
+            {error}
+          </div>
+        </div>
+      )}
       <div className="mb-2 flex items-center justify-between text-[11px]">
         <span className="text-ink-2">状态</span>
         <span
@@ -375,6 +424,10 @@ function BottomActions({
             <>
               <RotateCcw size={12} className="animate-spin" /> 运行中…
             </>
+          ) : status === 'error' ? (
+            <>
+              <RotateCcw size={12} /> 重试
+            </>
           ) : (
             <>
               <Sparkles size={12} /> {label}
@@ -383,7 +436,7 @@ function BottomActions({
         </button>
       </div>
       <div className="mt-2 flex items-center justify-center gap-1 text-[10px] text-ink-3">
-        <Play size={9} /> 上游节点输出会自动作为本节点 prompt
+        <Play size={9} /> 上游节点输出会自动作为本节点 prompt · ⌘/Ctrl+Enter 运行
       </div>
     </div>
   )
@@ -520,6 +573,7 @@ function PipelineInspector({
       <BottomActions
         status={node.data.status}
         label={meta.runLabel}
+        error={node.data.error}
         onRun={onRun}
         onDelete={onDelete}
       />

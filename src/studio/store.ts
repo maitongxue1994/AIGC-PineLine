@@ -78,6 +78,19 @@ function getUpstreamTextOutput(
   return null
 }
 
+function expectParams<T>(node: PineNode, kind: NodeKind, ...required: (keyof T)[]): T {
+  if (node.data.kind !== kind) {
+    throw new Error(`节点类型不一致：期望 ${kind}，实际 ${node.data.kind}`)
+  }
+  const p = node.data.params as Record<string, unknown>
+  for (const k of required) {
+    if (!(k in p)) {
+      throw new Error(`节点 params 缺少字段：${String(k)}（kind=${kind}）`)
+    }
+  }
+  return node.data.params as unknown as T
+}
+
 function collectUpstreamImages(
   nodes: PineNode[],
   edges: PineEdge[],
@@ -307,7 +320,7 @@ export const useStudioStore = create<StudioState>()(
     try {
       switch (node.data.kind) {
         case 'script': {
-          const p = node.data.params as ScriptParams
+          const p = expectParams<ScriptParams>(node, 'script', 'brief', 'tone', 'length')
           const res = await generateScript({
             brief: p.brief,
             tone: p.tone,
@@ -322,7 +335,7 @@ export const useStudioStore = create<StudioState>()(
           break
         }
         case 'image': {
-          const p = node.data.params as ImageParams
+          const p = expectParams<ImageParams>(node, 'image', 'prompt', 'aspectRatio')
           const upstream = getUpstreamTextOutput(state.nodes, state.edges, id)
           const prompt = p.prompt?.trim() || upstream || ''
           if (!prompt)
@@ -343,7 +356,7 @@ export const useStudioStore = create<StudioState>()(
           break
         }
         case 'storyboard': {
-          const p = node.data.params as StoryboardParams
+          const p = expectParams<StoryboardParams>(node, 'storyboard', 'mode')
           const upstream = getUpstreamTextOutput(state.nodes, state.edges, id)
           const screenplay = p.screenplay?.trim() || upstream || ''
           if (!screenplay)
@@ -365,7 +378,7 @@ export const useStudioStore = create<StudioState>()(
           break
         }
         case 'scene': {
-          const p = node.data.params as SceneParams
+          const p = expectParams<SceneParams>(node, 'scene', 'description', 'aspectRatio')
           const desc = p.description?.trim()
           if (!desc) throw new Error('请先填写场景描述')
           const res = await generateImageGrid({
@@ -383,7 +396,7 @@ export const useStudioStore = create<StudioState>()(
           break
         }
         case 'character': {
-          const p = node.data.params as CharacterParams
+          const p = expectParams<CharacterParams>(node, 'character', 'description')
           const desc = p.description?.trim()
           if (!desc) throw new Error('请先填写角色描述')
           const res = await generateImageGrid({
@@ -401,7 +414,7 @@ export const useStudioStore = create<StudioState>()(
           break
         }
         case 'prop': {
-          const p = node.data.params as PropParams
+          const p = expectParams<PropParams>(node, 'prop', 'description')
           const desc = p.description?.trim()
           if (!desc) throw new Error('请先填写道具描述')
           const res = await generateImageGrid({
@@ -419,7 +432,7 @@ export const useStudioStore = create<StudioState>()(
           break
         }
         case 'shot': {
-          const p = node.data.params as ShotParams
+          const p = expectParams<ShotParams>(node, 'shot', 'shotDescription', 'aspectRatio')
           const upstreamText = getUpstreamTextOutput(state.nodes, state.edges, id)
           const desc = p.shotDescription?.trim() || firstShotDescription(upstreamText)
           if (!desc) throw new Error('请填写分镜图描述，或从上游「分镜」节点连线')

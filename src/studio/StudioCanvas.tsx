@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -45,6 +45,8 @@ function StudioCanvasInner() {
   const addPropNode = useStudioStore((s) => s.addPropNode)
   const addShotNode = useStudioStore((s) => s.addShotNode)
   const selectNode = useStudioStore((s) => s.selectNode)
+  const runNode = useStudioStore((s) => s.runNode)
+  const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
 
   const { screenToFlowPosition } = useReactFlow()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -64,6 +66,32 @@ function StudioCanvasInner() {
     },
     [selectNode],
   )
+
+  // 键盘快捷键：Cmd/Ctrl+Enter 运行选中节点；Esc 关闭新建菜单
+  // Delete/Backspace 由 ReactFlow 内置（onNodesChange 收到 remove 即可）
+  useEffect(() => {
+    const isEditable = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return false
+      const tag = el.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && menu) {
+        pendingConnectRef.current = null
+        setMenu(null)
+        return
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        if (isEditable(e.target)) return
+        if (selectedNodeId) {
+          e.preventDefault()
+          runNode(selectedNodeId)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [menu, selectedNodeId, runNode])
 
   const handleConnectEnd: OnConnectEnd = useCallback(
     (event, connectionState) => {
