@@ -20,19 +20,23 @@ export async function callMinimaxText(
     { role: 'user', content: userPrompt },
   ]
 
-  const res = await fetchWithTimeout(MINIMAX_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+  const res = await fetchWithTimeout(
+    MINIMAX_ENDPOINT,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages,
+        temperature: 0.7,
+        max_tokens: 2048,
+      }),
     },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      temperature: 0.7,
-      max_tokens: 2048,
-    }),
-  })
+    60_000,
+  )
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
