@@ -2,7 +2,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Play, Loader2, type LucideIcon } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { AspectRatio, NodeKind, PineNode } from '../types'
-import { ImageThumb, StatusBadge } from './shared'
+import { ErrorBanner, ImageThumb, StatusBadge } from './shared'
 
 type GridParams = {
   description: string
@@ -36,6 +36,7 @@ export default function GridImageNode({
 }: Props) {
   const runNode = useStudioStore((s) => s.runNode)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
+  const clearNodeError = useStudioStore((s) => s.clearNodeError)
   const params = data.params as GridParams
   const status = data.status
   const outputs = data.outputs ?? []
@@ -125,9 +126,7 @@ export default function GridImageNode({
       </div>
 
       {data.error && (
-        <div className="border-t border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">
-          {data.error}
-        </div>
+        <ErrorBanner message={data.error} onClear={() => clearNodeError(id)} />
       )}
 
       <div className="border-t border-white/[0.06] bg-bg-1/50 px-3 py-2">

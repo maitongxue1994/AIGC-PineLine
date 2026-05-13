@@ -4,29 +4,30 @@ import {
   Image as ImageIcon,
   Play,
   Loader2,
-  AlertCircle,
-  Check,
   Download,
   Maximize2,
 } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { ImageParams, PineNode } from '../types'
+import {
+  ACCENTS,
+  ASPECT_TO_CLASS,
+  ErrorBanner,
+  IconButton,
+  PreviewLightbox,
+  StatusBadge,
+  downloadDataUrl,
+} from './shared'
 
 export default function ImageNode({ id, data, selected }: NodeProps<PineNode>) {
   const runNode = useStudioStore((s) => s.runNode)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
+  const clearNodeError = useStudioStore((s) => s.clearNodeError)
   const params = data.params as ImageParams
   const status = data.status
   const [preview, setPreview] = useState(false)
 
-  const aspectClass =
-    {
-      '1:1': 'aspect-square',
-      '16:9': 'aspect-video',
-      '9:16': 'aspect-[9/16]',
-      '4:3': 'aspect-[4/3]',
-      '3:4': 'aspect-[3/4]',
-    }[params.aspectRatio] ?? 'aspect-video'
+  const aspectClass = ASPECT_TO_CLASS[params.aspectRatio] ?? 'aspect-video'
 
   return (
     <div
@@ -39,21 +40,26 @@ export default function ImageNode({ id, data, selected }: NodeProps<PineNode>) {
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-3 !w-3 !border-2 !border-bg-0 !bg-[#7C5CFF]"
+        className="!h-3 !w-3 !border-2 !border-bg-0"
+        style={{ background: ACCENTS.image }}
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-bg-0 !bg-[#7C5CFF]"
+        className="!h-3 !w-3 !border-2 !border-bg-0"
+        style={{ background: ACCENTS.image }}
       />
 
       {/* header */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#7C5CFF]">
+        <span
+          className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
+          style={{ color: ACCENTS.image }}
+        >
           <ImageIcon size={12} />
           IMAGE · {data.title}
         </span>
-        <StatusBadge status={status} />
+        <StatusBadge status={status} accent={ACCENTS.image} />
       </div>
 
       {/* preview */}
@@ -127,11 +133,8 @@ export default function ImageNode({ id, data, selected }: NodeProps<PineNode>) {
         </div>
       </div>
 
-      {/* error */}
       {data.error && (
-        <div className="border-t border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">
-          {data.error}
-        </div>
+        <ErrorBanner message={data.error} onClear={() => clearNodeError(id)} />
       )}
 
       {/* run button */}
@@ -167,102 +170,4 @@ export default function ImageNode({ id, data, selected }: NodeProps<PineNode>) {
       )}
     </div>
   )
-}
-
-function IconButton({
-  title,
-  onClick,
-  children,
-}: {
-  title: string
-  onClick: (e: React.MouseEvent) => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      className="rounded bg-black/60 p-1 text-white/90 backdrop-blur transition hover:bg-black/80 hover:text-white"
-    >
-      {children}
-    </button>
-  )
-}
-
-function PreviewLightbox({
-  src,
-  filename,
-  onClose,
-}: {
-  src: string
-  filename: string
-  onClose: () => void
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-8 backdrop-blur"
-      onClick={onClose}
-      onMouseDown={(e) => e.stopPropagation()}
-    >
-      <div
-        className="relative max-h-full max-w-6xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <img
-          src={src}
-          alt="preview"
-          className="max-h-[85vh] max-w-full rounded-lg border border-white/10 object-contain shadow-2xl"
-        />
-        <div className="absolute right-2 top-2 flex gap-2">
-          <button
-            onClick={() => downloadDataUrl(src, filename)}
-            className="flex items-center gap-1.5 rounded-md bg-white/10 px-3 py-1.5 text-[12px] text-white backdrop-blur transition hover:bg-white/20"
-          >
-            <Download size={13} />
-            下载
-          </button>
-          <button
-            onClick={onClose}
-            className="rounded-md bg-white/10 px-3 py-1.5 text-[12px] text-white backdrop-blur transition hover:bg-white/20"
-          >
-            关闭
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function downloadDataUrl(dataUrl: string, filename: string) {
-  const a = document.createElement('a')
-  a.href = dataUrl
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-}
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'running')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-white">
-        <span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-brand" />
-        gen
-      </span>
-    )
-  if (status === 'done')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-[#B6FF5F]">
-        <Check size={10} />
-        ready
-      </span>
-    )
-  if (status === 'error')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-red-400">
-        <AlertCircle size={10} />
-        error
-      </span>
-    )
-  return <span className="h-1.5 w-1.5 rounded-full bg-[#7C5CFF]" />
 }

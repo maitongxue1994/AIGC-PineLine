@@ -11,6 +11,8 @@ import { useStudioStore } from '../store'
 import type { PineNode, ShotParams } from '../types'
 import {
   ACCENTS,
+  ASPECT_TO_CLASS,
+  ErrorBanner,
   IconButton,
   PreviewLightbox,
   StatusBadge,
@@ -26,18 +28,12 @@ const HANDLES: { id: string; label: string; color: string; top: string }[] = [
 export default function ShotNode({ id, data, selected }: NodeProps<PineNode>) {
   const runNode = useStudioStore((s) => s.runNode)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
+  const clearNodeError = useStudioStore((s) => s.clearNodeError)
   const params = data.params as ShotParams
   const status = data.status
   const [preview, setPreview] = useState(false)
 
-  const aspectClass =
-    {
-      '1:1': 'aspect-square',
-      '16:9': 'aspect-video',
-      '9:16': 'aspect-[9/16]',
-      '4:3': 'aspect-[4/3]',
-      '3:4': 'aspect-[3/4]',
-    }[params.aspectRatio] ?? 'aspect-video'
+  const aspectClass = ASPECT_TO_CLASS[params.aspectRatio] ?? 'aspect-video'
 
   return (
     <div
@@ -146,9 +142,7 @@ export default function ShotNode({ id, data, selected }: NodeProps<PineNode>) {
       </div>
 
       {data.error && (
-        <div className="border-t border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">
-          {data.error}
-        </div>
+        <ErrorBanner message={data.error} onClear={() => clearNodeError(id)} />
       )}
 
       <div className="border-t border-white/[0.06] bg-bg-1/50 px-3 py-2">

@@ -1,6 +1,6 @@
-import { useState, type MouseEvent, type ReactNode } from 'react'
-import { AlertCircle, Check, Download, Maximize2 } from 'lucide-react'
-import type { NodeStatus } from '../types'
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { AlertCircle, Check, Download, Maximize2, X } from 'lucide-react'
+import type { AspectRatio, NodeStatus } from '../types'
 
 export function StatusBadge({
   status,
@@ -71,11 +71,21 @@ export function PreviewLightbox({
   filename: string
   onClose: () => void
 }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-8 backdrop-blur"
       onClick={onClose}
       onMouseDown={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-modal="true"
     >
       <div className="relative max-h-full max-w-6xl" onClick={(e) => e.stopPropagation()}>
         <img
@@ -138,6 +148,35 @@ export function ImageThumb({
   )
 }
 
+export function ErrorBanner({
+  message,
+  onClear,
+}: {
+  message: string
+  onClear?: () => void
+}) {
+  return (
+    <div className="border-t border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">
+      <div className="flex items-start gap-2">
+        <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{message}</span>
+        {onClear && (
+          <button
+            type="button"
+            title="清除错误"
+            onClick={(e) => {
+              e.stopPropagation()
+              onClear()
+            }}
+            className="shrink-0 rounded p-0.5 text-red-300/80 transition hover:bg-red-500/20 hover:text-red-200"
+          >
+            <X size={11} />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export const ACCENTS = {
   script: '#FF6A3D',
   image: '#7C5CFF',
@@ -147,3 +186,11 @@ export const ACCENTS = {
   prop: '#B6FF5F',
   shot: '#7C5CFF',
 } as const
+
+export const ASPECT_TO_CLASS: Record<AspectRatio, string> = {
+  '1:1': 'aspect-square',
+  '16:9': 'aspect-video',
+  '9:16': 'aspect-[9/16]',
+  '4:3': 'aspect-[4/3]',
+  '3:4': 'aspect-[3/4]',
+}

@@ -1,12 +1,14 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { FileText, Play, Loader2, AlertCircle, Check } from 'lucide-react'
+import { FileText, Play, Loader2 } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { PineNode, ScriptParams } from '../types'
+import { ACCENTS, ErrorBanner, StatusBadge } from './shared'
 
 export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) {
   const runNode = useStudioStore((s) => s.runNode)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
   const updateNodeOutput = useStudioStore((s) => s.updateNodeOutput)
+  const clearNodeError = useStudioStore((s) => s.clearNodeError)
   const params = data.params as ScriptParams
   const status = data.status
 
@@ -21,21 +23,26 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-3 !w-3 !border-2 !border-bg-0 !bg-[#FF6A3D]"
+        className="!h-3 !w-3 !border-2 !border-bg-0"
+        style={{ background: ACCENTS.script }}
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-bg-0 !bg-[#FF6A3D]"
+        className="!h-3 !w-3 !border-2 !border-bg-0"
+        style={{ background: ACCENTS.script }}
       />
 
       {/* header */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#FF6A3D]">
+        <span
+          className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
+          style={{ color: ACCENTS.script }}
+        >
           <FileText size={12} />
           SCRIPT · {data.title}
         </span>
-        <StatusBadge status={status} />
+        <StatusBadge status={status} accent={ACCENTS.script} />
       </div>
 
       {/* brief editor */}
@@ -76,11 +83,8 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
         </div>
       )}
 
-      {/* error */}
       {data.error && (
-        <div className="border-t border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">
-          {data.error}
-        </div>
+        <ErrorBanner message={data.error} onClear={() => clearNodeError(id)} />
       )}
 
       {/* run button */}
@@ -108,31 +112,6 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
       </div>
     </div>
   )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'running')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-white">
-        <span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-brand" />
-        gen
-      </span>
-    )
-  if (status === 'done')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-[#B6FF5F]">
-        <Check size={10} />
-        ready
-      </span>
-    )
-  if (status === 'error')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-red-400">
-        <AlertCircle size={10} />
-        error
-      </span>
-    )
-  return <span className="h-1.5 w-1.5 rounded-full bg-[#FF6A3D]" />
 }
 
 function labelOfTone(t: ScriptParams['tone']) {

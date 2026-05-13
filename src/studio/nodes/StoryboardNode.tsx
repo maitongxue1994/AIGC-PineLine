@@ -2,12 +2,13 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Layers, Play, Loader2 } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { PineNode, StoryboardParams } from '../types'
-import { ACCENTS, StatusBadge } from './shared'
+import { ACCENTS, ErrorBanner, StatusBadge } from './shared'
 
 export default function StoryboardNode({ id, data, selected }: NodeProps<PineNode>) {
   const runNode = useStudioStore((s) => s.runNode)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
   const updateNodeOutput = useStudioStore((s) => s.updateNodeOutput)
+  const clearNodeError = useStudioStore((s) => s.clearNodeError)
   const params = data.params as StoryboardParams
   const status = data.status
   const shots = data.shots ?? []
@@ -105,9 +106,7 @@ export default function StoryboardNode({ id, data, selected }: NodeProps<PineNod
       )}
 
       {data.error && (
-        <div className="border-t border-red-500/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">
-          {data.error}
-        </div>
+        <ErrorBanner message={data.error} onClear={() => clearNodeError(id)} />
       )}
 
       <div className="border-t border-white/[0.06] bg-bg-1/50 px-3 py-2">

@@ -51,6 +51,7 @@ type StudioState = {
   addPropNode: (position?: Position) => string
   addShotNode: (position?: Position) => string
   deleteNode: (id: string) => void
+  clearNodeError: (id: string) => void
   runNode: (id: string) => Promise<void>
 }
 
@@ -306,6 +307,22 @@ export const useStudioStore = create<StudioState>()(
       nodes: s.nodes.filter((n) => n.id !== id),
       edges: s.edges.filter((e) => e.source !== id && e.target !== id),
       selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
+    })),
+
+  clearNodeError: (id) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === id
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                error: undefined,
+                status: n.data.status === 'error' ? 'idle' : n.data.status,
+              },
+            }
+          : n,
+      ),
     })),
 
   runNode: async (id) => {
