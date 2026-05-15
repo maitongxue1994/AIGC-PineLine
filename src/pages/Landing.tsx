@@ -1,10 +1,14 @@
 import { motion } from 'framer-motion'
 import Hero from '../sections/Hero'
+import TrustBar from '../sections/TrustBar'
+import AgentWorkspace from '../sections/AgentWorkspace'
+import ProfessionalControls from '../sections/ProfessionalControls'
 import ModelMarquee from '../sections/ModelMarquee'
 import Pipeline from '../sections/Pipeline'
 import CanvasShowcase from '../sections/CanvasShowcase'
 import FeatureGrid from '../sections/FeatureGrid'
 import VirtualActors from '../sections/VirtualActors'
+import CommunityRecipes from '../sections/CommunityRecipes'
 import ShowcaseWall from '../sections/ShowcaseWall'
 import Testimonials from '../sections/Testimonials'
 import PricingTeaser from '../sections/PricingTeaser'
@@ -21,11 +25,15 @@ export default function Landing() {
       className="relative flex-1"
     >
       <Hero />
+      <TrustBar />
+      <AgentWorkspace />
+      <ProfessionalControls />
       <ModelMarquee />
       <Pipeline />
       <CanvasShowcase />
       <FeatureGrid />
       <VirtualActors />
+      <CommunityRecipes />
       <ShowcaseWall />
       <Testimonials />
       <PricingTeaser />

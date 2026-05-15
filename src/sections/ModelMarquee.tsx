@@ -1,16 +1,16 @@
 const MODELS = [
-  'Sora · Turbo',
-  'Kling · 2.0',
-  'Runway · Gen-4',
-  'Luma · Dream Machine',
-  'MiniMax · Hailuo',
-  'Pika · 2.1',
-  'Veo · 3',
-  'HunyuanVideo',
-  'Vidu · Q1',
-  'Wan · 2.2',
-  'CogVideoX',
-  'LTX-Video',
+  'Veo',
+  'Kling',
+  'Luma',
+  'Sora',
+  'Midjourney',
+  'GPT Image',
+  'Hailuo',
+  'Jimeng',
+  'Vidu',
+  'Flux',
+  'Pixverse',
+  'Gemini',
 ]
 
 export default function ModelMarquee() {
@@ -18,9 +18,9 @@ export default function ModelMarquee() {
     <section className="relative py-16 md:py-20">
       <div className="container-x">
         <div className="mb-6 text-center">
-          <div className="eyebrow">12+ 视频大模型 · 统一编排</div>
+          <div className="eyebrow">强大引擎支持</div>
           <p className="mt-2 text-sm text-ink-2">
-            管线内置多家顶级视频模型，按镜头类型自动路由，画质与成本同步最优。
+            接入图像、视频、音频与语言模型，由 Agent 按镜头任务自动选择最合适的引擎。
           </p>
         </div>
       </div>

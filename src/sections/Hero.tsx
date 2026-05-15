@@ -1,64 +1,64 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Play, Sparkles, Film } from 'lucide-react'
+import { ArrowRight, Clapperboard, Sparkles, Wand2 } from 'lucide-react'
 import HeroCanvas from '../components/HeroCanvas'
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden pt-32 md:pt-36">
+    <section className="relative overflow-hidden pb-10 pt-28 md:pt-32">
       {/* grid background */}
-      <div className="pointer-events-none absolute inset-0 grid-bg opacity-40 [mask-image:radial-gradient(ellipse_60%_60%_at_50%_40%,#000_30%,transparent_75%)]" />
+      <div className="pointer-events-none absolute inset-0 dot-bg opacity-35 [mask-image:radial-gradient(ellipse_70%_55%_at_50%_32%,#000_28%,transparent_78%)]" />
 
       {/* glow */}
-      <div className="pointer-events-none absolute left-1/2 top-20 h-[520px] w-[1100px] -translate-x-1/2 rounded-full bg-brand-gradient opacity-[0.18] blur-[140px]" />
+      <div className="pointer-events-none absolute left-1/2 top-20 h-[480px] w-[1040px] -translate-x-1/2 rounded-full bg-brand-gradient opacity-[0.12] blur-[150px]" />
 
       <div className="container-x relative">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="mx-auto flex max-w-3xl flex-col items-center text-center"
+          className="max-w-4xl"
         >
           <span className="chip">
             <span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-brand" />
-            PineLine v0.1 · Cinematic AIGC Pipeline
+            PineLine Agentic Film Canvas
           </span>
 
-          <h1 className="mt-6 font-display text-display-xl font-semibold leading-[1] text-white [word-break:keep-all]">
-            从<span className="text-gradient">剧本</span>到<span className="text-gradient">成片</span>，
+          <h1 className="mt-7 max-w-4xl font-display text-display-xl font-semibold leading-[0.98] text-white [word-break:keep-all]">
+            你的影视
             <br />
-            只需一条<span className="text-gradient">管线</span>。
+            <span className="text-gradient">智能体创意画布</span>
           </h1>
 
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-ink-1 md:text-lg">
-            PineLine 是为专业影视团队打造的 AIGC 创作管线。无限画布上，
-            把剧本、分镜、角色、镜头、生成、剪辑与声效连成一条可视化工作流，
-            由多模型协同，一键产出影院级成片。
+            PineLine 是面向专业影视创作的 AI Agent 工作台。统一调度剧本、图像、音频与视频模型，
+            把角色、分镜、镜头控制、生成与剪辑连成一张可复用的创意画布。
           </p>
 
-          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
-            <Link to="/studio" className="btn-primary">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Link to="/studio" className="btn-light">
               <Sparkles size={14} />
-              进入 Studio 创作
+              免费开始创作
               <ArrowRight size={14} />
             </Link>
-            <a href="#pipeline" className="btn-ghost">
-              <Play size={14} />
-              观看 2 分钟演示
-            </a>
+            <Link to="/templates" className="btn-ghost">
+              查看工作流模板
+            </Link>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-ink-2">
+          <div className="mt-8 grid max-w-3xl gap-3 text-xs text-ink-2 sm:grid-cols-3">
             <span className="flex items-center gap-1.5">
-              <Film size={12} className="text-brand" />
-              支持 4K·24/30/60fps
+              <Wand2 size={13} className="text-brand" />
+              Agent Router · 12+ 模型编排
             </span>
-            <span>·</span>
-            <span>12+ 视频大模型协同</span>
-            <span>·</span>
-            <span>90% 成本下降</span>
-            <span>·</span>
-            <span>5 分钟首稿交付</span>
+            <span className="flex items-center gap-1.5">
+              <Clapperboard size={13} className="text-brand-cyan" />
+              Shot Control · 镜头参数可控
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Sparkles size={13} className="text-brand-pink" />
+              Recipe Clone · 公开画布可复用
+            </span>
           </div>
         </motion.div>
 
@@ -66,7 +66,7 @@ export default function Hero() {
           initial={{ opacity: 0, y: 40, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          className="relative mt-16 md:mt-20"
+          className="relative mt-14 md:mt-16"
         >
           <HeroCanvas />
         </motion.div>

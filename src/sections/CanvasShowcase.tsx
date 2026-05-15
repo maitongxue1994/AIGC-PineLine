@@ -6,12 +6,12 @@ const FEATURES = [
   {
     icon: Layers,
     title: '无限画布',
-    desc: '任意缩放的工作板，把整部片子铺成一张"地图"。',
+    desc: '任意缩放的工作板，把整部片子铺成一张地图。',
   },
   {
     icon: MousePointer2,
-    title: '节点化编排',
-    desc: '节点连线即为依赖，参数改动自动向下游传播。',
+    title: '克隆配方',
+    desc: '公开作品可 fork 成模板，保留节点、参数、素材与模型路由。',
   },
   {
     icon: Users2,
@@ -38,14 +38,13 @@ export default function CanvasShowcase() {
           >
             <div className="eyebrow">PineLine Board</div>
             <h2 className="section-title mt-3">
-              像<span className="text-gradient">剪辑台</span>一样的
+              像<span className="text-gradient">Tapflow</span>一样开放，
               <br />
-              AIGC 工作画布
+              但为影视生产而设计
             </h2>
             <p className="mt-4 max-w-md text-ink-1">
-              灵感来自专业后期工程文件的可视化工作板。节点代表一次创作动作——
-              文本、分镜、镜头、模型、剪辑——它们通过连线组织依赖，
-              并把整部作品的创作过程变成可回放、可分支的时间线。
+              节点代表一次创作动作：文本、参考图、角色、镜头控制、模型生成与剪辑。
+              你可以从社区克隆配方，也可以在自己的项目里把每一次生成回溯到原始上下文。
             </p>
 
             <div className="mt-8 grid grid-cols-2 gap-4">

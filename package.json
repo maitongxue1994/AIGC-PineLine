@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test:tapnow": "node scripts/verify-tapnow-redesign.mjs",
     "preview": "vite preview",
     "lint": "eslint ."
   },

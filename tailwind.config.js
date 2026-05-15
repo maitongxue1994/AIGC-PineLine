@@ -31,9 +31,9 @@ export default {
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       fontSize: {
-        'display-xl': ['clamp(3rem, 6vw, 6.5rem)', { lineHeight: '0.95', letterSpacing: '-0.04em' }],
-        'display-lg': ['clamp(2.5rem, 5vw, 5rem)', { lineHeight: '0.98', letterSpacing: '-0.035em' }],
-        'display-md': ['clamp(2rem, 3.5vw, 3.25rem)', { lineHeight: '1.05', letterSpacing: '-0.025em' }],
+        'display-xl': ['clamp(3rem, 6vw, 6.5rem)', { lineHeight: '0.95', letterSpacing: '0' }],
+        'display-lg': ['clamp(2.5rem, 5vw, 5rem)', { lineHeight: '0.98', letterSpacing: '0' }],
+        'display-md': ['clamp(2rem, 3.5vw, 3.25rem)', { lineHeight: '1.05', letterSpacing: '0' }],
       },
       backgroundImage: {
         'grid-dark':
