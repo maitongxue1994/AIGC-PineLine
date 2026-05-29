@@ -179,21 +179,22 @@ function NavPill({ icon, label, active }: { icon: React.ReactNode; label: string
 }
 
 function SecondaryPanel({ tool }: { tool: string }) {
+  // 注意：这里的 key 必须和左侧工具栏 TOOLS 的 id 保持一致，否则标题与内容会错位
   const TITLES: Record<string, string> = {
-    script: '剧本 Outline',
-    board:  '分镜 Board',
-    shot:   '镜头库',
-    image:  '素材库',
-    actor:  '数字演员',
-    model:  '模型选择',
-    audio:  '音画资产',
-    assets: '项目资产',
+    script:     '剧本 Outline',
+    storyboard: '分镜 Board',
+    scene:      '场景库',
+    shot:       '镜头库',
+    character:  '数字演员',
+    prop:       '道具库',
+    image:      '素材库',
+    audio:      '音画资产',
   }
 
   return (
     <aside className="w-[260px] shrink-0 border-r border-white/[0.06] bg-bg-1/40">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
-        <div className="font-display text-sm font-semibold text-white">{TITLES[tool]}</div>
+        <div className="font-display text-sm font-semibold text-white">{TITLES[tool] ?? '资产'}</div>
         <div className="flex items-center gap-1">
           <button className="rounded-md p-1 text-ink-2 hover:bg-white/5 hover:text-white">
             <Search size={13} />
@@ -205,11 +206,12 @@ function SecondaryPanel({ tool }: { tool: string }) {
       </div>
 
       {tool === 'script' && <ScriptPanel />}
-      {tool === 'board' && <BoardPanel />}
+      {tool === 'storyboard' && <BoardPanel />}
       {tool === 'shot' && <ShotLibrary />}
-      {tool === 'actor' && <ActorLibrary />}
-      {tool === 'model' && <ModelLibrary />}
-      {(tool === 'image' || tool === 'assets' || tool === 'audio') && <AssetLibrary />}
+      {tool === 'character' && <ActorLibrary />}
+      {(tool === 'scene' || tool === 'prop' || tool === 'image' || tool === 'audio') && (
+        <AssetLibrary />
+      )}
     </aside>
   )
 }
@@ -311,36 +313,6 @@ function ActorLibrary() {
       <button className="col-span-2 flex items-center justify-center gap-2 rounded-md border border-dashed border-white/15 py-3 text-xs text-ink-2 hover:border-white/30 hover:text-white">
         <Plus size={12} /> 训练数字演员
       </button>
-    </div>
-  )
-}
-
-function ModelLibrary() {
-  const M = [
-    { n: 'Sora Turbo', t: '电影级运镜 · 4K', best: '人物/光感' },
-    { n: 'Kling 2.0', t: '长时连续动作', best: '武打/舞蹈' },
-    { n: 'Runway Gen-4', t: '风格一致性高', best: '品牌广告' },
-    { n: 'Veo 3', t: '真实物理仿真', best: '自然场景' },
-    { n: 'MiniMax Hailuo', t: '中文语境最佳', best: '人物对白' },
-    { n: 'Luma DM', t: '快速创意探索', best: '首稿迭代' },
-  ]
-  return (
-    <div className="p-2">
-      {M.map((m, i) => (
-        <div
-          key={m.n}
-          className={`mb-1 cursor-pointer rounded-lg border p-3 transition ${
-            i === 0 ? 'border-white/15 bg-white/[0.04]' : 'border-transparent hover:bg-white/[0.03]'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-white">{m.n}</span>
-            {i === 0 && <span className="chip !py-0 !text-[10px]">active</span>}
-          </div>
-          <div className="mt-0.5 text-[11px] text-ink-2">{m.t}</div>
-          <div className="mt-1.5 text-[10px] text-brand">适合 · {m.best}</div>
-        </div>
-      ))}
     </div>
   )
 }

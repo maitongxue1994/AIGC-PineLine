@@ -125,7 +125,7 @@ function newNode(
   params: PineNodeData['params'],
   position: Position,
 ): PineNode {
-  const id = `${kind}-${Date.now()}`
+  const id = `${kind}-${crypto.randomUUID()}`
   return {
     id,
     type: kind,
