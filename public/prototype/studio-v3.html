@@ -25,10 +25,14 @@
   .review-banner {
     position: fixed; bottom: 12px; right: 12px; z-index: 99;
     background: var(--bg2); border: 1px solid var(--line); border-radius: 10px;
-    padding: 8px 12px; font-size: 11px; color: var(--ink2); max-width: 230px;
+    padding: 8px 26px 8px 12px; font-size: 11px; color: var(--ink2); max-width: 230px;
   }
   .review-banner b { color: var(--ink0); display:block; margin-bottom: 2px; }
-  .review-banner button { color: var(--cyan); padding: 0; margin-top: 4px; font-size: 11px; }
+  .review-banner .close-banner { position: absolute; top: 4px; right: 6px;
+    color: var(--ink3); font-size: 12px; }
+  .review-banner .close-banner:hover { color: #fff; }
+  /* 窄视口下会压住画布内容/Composer，直接隐藏 */
+  @media (max-width: 1200px) { .review-banner { display: none; } }
 
   /* ===== 顶栏 ===== */
   header {
@@ -440,6 +444,7 @@
 <div class="toast" id="toast"></div>
 
 <div class="review-banner">
+  <button class="close-banner" onclick="this.parentElement.remove()" title="关闭说明">✕</button>
   <b>Studio v3 静态原型</b>
   可点：模板卡（✕ 可关）/ 节点选中→工具条 / 双击空白→菜单 / 双击标题改名 / 左栏资产 / ? 帮助 / ⊞ 模板 / ↺ 重置=完全空白
 </div>
