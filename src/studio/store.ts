@@ -52,6 +52,11 @@ type StudioState = {
   addShotNode: (position?: Position) => string
   deleteNode: (id: string) => void
   runNode: (id: string) => Promise<void>
+  pipelineRunning: boolean
+  runPipeline: () => Promise<void>
+  exportProject: () => string
+  importProject: (raw: string) => void
+  resetProject: () => void
 }
 
 function mutateNode(
@@ -180,12 +185,55 @@ function stripHeavyOutputs(node: PineNode): PineNode {
   }
 }
 
+/**
+ * 按 edges 做 Kahn 拓扑分层：同一层内节点彼此无依赖、可并发运行；
+ * 后一层节点的所有上游都在前面的层里已运行完，从而能安全消费上游 output。
+ * 环路兜底：未被覆盖的节点作为最后一层强制返回，避免漏跑。
+ */
+function topoLayers(nodes: PineNode[], edges: PineEdge[]): string[][] {
+  const ids = nodes.map((n) => n.id)
+  const idSet = new Set(ids)
+  const indeg = new Map<string, number>()
+  const adj = new Map<string, string[]>()
+  for (const id of ids) {
+    indeg.set(id, 0)
+    adj.set(id, [])
+  }
+  for (const e of edges) {
+    if (!idSet.has(e.source) || !idSet.has(e.target)) continue
+    adj.get(e.source)!.push(e.target)
+    indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1)
+  }
+
+  const layers: string[][] = []
+  const seen = new Set<string>()
+  let frontier = ids.filter((id) => (indeg.get(id) ?? 0) === 0)
+
+  while (frontier.length) {
+    layers.push(frontier)
+    for (const id of frontier) seen.add(id)
+    const next: string[] = []
+    for (const id of frontier) {
+      for (const t of adj.get(id) ?? []) {
+        indeg.set(t, (indeg.get(t) ?? 0) - 1)
+        if ((indeg.get(t) ?? 0) === 0 && !seen.has(t)) next.push(t)
+      }
+    }
+    frontier = next
+  }
+
+  const leftover = ids.filter((id) => !seen.has(id))
+  if (leftover.length) layers.push(leftover)
+  return layers
+}
+
 export const useStudioStore = create<StudioState>()(
   persist<StudioState>(
     (set, get) => ({
   nodes: defaultNodes,
   edges: defaultEdges,
   selectedNodeId: 'script-1',
+  pipelineRunning: false,
 
   onNodesChange: (changes) =>
     set((s) => ({ nodes: applyNodeChanges(changes, s.nodes) as PineNode[] })),
@@ -458,6 +506,58 @@ export const useStudioStore = create<StudioState>()(
       }))
     }
   },
+
+  runPipeline: async () => {
+    if (get().pipelineRunning) return
+    set({ pipelineRunning: true })
+    try {
+      const { nodes, edges, runNode } = get()
+      const layers = topoLayers(nodes, edges)
+      for (const layer of layers) {
+        // 单节点失败由 runNode 自行兜成 error 状态，不阻断整条管线
+        await Promise.allSettled(layer.map((nid) => runNode(nid)))
+      }
+    } finally {
+      set({ pipelineRunning: false })
+    }
+  },
+
+  exportProject: () => {
+    const { nodes, edges } = get()
+    // 内存中保留完整 base64 图片，导出文件因此是用户可留存/转交的完整工程
+    return JSON.stringify(
+      { app: 'pineline', version: 1, exportedAt: new Date().toISOString(), nodes, edges },
+      null,
+      2,
+    )
+  },
+
+  importProject: (raw) => {
+    let data: unknown
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      throw new Error('文件不是合法 JSON')
+    }
+    const obj = data as { nodes?: unknown; edges?: unknown }
+    if (!obj || !Array.isArray(obj.nodes) || !Array.isArray(obj.edges)) {
+      throw new Error('工程文件格式不正确：缺少 nodes / edges 数组')
+    }
+    set({
+      nodes: obj.nodes as PineNode[],
+      edges: obj.edges as PineEdge[],
+      selectedNodeId: null,
+      pipelineRunning: false,
+    })
+  },
+
+  resetProject: () =>
+    set({
+      nodes: defaultNodes,
+      edges: defaultEdges,
+      selectedNodeId: 'script-1',
+      pipelineRunning: false,
+    }),
     }),
     {
       name: 'pineline-studio-v1',

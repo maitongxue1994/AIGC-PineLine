@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
@@ -7,6 +7,8 @@ import {
   Download,
   Share2,
   MoreHorizontal,
+  Upload,
+  FilePlus2,
   FileText,
   Clapperboard,
   Film,
@@ -92,29 +94,7 @@ export default function Studio() {
           <NavPill icon={<History size={13} />} label="版本" />
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex -space-x-2">
-            {['#FF6A3D', '#7C5CFF', '#22D3EE'].map((c, i) => (
-              <div
-                key={i}
-                className="h-6 w-6 rounded-full border-2 border-bg-1"
-                style={{ background: c }}
-              />
-            ))}
-          </div>
-          <button className="btn-ghost !py-1.5 !text-xs">
-            <Share2 size={12} /> 分享
-          </button>
-          <button className="btn-primary !py-1.5 !text-xs">
-            <Play size={12} fill="#fff" /> 预览成片
-          </button>
-          <button className="btn-ghost !p-1.5">
-            <Download size={13} />
-          </button>
-          <button className="btn-ghost !p-1.5">
-            <MoreHorizontal size={13} />
-          </button>
-        </div>
+        <ProjectActions />
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -162,6 +142,168 @@ export default function Studio() {
         </div>
       </div>
     </motion.main>
+  )
+}
+
+function ProjectActions() {
+  const runPipeline = useStudioStore((s) => s.runPipeline)
+  const pipelineRunning = useStudioStore((s) => s.pipelineRunning)
+  const exportProject = useStudioStore((s) => s.exportProject)
+  const importProject = useStudioStore((s) => s.importProject)
+  const resetProject = useStudioStore((s) => s.resetProject)
+
+  const [toast, setToast] = useState<string | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flash = (msg: string) => {
+    setToast(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2200)
+  }
+
+  useEffect(
+    () => () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current)
+    },
+    [],
+  )
+
+  const handleExport = () => {
+    const blob = new Blob([exportProject()], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `pineline-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    flash('工程已导出为 JSON')
+  }
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(exportProject())
+      flash('工程已复制到剪贴板')
+    } catch {
+      flash('复制失败：浏览器拒绝了剪贴板访问')
+    }
+  }
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // 重置以便能重复选同一文件
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        importProject(String(reader.result ?? ''))
+        flash('工程已导入')
+      } catch (err) {
+        flash(err instanceof Error ? err.message : '导入失败')
+      }
+    }
+    reader.onerror = () => flash('读取文件失败')
+    reader.readAsText(file)
+  }
+
+  const handleNew = () => {
+    setMenuOpen(false)
+    if (window.confirm('新建空工程会清空当前画布（可先「导出」备份），确定继续？')) {
+      resetProject()
+      flash('已新建空工程')
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="hidden -space-x-2 sm:flex">
+        {['#FF6A3D', '#7C5CFF', '#22D3EE'].map((c, i) => (
+          <div
+            key={i}
+            className="h-6 w-6 rounded-full border-2 border-bg-1"
+            style={{ background: c }}
+          />
+        ))}
+      </div>
+
+      <button
+        onClick={handleShare}
+        className="btn-ghost !py-1.5 !text-xs"
+        title="复制工程 JSON 到剪贴板，便于分享给协作者"
+      >
+        <Share2 size={12} /> 分享
+      </button>
+
+      <button
+        onClick={runPipeline}
+        disabled={pipelineRunning}
+        className="btn-primary !py-1.5 !text-xs disabled:cursor-not-allowed disabled:opacity-70"
+        title="按依赖顺序运行画布上的全部节点"
+      >
+        {pipelineRunning ? (
+          <>
+            <span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-white" /> 运行中…
+          </>
+        ) : (
+          <>
+            <Play size={12} fill="#fff" /> 运行管线
+          </>
+        )}
+      </button>
+
+      <button onClick={handleExport} className="btn-ghost !p-1.5" title="导出工程为 JSON 文件">
+        <Download size={13} />
+      </button>
+
+      <div className="relative">
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          className="btn-ghost !p-1.5"
+          title="更多"
+        >
+          <MoreHorizontal size={13} />
+        </button>
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-lg border border-white/10 bg-bg-2/95 py-1 text-xs shadow-xl backdrop-blur">
+              <button
+                onClick={() => {
+                  setMenuOpen(false)
+                  fileRef.current?.click()
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-ink-1 transition hover:bg-white/5 hover:text-white"
+              >
+                <Upload size={13} /> 导入工程…
+              </button>
+              <button
+                onClick={handleNew}
+                className="flex w-full items-center gap-2 px-3 py-2 text-ink-1 transition hover:bg-white/5 hover:text-white"
+              >
+                <FilePlus2 size={13} /> 新建空工程
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={handleImportFile}
+      />
+
+      {toast && (
+        <div className="pointer-events-none fixed left-1/2 top-16 z-[60] -translate-x-1/2 rounded-md border border-white/10 bg-bg-2/95 px-4 py-2 text-xs text-white shadow-xl backdrop-blur">
+          {toast}
+        </div>
+      )}
+    </div>
   )
 }
 

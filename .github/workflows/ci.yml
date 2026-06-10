@@ -17,6 +17,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: 首页结构/文案校验
+        run: npm run test:tapnow
       - name: npm audit (high)
         run: npm audit --audit-level=high
         continue-on-error: true
