@@ -19,7 +19,6 @@ import {
   Layers,
   Package,
   Plus,
-  Search,
   Sparkles,
   Settings2,
   History,
@@ -28,6 +27,7 @@ import Logo from '../components/Logo'
 import InspectorPanel from '../components/InspectorPanel'
 import StudioCanvas from '../studio/StudioCanvas'
 import { useStudioStore } from '../studio/store'
+import type { NodeKind, ScriptParams } from '../studio/types'
 
 const TOOLS = [
   { id: 'script',     icon: FileText,     label: '剧本' },
@@ -42,26 +42,9 @@ const TOOLS = [
 
 export default function Studio() {
   const [activeTool, setActiveTool] = useState('storyboard')
-  const addScriptNode = useStudioStore((s) => s.addScriptNode)
-  const addImageNode = useStudioStore((s) => s.addImageNode)
-  const addStoryboardNode = useStudioStore((s) => s.addStoryboardNode)
-  const addSceneNode = useStudioStore((s) => s.addSceneNode)
-  const addCharacterNode = useStudioStore((s) => s.addCharacterNode)
-  const addPropNode = useStudioStore((s) => s.addPropNode)
-  const addShotNode = useStudioStore((s) => s.addShotNode)
 
-  const handleToolClick = (id: string) => {
-    setActiveTool(id)
-    switch (id) {
-      case 'script':     addScriptNode();     break
-      case 'storyboard': addStoryboardNode(); break
-      case 'scene':      addSceneNode();      break
-      case 'shot':       addShotNode();       break
-      case 'character':  addCharacterNode();  break
-      case 'prop':       addPropNode();       break
-      case 'image':      addImageNode();      break
-    }
-  }
+  // 工具栏只切换二级面板；新建节点走面板「+」、双击画布空白或拖线弹菜单
+  const handleToolClick = (id: string) => setActiveTool(id)
 
   return (
     <motion.main
@@ -320,6 +303,26 @@ function NavPill({ icon, label, active }: { icon: React.ReactNode; label: string
   )
 }
 
+/** 各工具对应的"新建节点"动作；audio 尚无节点类型 */
+function useAdders(): Record<string, (() => string) | undefined> {
+  const addScriptNode = useStudioStore((s) => s.addScriptNode)
+  const addImageNode = useStudioStore((s) => s.addImageNode)
+  const addStoryboardNode = useStudioStore((s) => s.addStoryboardNode)
+  const addSceneNode = useStudioStore((s) => s.addSceneNode)
+  const addCharacterNode = useStudioStore((s) => s.addCharacterNode)
+  const addPropNode = useStudioStore((s) => s.addPropNode)
+  const addShotNode = useStudioStore((s) => s.addShotNode)
+  return {
+    script: addScriptNode,
+    storyboard: addStoryboardNode,
+    scene: addSceneNode,
+    shot: addShotNode,
+    character: addCharacterNode,
+    prop: addPropNode,
+    image: addImageNode,
+  }
+}
+
 function SecondaryPanel({ tool }: { tool: string }) {
   // 注意：这里的 key 必须和左侧工具栏 TOOLS 的 id 保持一致，否则标题与内容会错位
   const TITLES: Record<string, string> = {
@@ -332,156 +335,312 @@ function SecondaryPanel({ tool }: { tool: string }) {
     image:      '素材库',
     audio:      '音画资产',
   }
+  const adders = useAdders()
+  const onAdd = adders[tool]
 
   return (
-    <aside className="w-[260px] shrink-0 border-r border-white/[0.06] bg-bg-1/40">
+    <aside className="flex w-[260px] shrink-0 flex-col border-r border-white/[0.06] bg-bg-1/40">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
         <div className="font-display text-sm font-semibold text-white">{TITLES[tool] ?? '资产'}</div>
-        <div className="flex items-center gap-1">
-          <button className="rounded-md p-1 text-ink-2 hover:bg-white/5 hover:text-white">
-            <Search size={13} />
-          </button>
-          <button className="rounded-md p-1 text-ink-2 hover:bg-white/5 hover:text-white">
+        {onAdd && (
+          <button
+            onClick={() => onAdd()}
+            title="在画布上新建该类型节点"
+            className="rounded-md p-1 text-ink-2 hover:bg-white/5 hover:text-white"
+          >
             <Plus size={13} />
           </button>
-        </div>
+        )}
       </div>
 
-      {tool === 'script' && <ScriptPanel />}
-      {tool === 'storyboard' && <BoardPanel />}
-      {tool === 'shot' && <ShotLibrary />}
-      {tool === 'character' && <ActorLibrary />}
-      {(tool === 'scene' || tool === 'prop' || tool === 'image' || tool === 'audio') && (
-        <AssetLibrary />
-      )}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {tool === 'script' && <ScriptPanel />}
+        {tool === 'storyboard' && <BoardPanel />}
+        {tool === 'shot' && (
+          <NodeImageLibrary
+            kinds={['shot']}
+            emptyText="还没有分镜图节点。把分镜/场景/角色/道具连进「分镜图」，合成单张镜头画面。"
+            addLabel="新建分镜图节点"
+            addKind="shot"
+          />
+        )}
+        {tool === 'scene' && (
+          <NodeImageLibrary
+            kinds={['scene']}
+            emptyText="还没有场景节点。填一句场景描述，生成四宫格视角参考。"
+            addLabel="新建场景节点"
+            addKind="scene"
+          />
+        )}
+        {tool === 'prop' && (
+          <NodeImageLibrary
+            kinds={['prop']}
+            emptyText="还没有道具节点。填一句道具描述，生成三视图。"
+            addLabel="新建道具节点"
+            addKind="prop"
+          />
+        )}
+        {tool === 'image' && (
+          <NodeImageLibrary
+            kinds={['image', 'asset']}
+            emptyText="还没有图像产出。新建「通用图像」节点，或直接把图片拖进画布作为上传素材。"
+            addLabel="新建图像节点"
+            addKind="image"
+          />
+        )}
+        {tool === 'character' && <ActorLibrary />}
+        {tool === 'audio' && (
+          <div className="px-4 py-10 text-center text-[11px] leading-relaxed text-ink-3">
+            音画节点在路线图中（P2-7）：
+            <br />
+            配乐 / 音效 / 配音将作为画布节点接入时间线。
+          </div>
+        )}
+      </div>
     </aside>
   )
 }
 
-function ScriptPanel() {
+function PanelStatus({ status }: { status: string }) {
+  const MAP: Record<string, [string, string]> = {
+    running: ['生成中', 'text-brand'],
+    done: ['ready', 'text-[#B6FF5F]'],
+    error: ['error', 'text-red-400'],
+    idle: ['待运行', 'text-ink-3'],
+  }
+  const [label, cls] = MAP[status] ?? MAP.idle
+  return <span className={`shrink-0 text-[10px] ${cls}`}>{label}</span>
+}
+
+function PanelEmpty({
+  text,
+  actionLabel,
+  onAdd,
+}: {
+  text: string
+  actionLabel?: string
+  onAdd?: () => void
+}) {
   return (
-    <div className="p-4">
-      <div className="rounded-lg border border-white/[0.07] bg-bg-2/60 p-3 text-xs text-ink-1">
-        <div className="mb-2 flex items-center justify-between text-[10px] uppercase tracking-widest text-ink-2">
-          <span>Chapter 2 · 雨夜屋顶</span>
-          <span className="text-brand">● 解析中</span>
-        </div>
-        <p className="leading-relaxed">
-          <span className="text-ink-0">INT./EXT. 屋顶 — 夜 — 雨</span>
-          <br />
-          <br />
-          林夜独自站在霓虹边缘，雨水沿风衣滑落。远处无人机群点亮——
-          <span className="bg-[#FF6A3D]/15 text-white">像一群迁徙的萤火。</span>
-          <br />
-          <br />
-          <span className="text-brand-violet">林夜（旁白）：</span>
-          <br />
-          "这座城市关掉了声音，我却还在听。"
-        </p>
-      </div>
-      <div className="mt-3 flex items-center justify-between text-[11px] text-ink-2">
-        <span>3 scenes · 12 beats</span>
-        <button className="flex items-center gap-1 text-brand hover:text-white">
-          <Sparkles size={11} />
-          AI 拆分分镜
+    <div className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[11px] text-ink-3">
+      <p className="leading-relaxed">{text}</p>
+      {onAdd && actionLabel && (
+        <button
+          onClick={onAdd}
+          className="flex items-center gap-1.5 rounded-md border border-dashed border-white/15 px-3 py-2 text-xs text-ink-1 transition hover:border-white/30 hover:text-white"
+        >
+          <Plus size={12} /> {actionLabel}
         </button>
-      </div>
+      )}
+    </div>
+  )
+}
+
+function ScriptPanel() {
+  const nodes = useStudioStore((s) => s.nodes)
+  const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
+  const focusNode = useStudioStore((s) => s.focusNode)
+  const adders = useAdders()
+  const scripts = nodes.filter((n) => n.data.kind === 'script')
+
+  if (!scripts.length)
+    return (
+      <PanelEmpty
+        text="画布上还没有剧本节点。填一句创意简述，AI 帮你写出完整剧本。"
+        actionLabel="新建剧本节点"
+        onAdd={adders.script}
+      />
+    )
+
+  return (
+    <div className="p-2">
+      {scripts.map((n) => {
+        const p = n.data.params as ScriptParams
+        return (
+          <button
+            key={n.id}
+            onClick={() => focusNode(n.id)}
+            className={`mb-1 w-full rounded-lg border p-3 text-left transition ${
+              n.id === selectedNodeId
+                ? 'border-white/15 bg-white/[0.04]'
+                : 'border-transparent hover:bg-white/[0.03]'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-sm font-medium text-white">{n.data.title}</span>
+              <PanelStatus status={n.data.status} />
+            </div>
+            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-ink-2">
+              {n.data.output || p.brief || '（空白，点击在 Inspector 中填写）'}
+            </p>
+          </button>
+        )
+      })}
     </div>
   )
 }
 
 function BoardPanel() {
-  const SCENES = [
-    { id: 1, name: 'SC01 · 屋顶全景', shots: 3, time: '0:14' },
-    { id: 2, name: 'SC02 · 雨中独白', shots: 4, time: '0:22' },
-    { id: 3, name: 'SC03 · 无人机亮起', shots: 2, time: '0:10' },
-    { id: 4, name: 'SC04 · 转身离开', shots: 3, time: '0:16' },
-  ]
+  const nodes = useStudioStore((s) => s.nodes)
+  const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
+  const focusNode = useStudioStore((s) => s.focusNode)
+  const adders = useAdders()
+  const boards = nodes.filter((n) => n.data.kind === 'storyboard')
+
+  if (!boards.length)
+    return (
+      <PanelEmpty
+        text="还没有分镜节点。从剧本节点拖一条线出来选「分镜」，AI 把剧本拆成镜头序列。"
+        actionLabel="新建分镜节点"
+        onAdd={adders.storyboard}
+      />
+    )
+
   return (
     <div className="p-2">
-      {SCENES.map((s, i) => (
-        <div
-          key={s.id}
-          className={`group mb-1 cursor-pointer rounded-lg border p-3 transition ${
-            i === 0 ? 'border-white/15 bg-white/[0.04]' : 'border-transparent hover:bg-white/[0.03]'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-white">{s.name}</span>
-            <span className="text-[10px] text-ink-2">{s.time}</span>
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-[11px] text-ink-2">
-            <span>{s.shots} shots</span>
-            <span className="h-1 w-1 rounded-full bg-ink-3" />
-            <span className="text-brand">ready</span>
-          </div>
-        </div>
-      ))}
+      {boards.map((n) => {
+        const shots = n.data.shots ?? []
+        return (
+          <button
+            key={n.id}
+            onClick={() => focusNode(n.id)}
+            className={`mb-1 w-full rounded-lg border p-3 text-left transition ${
+              n.id === selectedNodeId
+                ? 'border-white/15 bg-white/[0.04]'
+                : 'border-transparent hover:bg-white/[0.03]'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-sm font-medium text-white">{n.data.title}</span>
+              <PanelStatus status={n.data.status} />
+            </div>
+            {shots.length > 0 ? (
+              <div className="mt-1.5 space-y-0.5">
+                {shots.slice(0, 4).map((s, i) => (
+                  <div key={s.id} className="truncate text-[11px] text-ink-2">
+                    <span className="text-ink-3">#{i + 1}</span> {s.title}
+                  </div>
+                ))}
+                {shots.length > 4 && (
+                  <div className="text-[10px] text-ink-3">… 共 {shots.length} 个镜头</div>
+                )}
+              </div>
+            ) : (
+              <p className="mt-1 text-[11px] text-ink-3">尚未拆分镜头，运行节点后在此列出</p>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }
 
-function ShotLibrary() {
+/** 把指定类型节点的图片产出汇总成网格；点击缩略图选中对应画布节点 */
+function NodeImageLibrary({
+  kinds,
+  emptyText,
+  addLabel,
+  addKind,
+}: {
+  kinds: NodeKind[]
+  emptyText: string
+  addLabel: string
+  addKind: string
+}) {
+  const nodes = useStudioStore((s) => s.nodes)
+  const focusNode = useStudioStore((s) => s.focusNode)
+  const adders = useAdders()
+  const owned = nodes.filter((n) => kinds.includes(n.data.kind))
+
+  const items = owned.flatMap((n) => {
+    const imgs = [n.data.output, ...(n.data.outputs ?? [])].filter(
+      (x): x is string => !!x && x.startsWith('data:image'),
+    )
+    return [...new Set(imgs)].map((src, i) => ({
+      key: `${n.id}-${i}`,
+      nodeId: n.id,
+      title: n.data.title,
+      src,
+    }))
+  })
+
+  if (!owned.length)
+    return <PanelEmpty text={emptyText} actionLabel={addLabel} onAdd={adders[addKind]} />
+
+  if (!items.length)
+    return (
+      <PanelEmpty
+        text={`已有 ${owned.length} 个节点，还没有产出图。点节点 ▶ 或顶栏「运行管线」，产出会汇总到这里。`}
+      />
+    )
+
   return (
     <div className="grid grid-cols-2 gap-2 p-3">
-      {['wide', 'medium', 'close', 'OTS', 'POV', 'top', 'tracking', 'dolly'].map((t, i) => (
-        <div
-          key={t}
-          className="aspect-[4/3] cursor-pointer rounded-md border border-white/[0.07] bg-gradient-to-br from-white/[0.04] to-transparent p-2 text-[10px] uppercase tracking-widest text-ink-2 transition hover:border-white/20 hover:text-white"
+      {items.map((it) => (
+        <button
+          key={it.key}
+          onClick={() => focusNode(it.nodeId)}
+          title={it.title}
+          className="group overflow-hidden rounded-md border border-white/[0.07] text-left transition hover:border-white/25"
         >
-          <div className="mb-2 h-10 rounded bg-gradient-to-br from-[#1a1a28] to-[#0a0a10]" />
-          {t}
-        </div>
+          <div className="aspect-square overflow-hidden">
+            <img
+              src={it.src}
+              alt={it.title}
+              className="h-full w-full object-cover transition group-hover:scale-105"
+            />
+          </div>
+          <div className="truncate px-2 py-1 text-[10px] text-ink-1">{it.title}</div>
+        </button>
       ))}
     </div>
   )
 }
 
 function ActorLibrary() {
-  const A = [
-    { n: '林夜', c: 'from-[#2a0a14] to-[#ff6a3d]' },
-    { n: 'Aria', c: 'from-[#071029] to-[#22d3ee]' },
-    { n: '苏白', c: 'from-[#1a0f0a] to-[#ff3d7f]' },
-    { n: '老K', c: 'from-[#161616] to-[#7c5cff]' },
-  ]
+  const nodes = useStudioStore((s) => s.nodes)
+  const focusNode = useStudioStore((s) => s.focusNode)
+  const adders = useAdders()
+  const actors = nodes.filter((n) => n.data.kind === 'character')
+
+  if (!actors.length)
+    return (
+      <PanelEmpty
+        text="还没有角色节点。填一句角色描述，生成前/侧/背三视图，保持全片角色一致。"
+        actionLabel="新建角色节点"
+        onAdd={adders.character}
+      />
+    )
+
   return (
     <div className="grid grid-cols-2 gap-2 p-3">
-      {A.map((a) => (
-        <div key={a.n} className="cursor-pointer overflow-hidden rounded-md border border-white/[0.07]">
-          <div className={`aspect-[3/4] bg-gradient-to-br ${a.c}`} />
-          <div className="px-2 py-1.5 text-xs text-white">{a.n}</div>
-        </div>
-      ))}
-      <button className="col-span-2 flex items-center justify-center gap-2 rounded-md border border-dashed border-white/15 py-3 text-xs text-ink-2 hover:border-white/30 hover:text-white">
-        <Plus size={12} /> 训练数字演员
+      {actors.map((n) => {
+        const img = [n.data.output, ...(n.data.outputs ?? [])].find(
+          (x): x is string => !!x && x.startsWith('data:image'),
+        )
+        return (
+          <button
+            key={n.id}
+            onClick={() => focusNode(n.id)}
+            className="overflow-hidden rounded-md border border-white/[0.07] text-left transition hover:border-white/25"
+          >
+            {img ? (
+              <img src={img} alt={n.data.title} className="aspect-[3/4] w-full object-cover" />
+            ) : (
+              <div className="flex aspect-[3/4] items-center justify-center bg-gradient-to-br from-[#1a0f0a] to-[#2a0a14] text-[10px] text-ink-3">
+                未生成
+              </div>
+            )}
+            <div className="truncate px-2 py-1.5 text-xs text-white">{n.data.title}</div>
+          </button>
+        )
+      })}
+      <button
+        onClick={() => adders.character?.()}
+        className="col-span-2 flex items-center justify-center gap-2 rounded-md border border-dashed border-white/15 py-3 text-xs text-ink-2 transition hover:border-white/30 hover:text-white"
+      >
+        <Plus size={12} /> 新建角色节点
       </button>
-    </div>
-  )
-}
-
-function AssetLibrary() {
-  return (
-    <div className="grid grid-cols-3 gap-1.5 p-2">
-      {Array.from({ length: 12 }).map((_, i) => (
-        <div
-          key={i}
-          className="aspect-square cursor-pointer overflow-hidden rounded-md border border-white/[0.07]"
-        >
-          <div
-            className="h-full w-full"
-            style={{
-              background: [
-                'linear-gradient(135deg,#1a0a14,#ff3d7f)',
-                'linear-gradient(135deg,#071029,#22d3ee)',
-                'linear-gradient(135deg,#2a0f3a,#7c5cff)',
-                'linear-gradient(135deg,#1a0f0a,#ff6a3d)',
-                'linear-gradient(135deg,#0a1f0a,#b6ff5f)',
-                'linear-gradient(135deg,#0a0a14,#5a5a66)',
-              ][i % 6],
-            }}
-          />
-        </div>
-      ))}
     </div>
   )
 }

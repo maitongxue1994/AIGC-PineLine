@@ -16,6 +16,7 @@ import {
   generateStoryboard,
 } from './api'
 import type {
+  AssetParams,
   CharacterParams,
   ImageParams,
   NodeKind,
@@ -32,14 +33,20 @@ import type {
 
 type Position = { x: number; y: number }
 
+// 撤销/重做的结构快照：节点数组是不可变更新的，快照只是引用拷贝，内存开销很小
+type GraphSnapshot = { nodes: PineNode[]; edges: PineEdge[] }
+
 type StudioState = {
   nodes: PineNode[]
   edges: PineEdge[]
   selectedNodeId: string | null
+  past: GraphSnapshot[]
+  future: GraphSnapshot[]
   onNodesChange: (changes: NodeChange<PineNode>[]) => void
   onEdgesChange: (changes: EdgeChange<PineEdge>[]) => void
   onConnect: (conn: Connection) => void
   selectNode: (id: string | null) => void
+  focusNode: (id: string) => void
   updateNodeParams: (id: string, patch: Partial<PineNodeData['params']>) => void
   updateNodeTitle: (id: string, title: string) => void
   updateNodeOutput: (id: string, output: string) => void
@@ -50,7 +57,11 @@ type StudioState = {
   addCharacterNode: (position?: Position) => string
   addPropNode: (position?: Position) => string
   addShotNode: (position?: Position) => string
+  addAssetNode: (dataUrl: string, position?: Position) => string
+  duplicateNode: (id: string) => string | null
   deleteNode: (id: string) => void
+  undo: () => void
+  redo: () => void
   runNode: (id: string) => Promise<void>
   pipelineRunning: boolean
   runPipeline: () => Promise<void>
@@ -185,6 +196,36 @@ function stripHeavyOutputs(node: PineNode): PineNode {
   }
 }
 
+const HISTORY_LIMIT = 50
+
+/**
+ * 撤销/重做只回退画布结构（节点增删、连线、导入/新建），不回退生成结果：
+ * 恢复快照时按节点 id 把"当前"的 output / status 等运行产物合并回去，
+ * 避免一次 Cmd+Z 把用户等了很久的生成图也撤掉。
+ */
+function withCurrentOutputs(
+  snapNodes: PineNode[],
+  curNodes: PineNode[],
+): PineNode[] {
+  const cur = new Map(curNodes.map((n) => [n.id, n]))
+  return snapNodes.map((n) => {
+    const c = cur.get(n.id)
+    if (!c) return n
+    return {
+      ...n,
+      data: {
+        ...n.data,
+        output: c.data.output,
+        outputs: c.data.outputs,
+        outputErrors: c.data.outputErrors,
+        shots: c.data.shots,
+        status: c.data.status,
+        error: c.data.error,
+      },
+    }
+  })
+}
+
 /**
  * 按 edges 做 Kahn 拓扑分层：同一层内节点彼此无依赖、可并发运行；
  * 后一层节点的所有上游都在前面的层里已运行完，从而能安全消费上游 output。
@@ -229,27 +270,64 @@ function topoLayers(nodes: PineNode[], edges: PineEdge[]): string[][] {
 
 export const useStudioStore = create<StudioState>()(
   persist<StudioState>(
-    (set, get) => ({
+    (set, get) => {
+      // 在结构性修改（增删节点/连线/导入/新建）前调用，记一笔撤销历史。
+      // 同一手势常触发多个回调（如删节点连带删边、拖线建节点随即连线），
+      // 150ms 内的连续 commit 合并成一步，撤销时整个手势一次回退。
+      let lastCommitAt = 0
+      const commit = () => {
+        const now = Date.now()
+        if (now - lastCommitAt < 150) return
+        lastCommitAt = now
+        const { nodes, edges, past } = get()
+        set({
+          past: [...past.slice(-(HISTORY_LIMIT - 1)), { nodes, edges }],
+          future: [],
+        })
+      }
+
+      const pushNode = (node: PineNode): string => {
+        commit()
+        set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: node.id }))
+        return node.id
+      }
+
+      return {
   nodes: defaultNodes,
   edges: defaultEdges,
   selectedNodeId: 'script-1',
+  past: [],
+  future: [],
   pipelineRunning: false,
 
-  onNodesChange: (changes) =>
-    set((s) => ({ nodes: applyNodeChanges(changes, s.nodes) as PineNode[] })),
+  onNodesChange: (changes) => {
+    if (changes.some((c) => c.type === 'remove')) commit()
+    set((s) => ({ nodes: applyNodeChanges(changes, s.nodes) as PineNode[] }))
+  },
 
-  onEdgesChange: (changes) =>
-    set((s) => ({ edges: applyEdgeChanges(changes, s.edges) })),
+  onEdgesChange: (changes) => {
+    if (changes.some((c) => c.type === 'remove')) commit()
+    set((s) => ({ edges: applyEdgeChanges(changes, s.edges) }))
+  },
 
-  onConnect: (conn) =>
+  onConnect: (conn) => {
+    commit()
     set((s) => ({
       edges: addEdge(
         { ...conn, animated: true, style: { stroke: '#FF6A3D' } },
         s.edges,
       ),
-    })),
+    }))
+  },
 
   selectNode: (id) => set({ selectedNodeId: id }),
+
+  // 从二级面板点选：同步 ReactFlow 的 selected 标记，画布上真正高亮该节点
+  focusNode: (id) =>
+    set((s) => ({
+      selectedNodeId: id,
+      nodes: s.nodes.map((n) => ({ ...n, selected: n.id === id })),
+    })),
 
   updateNodeParams: (id, patch) =>
     set((s) => ({
@@ -272,94 +350,146 @@ export const useStudioStore = create<StudioState>()(
   updateNodeOutput: (id, output) =>
     set((s) => ({ nodes: mutateNode(s.nodes, id, { output }) })),
 
-  addScriptNode: (position) => {
+  addScriptNode: (position) =>
+    pushNode(
+      newNode(
+        'script',
+        '新剧本节点',
+        { brief: '', tone: 'cinematic', length: 'short' } satisfies ScriptParams,
+        positionFor(120, position),
+      ),
+    ),
+
+  addImageNode: (position) =>
+    pushNode(
+      newNode(
+        'image',
+        '新概念图',
+        { prompt: '', aspectRatio: '16:9' } satisfies ImageParams,
+        positionFor(600, position),
+      ),
+    ),
+
+  addStoryboardNode: (position) =>
+    pushNode(
+      newNode(
+        'storyboard',
+        '新分镜',
+        { screenplay: '', splitter: '', mode: 'auto' } satisfies StoryboardParams,
+        positionFor(520, position),
+      ),
+    ),
+
+  addSceneNode: (position) =>
+    pushNode(
+      newNode(
+        'scene',
+        '新场景',
+        { description: '', aspectRatio: '16:9' } satisfies SceneParams,
+        positionFor(520, position),
+      ),
+    ),
+
+  addCharacterNode: (position) =>
+    pushNode(
+      newNode(
+        'character',
+        '新角色',
+        { description: '' } satisfies CharacterParams,
+        positionFor(520, position),
+      ),
+    ),
+
+  addPropNode: (position) =>
+    pushNode(
+      newNode(
+        'prop',
+        '新道具',
+        { description: '' } satisfies PropParams,
+        positionFor(520, position),
+      ),
+    ),
+
+  addShotNode: (position) =>
+    pushNode(
+      newNode(
+        'shot',
+        '新分镜图',
+        { shotDescription: '', aspectRatio: '16:9' } satisfies ShotParams,
+        positionFor(900, position),
+      ),
+    ),
+
+  addAssetNode: (dataUrl, position) => {
     const node = newNode(
-      'script',
-      '新剧本节点',
-      { brief: '', tone: 'cinematic', length: 'short' } satisfies ScriptParams,
-      positionFor(120, position),
+      'asset',
+      '上传素材',
+      { note: '' } satisfies AssetParams,
+      positionFor(320, position),
     )
-    set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: node.id }))
-    return node.id
+    // output 即素材本体，节点天然处于 done 态，可直接被下游引用
+    node.data.output = dataUrl
+    node.data.status = 'done'
+    return pushNode(node)
   },
 
-  addImageNode: (position) => {
-    const node = newNode(
-      'image',
-      '新概念图',
-      { prompt: '', aspectRatio: '16:9' } satisfies ImageParams,
-      positionFor(600, position),
+  duplicateNode: (id) => {
+    const src = get().nodes.find((n) => n.id === id)
+    if (!src) return null
+    const copy = newNode(
+      src.data.kind,
+      `${src.data.title} 副本`,
+      { ...src.data.params } as PineNodeData['params'],
+      { x: src.position.x + 48, y: src.position.y + 48 },
     )
-    set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: node.id }))
-    return node.id
+    // 素材节点的 output 就是内容本身，复制时保留；生成类节点则重置为待运行
+    if (src.data.kind === 'asset') {
+      copy.data.output = src.data.output
+      copy.data.status = src.data.status
+    }
+    return pushNode(copy)
   },
 
-  addStoryboardNode: (position) => {
-    const node = newNode(
-      'storyboard',
-      '新分镜',
-      { screenplay: '', splitter: '', mode: 'auto' } satisfies StoryboardParams,
-      positionFor(520, position),
-    )
-    set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: node.id }))
-    return node.id
-  },
-
-  addSceneNode: (position) => {
-    const node = newNode(
-      'scene',
-      '新场景',
-      { description: '', aspectRatio: '16:9' } satisfies SceneParams,
-      positionFor(520, position),
-    )
-    set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: node.id }))
-    return node.id
-  },
-
-  addCharacterNode: (position) => {
-    const node = newNode(
-      'character',
-      '新角色',
-      { description: '' } satisfies CharacterParams,
-      positionFor(520, position),
-    )
-    set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: node.id }))
-    return node.id
-  },
-
-  addPropNode: (position) => {
-    const node = newNode(
-      'prop',
-      '新道具',
-      { description: '' } satisfies PropParams,
-      positionFor(520, position),
-    )
-    set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: node.id }))
-    return node.id
-  },
-
-  addShotNode: (position) => {
-    const node = newNode(
-      'shot',
-      '新分镜图',
-      { shotDescription: '', aspectRatio: '16:9' } satisfies ShotParams,
-      positionFor(900, position),
-    )
-    set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: node.id }))
-    return node.id
-  },
-
-  deleteNode: (id) =>
+  deleteNode: (id) => {
+    commit()
     set((s) => ({
       nodes: s.nodes.filter((n) => n.id !== id),
       edges: s.edges.filter((e) => e.source !== id && e.target !== id),
       selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
-    })),
+    }))
+  },
+
+  undo: () => {
+    const { past, future, nodes, edges } = get()
+    const prev = past[past.length - 1]
+    if (!prev) return
+    set({
+      past: past.slice(0, -1),
+      future: [...future, { nodes, edges }],
+      nodes: withCurrentOutputs(prev.nodes, nodes),
+      edges: prev.edges,
+    })
+  },
+
+  redo: () => {
+    const { past, future, nodes, edges } = get()
+    const next = future[future.length - 1]
+    if (!next) return
+    set({
+      future: future.slice(0, -1),
+      past: [...past, { nodes, edges }],
+      nodes: withCurrentOutputs(next.nodes, nodes),
+      edges: next.edges,
+    })
+  },
 
   runNode: async (id) => {
     const state = get()
     const node = state.nodes.find((n) => n.id === id)
     if (!node) return
+
+    // 上传素材节点不调模型，output 即内容本身
+    if (node.data.kind === 'asset') return
 
     set({
       nodes: mutateNode(state.nodes, id, { status: 'running', error: undefined }),
@@ -543,6 +673,7 @@ export const useStudioStore = create<StudioState>()(
     if (!obj || !Array.isArray(obj.nodes) || !Array.isArray(obj.edges)) {
       throw new Error('工程文件格式不正确：缺少 nodes / edges 数组')
     }
+    commit()
     set({
       nodes: obj.nodes as PineNode[],
       edges: obj.edges as PineEdge[],
@@ -551,14 +682,17 @@ export const useStudioStore = create<StudioState>()(
     })
   },
 
-  resetProject: () =>
+  resetProject: () => {
+    commit()
     set({
       nodes: defaultNodes,
       edges: defaultEdges,
       selectedNodeId: 'script-1',
       pipelineRunning: false,
-    }),
-    }),
+    })
+  },
+      }
+    },
     {
       name: 'pineline-studio-v1',
       version: 1,

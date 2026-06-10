@@ -8,6 +8,7 @@ export type NodeKind =
   | 'character'
   | 'prop'
   | 'shot'
+  | 'asset'
 
 export type NodeStatus = 'idle' | 'running' | 'done' | 'error'
 
@@ -51,6 +52,11 @@ export type ShotParams = {
   aspectRatio: AspectRatio
 }
 
+// 上传素材节点：output 即图片本体（data URL），不调模型，仅作下游参考图
+export type AssetParams = {
+  note: string
+}
+
 export type ShotItem = {
   id: string
   title: string
@@ -68,6 +74,7 @@ export type PineNodeData = {
     | CharacterParams
     | PropParams
     | ShotParams
+    | AssetParams
   output: string | null
   outputs?: (string | null)[]
   outputErrors?: (string | null)[]

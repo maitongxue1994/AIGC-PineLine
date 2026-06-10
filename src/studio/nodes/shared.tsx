@@ -146,4 +146,5 @@ export const ACCENTS = {
   character: '#F4A64F',
   prop: '#B6FF5F',
   shot: '#7C5CFF',
+  asset: '#22D3EE',
 } as const

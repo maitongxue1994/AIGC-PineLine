@@ -16,6 +16,7 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npm run build
       - name: 首页结构/文案校验
         run: npm run test:tapnow
