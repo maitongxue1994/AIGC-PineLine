@@ -425,7 +425,7 @@ export const useStudioStore = create<StudioState>()(
     const node = newNode(
       'asset',
       '上传素材',
-      { note: '' } satisfies AssetParams,
+      {} satisfies AssetParams,
       positionFor(320, position),
     )
     // output 即素材本体，节点天然处于 done 态，可直接被下游引用
@@ -522,7 +522,6 @@ export const useStudioStore = create<StudioState>()(
           const refImgs = collectUpstreamImages(state.nodes, state.edges, id)
           const res = await generateImage({
             prompt,
-            referenceImage: p.referenceImage,
             referenceImages: refImgs.length ? refImgs : undefined,
             aspectRatio: p.aspectRatio,
           })
@@ -578,9 +577,11 @@ export const useStudioStore = create<StudioState>()(
           const p = expectParams<CharacterParams>(node, 'character', 'description')
           const desc = p.description?.trim()
           if (!desc) throw new Error('请先填写角色描述')
+          // v3：参考图不再是参数，统一从连入的上游节点（如上传素材）收集
+          const charRefs = collectUpstreamImages(state.nodes, state.edges, id)
           const res = await generateImageGrid({
             prompts: characterTriViewPrompts(desc),
-            referenceImages: p.referenceImage ? [p.referenceImage] : undefined,
+            referenceImages: charRefs.length ? charRefs : undefined,
           })
           set((s) => ({
             nodes: mutateNode(s.nodes, id, {
@@ -596,9 +597,10 @@ export const useStudioStore = create<StudioState>()(
           const p = expectParams<PropParams>(node, 'prop', 'description')
           const desc = p.description?.trim()
           if (!desc) throw new Error('请先填写道具描述')
+          const propRefs = collectUpstreamImages(state.nodes, state.edges, id)
           const res = await generateImageGrid({
             prompts: propTriViewPrompts(desc),
-            referenceImages: p.referenceImage ? [p.referenceImage] : undefined,
+            referenceImages: propRefs.length ? propRefs : undefined,
           })
           set((s) => ({
             nodes: mutateNode(s.nodes, id, {
@@ -731,7 +733,12 @@ export const useStudioStore = create<StudioState>()(
     commit()
     set({
       nodes: obj.nodes as PineNode[],
-      edges: obj.edges as PineEdge[],
+      // 旧版工程文件的边可能带已废弃的 shot 多桩 handle id，剥离之
+      edges: (obj.edges as PineEdge[]).map((e) => ({
+        ...e,
+        sourceHandle: undefined,
+        targetHandle: undefined,
+      })),
       selectedNodeId: null,
       pipelineRunning: false,
     })
@@ -750,8 +757,21 @@ export const useStudioStore = create<StudioState>()(
     },
     {
       name: 'pineline-studio-v1',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      // v2：shot 节点从 4 个分色输入桩收敛为单桩，旧边携带的 handle id
+      // （text/scene/character/prop）已不存在，剥离后 ReactFlow 才能正常渲染
+      migrate: (persisted) => {
+        const s = persisted as StudioState
+        if (Array.isArray(s?.edges)) {
+          s.edges = s.edges.map((e) => ({
+            ...e,
+            sourceHandle: undefined,
+            targetHandle: undefined,
+          }))
+        }
+        return s
+      },
       partialize: (state) =>
         ({
           nodes: state.nodes.map(stripHeavyOutputs),

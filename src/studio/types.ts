@@ -23,7 +23,6 @@ export type ScriptParams = {
 export type ImageParams = {
   prompt: string
   aspectRatio: AspectRatio
-  referenceImage?: string
 }
 
 export type StoryboardParams = {
@@ -37,14 +36,13 @@ export type SceneParams = {
   aspectRatio: AspectRatio
 }
 
+// 角色/道具的参考图不再是参数：把「上传素材」节点连进来即可（v3 去死参数）
 export type CharacterParams = {
   description: string
-  referenceImage?: string
 }
 
 export type PropParams = {
   description: string
-  referenceImage?: string
 }
 
 export type ShotParams = {
@@ -52,10 +50,8 @@ export type ShotParams = {
   aspectRatio: AspectRatio
 }
 
-// 上传素材节点：output 即图片本体（data URL），不调模型，仅作下游参考图
-export type AssetParams = {
-  note: string
-}
+// 上传素材节点：output 即图片本体（data URL），不调模型，仅作下游参考图；无可编辑参数
+export type AssetParams = Record<string, never>
 
 export type ShotItem = {
   id: string

@@ -1,25 +1,35 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Play, Loader2, type LucideIcon } from 'lucide-react'
+import { Loader2, type LucideIcon } from 'lucide-react'
 import { useStudioStore } from '../store'
-import type { AspectRatio, NodeKind, PineNode } from '../types'
-import { ImageThumb, NodeActionBar, StatusBadge } from './shared'
+import type { AspectRatio, PineNode } from '../types'
+import {
+  ImageThumb,
+  NodeActionBar,
+  NodeTitle,
+  ParamSelect,
+  StatusBadge,
+  UpstreamIndicator,
+} from './shared'
 
 type GridParams = {
   description: string
   aspectRatio?: AspectRatio
-  referenceImage?: string
 }
+
+const ASPECT_OPTIONS: { value: AspectRatio; label: string }[] = [
+  { value: '16:9', label: '16:9' },
+  { value: '9:16', label: '9:16' },
+  { value: '1:1', label: '1:1' },
+  { value: '4:3', label: '4:3' },
+  { value: '3:4', label: '3:4' },
+]
 
 type Props = NodeProps<PineNode> & {
   accent: string
-  label: string
-  kindLabel: string
   icon: LucideIcon
   cols: 2 | 3
-  runLabel: string
   placeholder: string
   showAspectRatio?: boolean
-  kind: NodeKind
 }
 
 export default function GridImageNode({
@@ -27,14 +37,11 @@ export default function GridImageNode({
   data,
   selected,
   accent,
-  kindLabel,
   icon: Icon,
   cols,
-  runLabel,
   placeholder,
   showAspectRatio = false,
 }: Props) {
-  const runNode = useStudioStore((s) => s.runNode)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
   const params = data.params as GridParams
   const status = data.status
@@ -71,16 +78,18 @@ export default function GridImageNode({
         style={{ background: accent }}
       />
 
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
         <span
-          className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
+          className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
           style={{ color: accent }}
         >
-          <Icon size={12} />
-          {kindLabel} · {data.title}
+          <Icon size={12} className="shrink-0" />
+          <NodeTitle id={id} title={data.title} />
         </span>
-        <StatusBadge status={status} accent={accent} />
+        <StatusBadge status={status} />
       </div>
+
+      <UpstreamIndicator nodeId={id} />
 
       <div className="p-3">
         <div className={`grid ${gridCols} gap-1.5`}>
@@ -126,7 +135,14 @@ export default function GridImageNode({
           />
         </div>
         {showAspectRatio && (
-          <div className="mt-1 text-[10px] text-ink-3">画幅：{params.aspectRatio}</div>
+          <div className="mt-1.5">
+            <ParamSelect
+              title="画幅"
+              value={params.aspectRatio ?? '16:9'}
+              options={ASPECT_OPTIONS}
+              onChange={(aspectRatio) => updateNodeParams(id, { aspectRatio })}
+            />
+          </div>
         )}
       </div>
 
@@ -135,29 +151,6 @@ export default function GridImageNode({
           {data.error}
         </div>
       )}
-
-      <div className="border-t border-white/[0.06] bg-bg-1/50 px-3 py-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            runNode(id)
-          }}
-          disabled={status === 'running'}
-          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-brand-gradient py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-        >
-          {status === 'running' ? (
-            <>
-              <Loader2 size={12} className="animate-spin" />
-              生成中…
-            </>
-          ) : (
-            <>
-              <Play size={11} fill="#fff" />
-              {runLabel}
-            </>
-          )}
-        </button>
-      </div>
     </div>
   )
 }

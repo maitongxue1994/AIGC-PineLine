@@ -1,8 +1,7 @@
 import { useState, type MouseEvent, type ReactNode } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import {
-  AlertCircle,
-  Check,
+  ArrowDownToLine,
   Copy,
   Download,
   Loader2,
@@ -13,35 +12,132 @@ import {
 import { useStudioStore } from '../store'
 import type { NodeStatus } from '../types'
 
-export function StatusBadge({
-  status,
-  accent,
+/** 状态徽章：全站唯一实现，统一中文四态（v3 规范） */
+export function StatusBadge({ status }: { status: NodeStatus }) {
+  const MAP: Record<NodeStatus, { label: string; cls: string; dot: string }> = {
+    idle:    { label: '待运行', cls: 'text-ink-3',      dot: 'bg-ink-3' },
+    running: { label: '生成中', cls: 'text-brand',      dot: 'animate-pulseDot bg-brand' },
+    done:    { label: '完成',   cls: 'text-[#B6FF5F]',  dot: 'bg-[#B6FF5F]' },
+    error:   { label: '失败',   cls: 'text-red-400',    dot: 'bg-red-400' },
+  }
+  const s = MAP[status] ?? MAP.idle
+  return (
+    <span className={`flex shrink-0 items-center gap-1.5 text-[10px] ${s.cls}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+      {s.label}
+    </span>
+  )
+}
+
+/** 节点标题：双击进入重命名（TapNow 同款），Enter 确认 / Esc 取消 */
+export function NodeTitle({ id, title }: { id: string; title: string }) {
+  const updateNodeTitle = useStudioStore((s) => s.updateNodeTitle)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(title)
+
+  if (editing)
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter') {
+            if (draft.trim()) updateNodeTitle(id, draft.trim())
+            setEditing(false)
+          }
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        onBlur={() => {
+          if (draft.trim()) updateNodeTitle(id, draft.trim())
+          setEditing(false)
+        }}
+        className="nodrag w-full min-w-0 rounded border border-white/30 bg-bg-2 px-1 py-0.5 text-[11px] normal-case tracking-normal text-white outline-none"
+      />
+    )
+
+  return (
+    <span
+      title="双击重命名"
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        setDraft(title)
+        setEditing(true)
+      }}
+      className="min-w-0 truncate"
+    >
+      {title}
+    </span>
+  )
+}
+
+/**
+ * 上游输入指示条：把「prompt 留空自动用上游」的隐形规则显式化（v3 规范）。
+ * 有入边才渲染；点击选中第一个上游节点。
+ */
+export function UpstreamIndicator({ nodeId }: { nodeId: string }) {
+  const focusNode = useStudioStore((s) => s.focusNode)
+  // selector 返回字符串，仅在摘要变化时重渲染
+  const summary = useStudioStore((s) => {
+    const ups = s.edges
+      .filter((e) => e.target === nodeId)
+      .map((e) => s.nodes.find((n) => n.id === e.source))
+      .filter((n): n is NonNullable<typeof n> => !!n)
+    if (!ups.length) return ''
+    const texts = ups.filter((n) => ['script', 'storyboard'].includes(n.data.kind)).length
+    const imgs = ups.length - texts
+    const parts = [texts && `文本 ×${texts}`, imgs && `图 ×${imgs}`].filter(Boolean)
+    return `${ups[0].id}|上游输入 ×${ups.length}（${parts.join(' · ')}，留空时自动使用）`
+  })
+  if (!summary) return null
+  const [firstId, label] = summary.split('|')
+
+  return (
+    <button
+      title="点击选中上游节点"
+      onClick={(e) => {
+        e.stopPropagation()
+        focusNode(firstId)
+      }}
+      className="nodrag mx-3 mt-2 flex w-[calc(100%-24px)] items-center gap-1.5 rounded-md border border-dashed border-white/15 px-2 py-1 text-left text-[10px] text-ink-2 transition hover:border-white/30 hover:text-ink-1"
+    >
+      <ArrowDownToLine size={10} className="shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
+  )
+}
+
+/** 节点内紧凑参数下拉（v3：参数全部上节点） */
+export function ParamSelect<T extends string>({
+  value,
+  options,
+  onChange,
+  title,
 }: {
-  status: NodeStatus
-  accent: string
+  value: T
+  options: { value: T; label: string }[]
+  onChange: (v: T) => void
+  title?: string
 }) {
-  if (status === 'running')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-white">
-        <span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-brand" />
-        gen
-      </span>
-    )
-  if (status === 'done')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-[#B6FF5F]">
-        <Check size={10} />
-        ready
-      </span>
-    )
-  if (status === 'error')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-red-400">
-        <AlertCircle size={10} />
-        error
-      </span>
-    )
-  return <span className="h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
+  return (
+    <select
+      title={title}
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      className="nodrag rounded-md border border-white/[0.07] bg-bg-2 px-1.5 py-1 text-[10px] text-ink-1 outline-none transition hover:border-white/20 focus:border-white/30"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  )
 }
 
 export function downloadDataUrl(dataUrl: string, filename: string) {
@@ -216,13 +312,14 @@ export function NodeActionBar({
   )
 }
 
+// v3 配色收敛为 3 色语义：文本类=橙，图像类=紫，素材=青
 export const ACCENTS = {
   script: '#FF6A3D',
-  image: '#7C5CFF',
   storyboard: '#FF6A3D',
-  scene: '#2BE3C2',
-  character: '#F4A64F',
-  prop: '#B6FF5F',
+  image: '#7C5CFF',
+  scene: '#7C5CFF',
+  character: '#7C5CFF',
+  prop: '#7C5CFF',
   shot: '#7C5CFF',
   asset: '#22D3EE',
 } as const

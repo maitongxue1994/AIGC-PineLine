@@ -1,11 +1,30 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { FileText, Play, Loader2, AlertCircle, Check } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { PineNode, ScriptParams } from '../types'
-import { NodeActionBar } from './shared'
+import {
+  ACCENTS,
+  NodeActionBar,
+  NodeTitle,
+  ParamSelect,
+  StatusBadge,
+  UpstreamIndicator,
+} from './shared'
+
+const TONE_OPTIONS: { value: ScriptParams['tone']; label: string }[] = [
+  { value: 'cinematic', label: '电影级' },
+  { value: 'commercial', label: '商业广告' },
+  { value: 'drama', label: '短剧' },
+  { value: 'documentary', label: '纪录片' },
+]
+
+const LENGTH_OPTIONS: { value: ScriptParams['length']; label: string }[] = [
+  { value: 'short', label: '短 · 1 场' },
+  { value: 'medium', label: '中 · 3 场' },
+  { value: 'long', label: '长 · 5 场' },
+]
 
 export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) {
-  const runNode = useStudioStore((s) => s.runNode)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
   const updateNodeOutput = useStudioStore((s) => s.updateNodeOutput)
   const params = data.params as ScriptParams
@@ -23,24 +42,27 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-3 !w-3 !border-2 !border-bg-0 !bg-[#FF6A3D]"
+        className="!h-3 !w-3 !border-2 !border-bg-0"
+        style={{ background: ACCENTS.script }}
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-bg-0 !bg-[#FF6A3D]"
+        className="!h-3 !w-3 !border-2 !border-bg-0"
+        style={{ background: ACCENTS.script }}
       />
 
-      {/* header */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#FF6A3D]">
-          <FileText size={12} />
-          SCRIPT · {data.title}
+      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
+        <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#FF6A3D]">
+          <FileText size={12} className="shrink-0" />
+          <NodeTitle id={id} title={data.title} />
         </span>
         <StatusBadge status={status} />
       </div>
 
-      {/* brief editor */}
+      <UpstreamIndicator nodeId={id} />
+
+      {/* brief + 参数（v3：tone/length 上节点，不再去 Inspector） */}
       <div className="px-3 py-2">
         <div className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-ink-3">
           Brief
@@ -53,10 +75,19 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
           placeholder="一两句话的创意简述…"
           className="nodrag nowheel w-full resize-none rounded-md border border-white/[0.05] bg-bg-2/50 p-2 text-[11px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
         />
-        <div className="mt-1.5 flex gap-2 text-[10px] text-ink-3">
-          <span>{labelOfTone(params.tone)}</span>
-          <span>·</span>
-          <span>{labelOfLength(params.length)}</span>
+        <div className="mt-1.5 flex gap-1.5">
+          <ParamSelect
+            title="风格"
+            value={params.tone}
+            options={TONE_OPTIONS}
+            onChange={(tone) => updateNodeParams(id, { tone })}
+          />
+          <ParamSelect
+            title="篇幅"
+            value={params.length}
+            options={LENGTH_OPTIONS}
+            onChange={(length) => updateNodeParams(id, { length })}
+          />
         </div>
       </div>
 
@@ -84,70 +115,6 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
           {data.error}
         </div>
       )}
-
-      {/* run button */}
-      <div className="border-t border-white/[0.06] bg-bg-1/50 px-3 py-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            runNode(id)
-          }}
-          disabled={status === 'running'}
-          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-brand-gradient py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-        >
-          {status === 'running' ? (
-            <>
-              <Loader2 size={12} className="animate-spin" />
-              MiniMax 生成中…
-            </>
-          ) : (
-            <>
-              <Play size={11} fill="#fff" />
-              生成剧本
-            </>
-          )}
-        </button>
-      </div>
     </div>
   )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'running')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-white">
-        <span className="h-1.5 w-1.5 animate-pulseDot rounded-full bg-brand" />
-        gen
-      </span>
-    )
-  if (status === 'done')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-[#B6FF5F]">
-        <Check size={10} />
-        ready
-      </span>
-    )
-  if (status === 'error')
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-red-400">
-        <AlertCircle size={10} />
-        error
-      </span>
-    )
-  return <span className="h-1.5 w-1.5 rounded-full bg-[#FF6A3D]" />
-}
-
-function labelOfTone(t: ScriptParams['tone']) {
-  return (
-    {
-      cinematic: '电影级',
-      commercial: '商业广告',
-      drama: '短剧',
-      documentary: '纪录片',
-    }[t] ?? t
-  )
-}
-
-function labelOfLength(l: ScriptParams['length']) {
-  return { short: '短（1 段）', medium: '中（3 段）', long: '长（5 段）' }[l] ?? l
 }

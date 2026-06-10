@@ -1,11 +1,16 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Layers, Play, Loader2 } from 'lucide-react'
+import { Layers } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { PineNode, StoryboardParams } from '../types'
-import { ACCENTS, NodeActionBar, StatusBadge } from './shared'
+import {
+  ACCENTS,
+  NodeActionBar,
+  NodeTitle,
+  StatusBadge,
+  UpstreamIndicator,
+} from './shared'
 
 export default function StoryboardNode({ id, data, selected }: NodeProps<PineNode>) {
-  const runNode = useStudioStore((s) => s.runNode)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
   const updateNodeOutput = useStudioStore((s) => s.updateNodeOutput)
   const params = data.params as StoryboardParams
@@ -34,16 +39,18 @@ export default function StoryboardNode({ id, data, selected }: NodeProps<PineNod
         style={{ background: ACCENTS.storyboard }}
       />
 
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
         <span
-          className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
+          className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
           style={{ color: ACCENTS.storyboard }}
         >
-          <Layers size={12} />
-          STORYBOARD · {data.title}
+          <Layers size={12} className="shrink-0" />
+          <NodeTitle id={id} title={data.title} />
         </span>
-        <StatusBadge status={status} accent={ACCENTS.storyboard} />
+        <StatusBadge status={status} />
       </div>
+
+      <UpstreamIndicator nodeId={id} />
 
       <div className="px-3 py-2">
         <div className="mb-1 flex items-center justify-between text-[9px] font-semibold uppercase tracking-widest text-ink-3">
@@ -110,29 +117,6 @@ export default function StoryboardNode({ id, data, selected }: NodeProps<PineNod
           {data.error}
         </div>
       )}
-
-      <div className="border-t border-white/[0.06] bg-bg-1/50 px-3 py-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            runNode(id)
-          }}
-          disabled={status === 'running'}
-          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-brand-gradient py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-        >
-          {status === 'running' ? (
-            <>
-              <Loader2 size={12} className="animate-spin" />
-              拆分中…
-            </>
-          ) : (
-            <>
-              <Play size={11} fill="#fff" />
-              拆分分镜
-            </>
-          )}
-        </button>
-      </div>
     </div>
   )
 }

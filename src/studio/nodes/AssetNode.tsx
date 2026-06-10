@@ -1,7 +1,7 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { FolderUp } from 'lucide-react'
 import type { PineNode } from '../types'
-import { ImageThumb, NodeActionBar, StatusBadge, ACCENTS } from './shared'
+import { ImageThumb, NodeActionBar, NodeTitle, StatusBadge } from './shared'
 
 /** 上传素材节点：不调模型，output 即图片本体，作为下游的参考图来源 */
 export default function AssetNode({ id, data, selected }: NodeProps<PineNode>) {
@@ -26,12 +26,12 @@ export default function AssetNode({ id, data, selected }: NodeProps<PineNode>) {
         className="!h-3 !w-3 !border-2 !border-bg-0 !bg-[#22D3EE]"
       />
 
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#22D3EE]">
-          <FolderUp size={12} />
-          ASSET · {data.title}
+      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
+        <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#22D3EE]">
+          <FolderUp size={12} className="shrink-0" />
+          <NodeTitle id={id} title={data.title} />
         </span>
-        <StatusBadge status={data.status} accent={ACCENTS.asset} />
+        <StatusBadge status={data.status} />
       </div>
 
       <div className="p-3">

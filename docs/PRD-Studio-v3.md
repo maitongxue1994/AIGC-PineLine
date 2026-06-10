@@ -159,11 +159,11 @@ v3 不加任何新功能，**只做减法和统一**。
 
 ## 5. 分期实施
 
-| 期 | 内容 | 涉及文件（主要） |
-|---|---|---|
-| **M1 节点统一 + 去冗余** | 节点卡片规范 v3 落地：砍底部按钮、状态徽章统一、参数全部上节点、删死参数、shot 单桩、上游指示条、双击重命名；移除 Inspector | `src/studio/nodes/*`、`src/studio/types.ts`、`src/studio/store.ts`、删 `src/components/InspectorPanel.tsx` |
-| **M2 布局简化 + 首次体验** | 左栏砍为资产单入口（合并现有面板）、真实工程名、空画布引导卡、默认空工程 | `src/pages/Studio.tsx`、`src/studio/defaultGraph.ts` |
-| **M3 收尾** | 右键菜单建节点、首次进入自动弹帮助、3 色收敛全局复查 | `src/studio/StudioCanvas.tsx` 等 |
+| 期 | 内容 | 涉及文件（主要） | 状态 |
+|---|---|---|---|
+| **M1 节点统一 + 去冗余** | 节点卡片规范 v3 落地：砍底部按钮、状态徽章统一、参数全部上节点、删死参数、shot 单桩、上游指示条、双击重命名；移除 Inspector | `src/studio/nodes/*`、`src/studio/types.ts`、`src/studio/store.ts`、删 `src/components/InspectorPanel.tsx` | ✅ 已实施（23 项 Playwright 冒烟全过） |
+| **M2 布局简化 + 首次体验** | 左栏砍为资产单入口（合并现有面板）、真实工程名、空画布引导卡、默认空工程 | `src/pages/Studio.tsx`、`src/studio/defaultGraph.ts` | ⏳ |
+| **M3 收尾** | 右键菜单建节点、首次进入自动弹帮助、3 色收敛全局复查 | `src/studio/StudioCanvas.tsx` 等 | ⏳ |
 
 每期独立可部署、可回滚；M1 是体验提升最大的一期。
 

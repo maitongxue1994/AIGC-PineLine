@@ -376,9 +376,9 @@ function StudioCanvasInner() {
             const colors: Record<string, string> = {
               script: '#FF6A3D',
               storyboard: '#FF6A3D',
-              scene: '#2BE3C2',
-              character: '#F4A64F',
-              prop: '#B6FF5F',
+              scene: '#7C5CFF',
+              character: '#7C5CFF',
+              prop: '#7C5CFF',
               shot: '#7C5CFF',
               image: '#7C5CFF',
               asset: '#22D3EE',

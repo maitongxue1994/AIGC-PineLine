@@ -21,7 +21,6 @@ import {
   Sparkles,
 } from 'lucide-react'
 import Logo from '../components/Logo'
-import InspectorPanel from '../components/InspectorPanel'
 import StudioCanvas from '../studio/StudioCanvas'
 import { useStudioStore } from '../studio/store'
 import type { NodeKind, ScriptParams } from '../studio/types'
@@ -39,14 +38,10 @@ const TOOLS = [
 
 export default function Studio() {
   // 画布优先：抽屉默认收起，点工具开/再点收起；新建节点走面板「+」、双击画布或拖线菜单
+  // v3：右侧 Inspector 已移除——节点的所有编辑（参数/输出/重命名/运行）都在节点上完成
   const [activeTool, setActiveTool] = useState<string | null>(null)
   const handleToolClick = (id: string) =>
     setActiveTool((prev) => (prev === id ? null : id))
-
-  // 选中节点 → 浮动 Inspector；记录"为哪个节点收起过"，换选节点自然复现
-  const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
-  const [inspectorClosedFor, setInspectorClosedFor] = useState<string | null>(null)
-  const inspectorVisible = !!selectedNodeId && inspectorClosedFor !== selectedNodeId
 
   return (
     <motion.main
@@ -104,13 +99,6 @@ export default function Studio() {
           {activeTool && (
             <div className="absolute bottom-0 left-0 top-0 z-20">
               <SecondaryPanel tool={activeTool} />
-            </div>
-          )}
-
-          {/* 浮动 Inspector：选中节点出现，可收起 */}
-          {inspectorVisible && (
-            <div className="absolute bottom-20 right-3 top-3 z-20 hidden md:block">
-              <InspectorPanel onClose={() => setInspectorClosedFor(selectedNodeId)} />
             </div>
           )}
 

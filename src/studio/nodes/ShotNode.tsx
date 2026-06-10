@@ -1,44 +1,42 @@
-import { useState } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import {
-  Camera,
-  Play,
-  Loader2,
-  Download,
-  Maximize2,
-} from 'lucide-react'
+import { Camera, Loader2 } from 'lucide-react'
 import { useStudioStore } from '../store'
-import type { PineNode, ShotParams } from '../types'
+import type { AspectRatio, PineNode, ShotParams } from '../types'
 import {
   ACCENTS,
-  IconButton,
+  ImageThumb,
   NodeActionBar,
-  PreviewLightbox,
+  NodeTitle,
+  ParamSelect,
   StatusBadge,
-  downloadDataUrl,
+  UpstreamIndicator,
 } from './shared'
 
-const HANDLES: { id: string; label: string; color: string; top: string }[] = [
-  { id: 'scene', label: '场景', color: ACCENTS.scene, top: '30%' },
-  { id: 'character', label: '角色', color: ACCENTS.character, top: '55%' },
-  { id: 'prop', label: '道具', color: ACCENTS.prop, top: '80%' },
+const ASPECT_OPTIONS: { value: AspectRatio; label: string }[] = [
+  { value: '16:9', label: '16:9' },
+  { value: '9:16', label: '9:16' },
+  { value: '1:1', label: '1:1' },
+  { value: '4:3', label: '4:3' },
+  { value: '3:4', label: '3:4' },
 ]
 
+const ASPECT_CLASS: Record<AspectRatio, string> = {
+  '1:1': 'aspect-square',
+  '16:9': 'aspect-video',
+  '9:16': 'aspect-[9/16]',
+  '4:3': 'aspect-[4/3]',
+  '3:4': 'aspect-[3/4]',
+}
+
+/**
+ * 分镜图节点（v3）：单输入桩——上游文本自动当描述、上游图片自动当参考，
+ * 不再要求用户区分 4 个分色端口（旧版的装饰性复杂度）。
+ */
 export default function ShotNode({ id, data, selected }: NodeProps<PineNode>) {
-  const runNode = useStudioStore((s) => s.runNode)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
   const params = data.params as ShotParams
   const status = data.status
-  const [preview, setPreview] = useState(false)
-
-  const aspectClass =
-    {
-      '1:1': 'aspect-square',
-      '16:9': 'aspect-video',
-      '9:16': 'aspect-[9/16]',
-      '4:3': 'aspect-[4/3]',
-      '3:4': 'aspect-[3/4]',
-    }[params.aspectRatio] ?? 'aspect-video'
+  const aspectClass = ASPECT_CLASS[params.aspectRatio] ?? 'aspect-video'
 
   return (
     <div
@@ -52,26 +50,14 @@ export default function ShotNode({ id, data, selected }: NodeProps<PineNode>) {
         id={id}
         status={status}
         output={data.output}
-        filename={`${data.title || 'pineline'}.png`}
+        filename={`${data.title || 'shot'}.png`}
       />
-      {/* upper text handle (from storyboard) */}
       <Handle
-        id="text"
         type="target"
         position={Position.Left}
         className="!h-3 !w-3 !border-2 !border-bg-0"
-        style={{ background: ACCENTS.storyboard, top: '8%' }}
+        style={{ background: ACCENTS.shot }}
       />
-      {HANDLES.map((h) => (
-        <Handle
-          key={h.id}
-          id={h.id}
-          type="target"
-          position={Position.Left}
-          className="!h-3 !w-3 !border-2 !border-bg-0"
-          style={{ background: h.color, top: h.top }}
-        />
-      ))}
       <Handle
         type="source"
         position={Position.Right}
@@ -79,60 +65,40 @@ export default function ShotNode({ id, data, selected }: NodeProps<PineNode>) {
         style={{ background: ACCENTS.shot }}
       />
 
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
         <span
-          className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
+          className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em]"
           style={{ color: ACCENTS.shot }}
         >
-          <Camera size={12} />
-          SHOT · {data.title}
+          <Camera size={12} className="shrink-0" />
+          <NodeTitle id={id} title={data.title} />
         </span>
-        <StatusBadge status={status} accent={ACCENTS.shot} />
+        <StatusBadge status={status} />
       </div>
 
-      {/* handle legend */}
-      <div className="border-b border-white/[0.06] px-3 py-1.5 text-[9px] text-ink-3">
-        <div className="flex flex-wrap gap-2">
-          <Legend color={ACCENTS.storyboard} label="分镜描述" />
-          <Legend color={ACCENTS.scene} label="场景" />
-          <Legend color={ACCENTS.character} label="角色" />
-          <Legend color={ACCENTS.prop} label="道具" />
-        </div>
-      </div>
+      <UpstreamIndicator nodeId={id} />
 
       <div className="p-3">
-        <div className={`relative overflow-hidden rounded-md border border-white/[0.08] ${aspectClass}`}>
-          {data.output ? (
-            <>
-              <img src={data.output} alt={data.title} className="h-full w-full object-cover" />
-              <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition [.react-flow__node:hover_&]:opacity-100">
-                <IconButton title="放大" onClick={(e) => { e.stopPropagation(); setPreview(true) }}>
-                  <Maximize2 size={11} />
-                </IconButton>
-                <IconButton
-                  title="下载"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    downloadDataUrl(data.output!, `${data.title || 'shot'}.png`)
-                  }}
-                >
-                  <Download size={11} />
-                </IconButton>
+        {data.output ? (
+          <ImageThumb
+            src={data.output}
+            filename={`${data.title || 'shot'}.png`}
+            aspectClass={aspectClass}
+          />
+        ) : (
+          <div
+            className={`flex items-center justify-center rounded-md border border-white/[0.08] bg-gradient-to-br from-[#1a0a14] via-[#2a0f3a] to-[#071029] text-[10px] text-ink-3 ${aspectClass}`}
+          >
+            {status === 'running' ? (
+              <div className="flex items-center gap-2 text-ink-1">
+                <Loader2 size={14} className="animate-spin" />
+                合成中…
               </div>
-            </>
-          ) : (
-            <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#1a0a14] via-[#2a0f3a] to-[#071029] text-[10px] text-ink-3">
-              {status === 'running' ? (
-                <div className="flex items-center gap-2 text-ink-1">
-                  <Loader2 size={14} className="animate-spin" />
-                  合成中…
-                </div>
-              ) : (
-                <span>未生成</span>
-              )}
-            </div>
-          )}
-        </div>
+            ) : (
+              <span>未生成</span>
+            )}
+          </div>
+        )}
 
         <div className="mt-2">
           <div className="mb-1 text-[9px] font-semibold uppercase tracking-widest text-ink-3">
@@ -147,8 +113,13 @@ export default function ShotNode({ id, data, selected }: NodeProps<PineNode>) {
             className="nodrag nowheel w-full resize-none rounded-md border border-white/[0.05] bg-bg-2/50 p-2 text-[11px] leading-relaxed text-ink-0 outline-none transition focus:border-white/25"
           />
         </div>
-        <div className="mt-1 text-[10px] text-ink-3">
-          {params.aspectRatio} · 多参考：场景 / 角色 / 道具
+        <div className="mt-1.5">
+          <ParamSelect
+            title="画幅"
+            value={params.aspectRatio}
+            options={ASPECT_OPTIONS}
+            onChange={(aspectRatio) => updateNodeParams(id, { aspectRatio })}
+          />
         </div>
       </div>
 
@@ -157,46 +128,6 @@ export default function ShotNode({ id, data, selected }: NodeProps<PineNode>) {
           {data.error}
         </div>
       )}
-
-      <div className="border-t border-white/[0.06] bg-bg-1/50 px-3 py-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            runNode(id)
-          }}
-          disabled={status === 'running'}
-          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-brand-gradient py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-        >
-          {status === 'running' ? (
-            <>
-              <Loader2 size={12} className="animate-spin" />
-              生成中…
-            </>
-          ) : (
-            <>
-              <Play size={11} fill="#fff" />
-              生成分镜图
-            </>
-          )}
-        </button>
-      </div>
-
-      {preview && data.output && (
-        <PreviewLightbox
-          src={data.output}
-          filename={`${data.title || 'shot'}.png`}
-          onClose={() => setPreview(false)}
-        />
-      )}
     </div>
-  )
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
-      {label}
-    </span>
   )
 }

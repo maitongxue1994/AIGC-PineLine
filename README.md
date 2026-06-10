@@ -90,7 +90,6 @@ src/
     Footer.tsx
     HeroCanvas.tsx              # Hero 区域画布 mockup
     StoryboardCanvas.tsx        # Studio 可拖拽节点画布
-    InspectorPanel.tsx          # Studio 右侧 Inspector
   sections/                     # 首页分段
     Hero.tsx
     ModelMarquee.tsx
