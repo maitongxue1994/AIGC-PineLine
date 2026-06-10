@@ -1,4 +1,4 @@
-import { Sparkles, Play, RotateCcw, Info, Trash2, Download, Copy } from 'lucide-react'
+import { Sparkles, Play, RotateCcw, Trash2, Download, Copy, X } from 'lucide-react'
 import { useStudioStore } from '../studio/store'
 import type {
   CharacterParams,
@@ -11,7 +11,7 @@ import type {
   StoryboardParams,
 } from '../studio/types'
 
-export default function InspectorPanel() {
+export default function InspectorPanel({ onClose }: { onClose: () => void }) {
   const nodes = useStudioStore((s) => s.nodes)
   const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
@@ -21,66 +21,27 @@ export default function InspectorPanel() {
   const runNode = useStudioStore((s) => s.runNode)
 
   const node = nodes.find((n) => n.id === selectedNodeId)
+  if (!node) return null
 
   return (
-    <aside className="hidden w-[320px] shrink-0 border-l border-white/[0.06] bg-bg-1/50 md:flex md:flex-col">
+    <aside className="flex h-full w-[320px] flex-col overflow-hidden rounded-xl border border-white/10 bg-bg-1/95 shadow-2xl backdrop-blur">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] uppercase tracking-widest text-ink-2">Inspector</div>
-          {node ? (
-            <input
-              value={node.data.title}
-              onChange={(e) => updateNodeTitle(node.id, e.target.value)}
-              className="w-full bg-transparent font-display text-sm font-semibold text-white outline-none"
-            />
-          ) : (
-            <div className="font-display text-sm font-semibold text-ink-3">未选中节点</div>
-          )}
+          <input
+            value={node.data.title}
+            onChange={(e) => updateNodeTitle(node.id, e.target.value)}
+            className="w-full bg-transparent font-display text-sm font-semibold text-white outline-none"
+          />
         </div>
         <button
           className="rounded-md p-1 text-ink-2 hover:bg-white/5 hover:text-white"
-          title="帮助"
+          title="收起面板"
+          onClick={onClose}
         >
-          <Info size={14} />
+          <X size={14} />
         </button>
       </div>
-
-      {!node && (
-        <div className="flex flex-1 flex-col gap-3 px-5 py-6 text-[12px] text-ink-2">
-          <div className="rounded-md border border-white/[0.06] bg-bg-2/40 p-3">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3">
-              快速开始
-            </div>
-            <ol className="ml-3 list-decimal space-y-1 leading-relaxed">
-              <li>双击画布空白（或左栏面板点 +）新建「剧本」，填创意 → ▶</li>
-              <li>从剧本节点右端口拖一条线到空白 → 选「分镜」</li>
-              <li>分镜节点 ▶ → 拖出「场景/角色/道具」并各自 ▶</li>
-              <li>新建「分镜图」，把上面三类连进去 → 合成一张</li>
-              <li>顶栏「运行管线」可按依赖一键跑完全部节点</li>
-            </ol>
-          </div>
-          <div className="rounded-md border border-white/[0.06] bg-bg-2/40 p-3 text-[11px] leading-relaxed">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3">
-              快捷键
-            </div>
-            <div>⌘/Ctrl+Enter · 运行选中节点</div>
-            <div>⌘/Ctrl+Z · 撤销画布结构改动</div>
-            <div>⌘/Ctrl+Shift+Z · 重做</div>
-            <div>⌘/Ctrl+D · 复制选中节点</div>
-            <div>Delete · 删除选中节点</div>
-            <div>Esc · 关闭新建菜单</div>
-          </div>
-          <div className="rounded-md border border-white/[0.06] bg-bg-2/40 p-3 text-[11px] leading-relaxed">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3">
-              上传素材
-            </div>
-            把图片直接拖进画布，会生成「上传素材」节点，连到下游即作参考图。
-          </div>
-          <div className="text-[11px] text-ink-3">
-            选中画布上任一节点即可在此编辑参数与输出。
-          </div>
-        </div>
-      )}
 
       {node?.data.kind === 'script' && (
         <ScriptInspector

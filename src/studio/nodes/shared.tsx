@@ -1,5 +1,16 @@
 import { useState, type MouseEvent, type ReactNode } from 'react'
-import { AlertCircle, Check, Download, Maximize2 } from 'lucide-react'
+import { NodeToolbar, Position } from '@xyflow/react'
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  Download,
+  Loader2,
+  Maximize2,
+  Play,
+  Trash2,
+} from 'lucide-react'
+import { useStudioStore } from '../store'
 import type { NodeStatus } from '../types'
 
 export function StatusBadge({
@@ -135,6 +146,73 @@ export function ImageThumb({
         <PreviewLightbox src={src} filename={filename} onClose={() => setPreview(false)} />
       )}
     </>
+  )
+}
+
+/**
+ * 选中节点时浮在节点上方的工具条（TapNow 同款交互）：
+ * 运行 / 复制 / 下载（有图时）/ 删除，全部就地完成，不必去 Inspector。
+ */
+export function NodeActionBar({
+  id,
+  status,
+  output,
+  filename,
+  runnable = true,
+}: {
+  id: string
+  status: NodeStatus
+  output?: string | null
+  filename?: string
+  runnable?: boolean
+}) {
+  const runNode = useStudioStore((s) => s.runNode)
+  const duplicateNode = useStudioStore((s) => s.duplicateNode)
+  const deleteNode = useStudioStore((s) => s.deleteNode)
+
+  const btn =
+    'rounded-md p-1.5 text-ink-1 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40'
+
+  return (
+    <NodeToolbar
+      position={Position.Top}
+      offset={10}
+      className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-bg-2/95 p-1 shadow-xl backdrop-blur"
+    >
+      {runnable && (
+        <button
+          title="运行 (⌘/Ctrl+Enter)"
+          disabled={status === 'running'}
+          onClick={() => runNode(id)}
+          className={btn}
+        >
+          {status === 'running' ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <Play size={13} />
+          )}
+        </button>
+      )}
+      <button title="复制节点 (⌘/Ctrl+D)" onClick={() => duplicateNode(id)} className={btn}>
+        <Copy size={13} />
+      </button>
+      {output?.startsWith('data:image') && (
+        <button
+          title="下载图片"
+          onClick={() => downloadDataUrl(output, filename ?? 'pineline.png')}
+          className={btn}
+        >
+          <Download size={13} />
+        </button>
+      )}
+      <button
+        title="删除节点 (Delete)"
+        onClick={() => deleteNode(id)}
+        className={`${btn} hover:!bg-red-500/15 hover:!text-red-300`}
+      >
+        <Trash2 size={13} />
+      </button>
+    </NodeToolbar>
   )
 }
 

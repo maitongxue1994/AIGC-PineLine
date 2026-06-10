@@ -2,7 +2,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Layers, Play, Loader2 } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { PineNode, StoryboardParams } from '../types'
-import { ACCENTS, StatusBadge } from './shared'
+import { ACCENTS, NodeActionBar, StatusBadge } from './shared'
 
 export default function StoryboardNode({ id, data, selected }: NodeProps<PineNode>) {
   const runNode = useStudioStore((s) => s.runNode)
@@ -20,6 +20,7 @@ export default function StoryboardNode({ id, data, selected }: NodeProps<PineNod
           : 'border-white/10 hover:border-white/25'
       }`}
     >
+      <NodeActionBar id={id} status={status} output={data.output} />
       <Handle
         type="target"
         position={Position.Left}

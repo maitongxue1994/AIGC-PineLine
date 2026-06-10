@@ -11,7 +11,7 @@ import {
   type NodeTypes,
   type OnConnectEnd,
 } from '@xyflow/react'
-import { Redo2, Undo2 } from 'lucide-react'
+import { HelpCircle, Redo2, Undo2, X } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
 import ScriptNode from './nodes/ScriptNode'
@@ -75,6 +75,7 @@ function StudioCanvasInner() {
     null,
   )
   const [notice, setNotice] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const flash = useCallback((msg: string) => {
@@ -315,10 +316,50 @@ function StudioCanvasInner() {
           >
             <Redo2 size={13} />
           </button>
+          <button
+            title="快速开始与快捷键"
+            onClick={() => setHelpOpen((v) => !v)}
+            className="rounded-md border border-white/[0.07] bg-bg-2/80 p-1.5 text-ink-1 backdrop-blur transition hover:bg-bg-2 hover:text-white"
+          >
+            <HelpCircle size={13} />
+          </button>
           <span className="ml-1 hidden self-center text-[10px] text-ink-3 lg:inline">
             双击空白新建节点 · 拖图片进画布作参考
           </span>
         </Panel>
+
+        {helpOpen && (
+          <Panel position="top-left" className="!m-2 !mt-12">
+            <div className="w-[300px] rounded-xl border border-white/10 bg-bg-1/95 p-4 text-[12px] shadow-2xl backdrop-blur">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-2">
+                  快速开始
+                </span>
+                <button
+                  onClick={() => setHelpOpen(false)}
+                  className="rounded p-0.5 text-ink-2 hover:bg-white/5 hover:text-white"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+              <ol className="ml-4 list-decimal space-y-1 leading-relaxed text-ink-1">
+                <li>底部输入一句创意 → 「创建并运行」直接起一条管线</li>
+                <li>或双击画布空白新建「剧本」，填创意 → ▶</li>
+                <li>从节点右端口拖线到空白 → 选下一环（分镜/场景…）</li>
+                <li>把图片拖进画布 → 成为下游参考图</li>
+                <li>选中节点 → 上方工具条可运行/复制/下载/删除</li>
+              </ol>
+              <div className="mt-3 border-t border-white/[0.06] pt-2 leading-relaxed text-ink-2">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3">
+                  快捷键
+                </div>
+                <div>⌘/Ctrl+Enter 运行选中 · ⌘/Ctrl+D 复制</div>
+                <div>⌘/Ctrl+Z 撤销 · ⌘/Ctrl+Shift+Z 重做</div>
+                <div>Delete 删除 · Esc 关闭菜单</div>
+              </div>
+            </div>
+          </Panel>
+        )}
         <Background
           variant={BackgroundVariant.Dots}
           gap={20}

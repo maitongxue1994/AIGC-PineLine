@@ -1,10 +1,10 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { FolderUp } from 'lucide-react'
 import type { PineNode } from '../types'
-import { ImageThumb, StatusBadge, ACCENTS } from './shared'
+import { ImageThumb, NodeActionBar, StatusBadge, ACCENTS } from './shared'
 
 /** 上传素材节点：不调模型，output 即图片本体，作为下游的参考图来源 */
-export default function AssetNode({ data, selected }: NodeProps<PineNode>) {
+export default function AssetNode({ id, data, selected }: NodeProps<PineNode>) {
   return (
     <div
       className={`w-[260px] overflow-hidden rounded-xl border bg-[#0E0E14]/95 shadow-card backdrop-blur transition ${
@@ -13,6 +13,13 @@ export default function AssetNode({ data, selected }: NodeProps<PineNode>) {
           : 'border-white/10 hover:border-white/25'
       }`}
     >
+      <NodeActionBar
+        id={id}
+        status={data.status}
+        output={data.output}
+        filename={`${data.title || 'asset'}.png`}
+        runnable={false}
+      />
       <Handle
         type="source"
         position={Position.Right}

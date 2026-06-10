@@ -16,12 +16,9 @@ import {
   Mountain,
   Users,
   Music2,
-  Layers,
   Package,
   Plus,
   Sparkles,
-  Settings2,
-  History,
 } from 'lucide-react'
 import Logo from '../components/Logo'
 import InspectorPanel from '../components/InspectorPanel'
@@ -41,10 +38,15 @@ const TOOLS = [
 ]
 
 export default function Studio() {
-  const [activeTool, setActiveTool] = useState('storyboard')
+  // 画布优先：抽屉默认收起，点工具开/再点收起；新建节点走面板「+」、双击画布或拖线菜单
+  const [activeTool, setActiveTool] = useState<string | null>(null)
+  const handleToolClick = (id: string) =>
+    setActiveTool((prev) => (prev === id ? null : id))
 
-  // 工具栏只切换二级面板；新建节点走面板「+」、双击画布空白或拖线弹菜单
-  const handleToolClick = (id: string) => setActiveTool(id)
+  // 选中节点 → 浮动 Inspector；记录"为哪个节点收起过"，换选节点自然复现
+  const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
+  const [inspectorClosedFor, setInspectorClosedFor] = useState<string | null>(null)
+  const inspectorVisible = !!selectedNodeId && inspectorClosedFor !== selectedNodeId
 
   return (
     <motion.main
@@ -71,22 +73,16 @@ export default function Studio() {
           </div>
         </div>
 
-        <div className="hidden items-center gap-1 md:flex">
-          <NavPill icon={<Layers size={13} />} label="画布" active />
-          <NavPill icon={<Film size={13} />} label="时间线" />
-          <NavPill icon={<History size={13} />} label="版本" />
-        </div>
-
         <ProjectActions />
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* left tool rail */}
+        {/* left tool rail（点击开/合抽屉） */}
         <aside className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-white/[0.06] bg-bg-1/50 py-3">
           {TOOLS.map((t) => (
             <button
               key={t.id}
-              title={t.label}
+              title={`${t.label}（点击${activeTool === t.id ? '收起' : '打开'}面板）`}
               onClick={() => handleToolClick(t.id)}
               className={`group flex h-10 w-10 flex-col items-center justify-center rounded-xl transition ${
                 activeTool === t.id
@@ -98,33 +94,85 @@ export default function Studio() {
               <span className="mt-0.5 text-[9px] opacity-70">{t.label}</span>
             </button>
           ))}
-          <div className="mt-auto flex flex-col items-center gap-1">
-            <button className="flex h-10 w-10 items-center justify-center rounded-xl text-ink-2 hover:bg-white/[0.04] hover:text-white">
-              <Settings2 size={16} />
-            </button>
-          </div>
         </aside>
 
-        {/* panel + canvas */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1">
-            {/* secondary panel */}
-            <SecondaryPanel tool={activeTool} />
+        {/* 满屏画布 + 浮动层 */}
+        <section className="relative min-w-0 flex-1 overflow-hidden">
+          <StudioCanvas />
 
-            {/* canvas */}
-            <section className="relative min-w-0 flex-1 overflow-hidden">
-              <StudioCanvas />
-            </section>
+          {/* 资产抽屉（按需浮出） */}
+          {activeTool && (
+            <div className="absolute bottom-0 left-0 top-0 z-20">
+              <SecondaryPanel tool={activeTool} />
+            </div>
+          )}
 
-            {/* inspector */}
-            <InspectorPanel />
-          </div>
+          {/* 浮动 Inspector：选中节点出现，可收起 */}
+          {inspectorVisible && (
+            <div className="absolute bottom-20 right-3 top-3 z-20 hidden md:block">
+              <InspectorPanel onClose={() => setInspectorClosedFor(selectedNodeId)} />
+            </div>
+          )}
 
-          {/* bottom timeline */}
-          <BottomTimeline />
-        </div>
+          {/* 底部中央 Composer：一句话起一条管线 */}
+          <Composer />
+        </section>
       </div>
     </motion.main>
+  )
+}
+
+function Composer() {
+  const [brief, setBrief] = useState('')
+  const createPipelineFromBrief = useStudioStore((s) => s.createPipelineFromBrief)
+  const runPipeline = useStudioStore((s) => s.runPipeline)
+  const pipelineRunning = useStudioStore((s) => s.pipelineRunning)
+
+  const handleCreate = (run: boolean) => {
+    const text = brief.trim()
+    if (!text) return
+    const ids = createPipelineFromBrief(text)
+    setBrief('')
+    if (run) void runPipeline(ids)
+  }
+
+  return (
+    <div className="absolute bottom-4 left-1/2 z-20 w-[min(620px,calc(100%-32px))] -translate-x-1/2">
+      <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-bg-1/95 p-2 pl-4 shadow-2xl backdrop-blur">
+        <Sparkles size={15} className="shrink-0 text-brand" />
+        <input
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+              handleCreate(e.metaKey || e.ctrlKey)
+            }
+          }}
+          placeholder="一句话描述你的创意，例如：雨夜屋顶，少年与无人机群对视…"
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-ink-0 outline-none placeholder:text-ink-3"
+        />
+        <button
+          onClick={() => handleCreate(false)}
+          disabled={!brief.trim()}
+          title="创建 剧本→分镜→分镜图 节点链（Enter）"
+          className="btn-ghost shrink-0 !px-3 !py-1.5 !text-xs disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          创建管线
+        </button>
+        <button
+          onClick={() => handleCreate(true)}
+          disabled={!brief.trim() || pipelineRunning}
+          title="创建并立即按依赖运行（⌘/Ctrl+Enter）"
+          className="btn-primary shrink-0 !px-3 !py-1.5 !text-xs disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Play size={11} fill="#fff" />
+          创建并运行
+        </button>
+      </div>
+      <div className="mt-1 text-center text-[10px] text-ink-3">
+        将创建预连好的 剧本 → 分镜 → 分镜图 链 · P3 将升级为多轮 Agent
+      </div>
+    </div>
   )
 }
 
@@ -202,16 +250,6 @@ function ProjectActions() {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="hidden -space-x-2 sm:flex">
-        {['#FF6A3D', '#7C5CFF', '#22D3EE'].map((c, i) => (
-          <div
-            key={i}
-            className="h-6 w-6 rounded-full border-2 border-bg-1"
-            style={{ background: c }}
-          />
-        ))}
-      </div>
-
       <button
         onClick={handleShare}
         className="btn-ghost !py-1.5 !text-xs"
@@ -221,7 +259,7 @@ function ProjectActions() {
       </button>
 
       <button
-        onClick={runPipeline}
+        onClick={() => runPipeline()}
         disabled={pipelineRunning}
         className="btn-primary !py-1.5 !text-xs disabled:cursor-not-allowed disabled:opacity-70"
         title="按依赖顺序运行画布上的全部节点"
@@ -290,19 +328,6 @@ function ProjectActions() {
   )
 }
 
-function NavPill({ icon, label, active }: { icon: React.ReactNode; label: string; active?: boolean }) {
-  return (
-    <button
-      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-        active ? 'bg-white/[0.08] text-white' : 'text-ink-1 hover:text-white'
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
-  )
-}
-
 /** 各工具对应的"新建节点"动作；audio 尚无节点类型 */
 function useAdders(): Record<string, (() => string) | undefined> {
   const addScriptNode = useStudioStore((s) => s.addScriptNode)
@@ -339,7 +364,7 @@ function SecondaryPanel({ tool }: { tool: string }) {
   const onAdd = adders[tool]
 
   return (
-    <aside className="flex w-[260px] shrink-0 flex-col border-r border-white/[0.06] bg-bg-1/40">
+    <aside className="flex h-full w-[260px] flex-col border-r border-white/[0.06] bg-bg-1/90 shadow-2xl backdrop-blur">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
         <div className="font-display text-sm font-semibold text-white">{TITLES[tool] ?? '资产'}</div>
         {onAdd && (
@@ -641,74 +666,6 @@ function ActorLibrary() {
       >
         <Plus size={12} /> 新建角色节点
       </button>
-    </div>
-  )
-}
-
-function BottomTimeline() {
-  return (
-    <div className="h-24 shrink-0 border-t border-white/[0.06] bg-bg-1/70">
-      <div className="flex items-center justify-between border-b border-white/[0.04] px-4 py-1.5 text-[11px] text-ink-2">
-        <div className="flex items-center gap-3">
-          <span className="text-white">时间线</span>
-          <span>00:00:00 / 00:01:02</span>
-          <span className="chip !py-0 !text-[10px]">24 fps · 4K</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-1 text-ink-1 hover:text-white">
-            <Play size={11} /> 播放
-          </button>
-          <button className="flex items-center gap-1 text-brand hover:text-white">
-            <Sparkles size={11} /> AI 自动节奏
-          </button>
-        </div>
-      </div>
-
-      <div className="relative h-[calc(100%-28px)] px-4 pt-2">
-        {/* ruler */}
-        <div className="absolute inset-x-4 top-2 flex items-center justify-between text-[9px] text-ink-3">
-          {Array.from({ length: 11 }).map((_, i) => (
-            <div key={i} className="flex flex-col items-center gap-0.5">
-              <span>{`0:${String(i * 6).padStart(2, '0')}`}</span>
-              <span className="h-1.5 w-px bg-white/10" />
-            </div>
-          ))}
-        </div>
-
-        {/* tracks */}
-        <div className="mt-5 space-y-1">
-          <Track color="#FF6A3D" label="V1" blocks={[[2, 18], [22, 40], [44, 60]]} />
-          <Track color="#7C5CFF" label="V2" blocks={[[4, 16], [48, 56]]} />
-          <Track color="#22D3EE" label="A1" blocks={[[0, 60]]} />
-        </div>
-
-        {/* playhead */}
-        <div className="absolute left-[32%] top-2 h-[calc(100%-8px)] w-px bg-white/70">
-          <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-white/70" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function Track({ color, label, blocks }: { color: string; label: string; blocks: [number, number][] }) {
-  return (
-    <div className="flex h-5 items-center gap-2">
-      <span className="w-6 text-[10px] uppercase tracking-widest text-ink-2">{label}</span>
-      <div className="relative h-4 flex-1 rounded-sm bg-white/[0.03]">
-        {blocks.map(([l, r], i) => (
-          <div
-            key={i}
-            className="absolute top-0 h-4 rounded-sm"
-            style={{
-              left: `${(l / 60) * 100}%`,
-              width: `${((r - l) / 60) * 100}%`,
-              background: `linear-gradient(180deg, ${color}cc, ${color}55)`,
-              border: `1px solid ${color}aa`,
-            }}
-          />
-        ))}
-      </div>
     </div>
   )
 }

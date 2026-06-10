@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { ImageParams, PineNode } from '../types'
+import { NodeActionBar } from './shared'
 
 export default function ImageNode({ id, data, selected }: NodeProps<PineNode>) {
   const runNode = useStudioStore((s) => s.runNode)
@@ -36,6 +37,12 @@ export default function ImageNode({ id, data, selected }: NodeProps<PineNode>) {
           : 'border-white/10 hover:border-white/25'
       }`}
     >
+      <NodeActionBar
+        id={id}
+        status={status}
+        output={data.output}
+        filename={`${data.title || 'pineline'}.png`}
+      />
       <Handle
         type="target"
         position={Position.Left}

@@ -12,6 +12,7 @@ import type { PineNode, ShotParams } from '../types'
 import {
   ACCENTS,
   IconButton,
+  NodeActionBar,
   PreviewLightbox,
   StatusBadge,
   downloadDataUrl,
@@ -47,6 +48,12 @@ export default function ShotNode({ id, data, selected }: NodeProps<PineNode>) {
           : 'border-white/10 hover:border-white/25'
       }`}
     >
+      <NodeActionBar
+        id={id}
+        status={status}
+        output={data.output}
+        filename={`${data.title || 'pineline'}.png`}
+      />
       {/* upper text handle (from storyboard) */}
       <Handle
         id="text"

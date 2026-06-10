@@ -2,6 +2,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { FileText, Play, Loader2, AlertCircle, Check } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { PineNode, ScriptParams } from '../types'
+import { NodeActionBar } from './shared'
 
 export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) {
   const runNode = useStudioStore((s) => s.runNode)
@@ -18,6 +19,7 @@ export default function ScriptNode({ id, data, selected }: NodeProps<PineNode>) 
           : 'border-white/10 hover:border-white/25'
       }`}
     >
+      <NodeActionBar id={id} status={status} output={data.output} />
       <Handle
         type="target"
         position={Position.Left}

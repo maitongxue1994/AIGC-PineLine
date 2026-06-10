@@ -64,7 +64,8 @@ type StudioState = {
   redo: () => void
   runNode: (id: string) => Promise<void>
   pipelineRunning: boolean
-  runPipeline: () => Promise<void>
+  runPipeline: (ids?: string[]) => Promise<void>
+  createPipelineFromBrief: (brief: string) => string[]
   exportProject: () => string
   importProject: (raw: string) => void
   resetProject: () => void
@@ -637,12 +638,18 @@ export const useStudioStore = create<StudioState>()(
     }
   },
 
-  runPipeline: async () => {
+  runPipeline: async (ids) => {
     if (get().pipelineRunning) return
     set({ pipelineRunning: true })
     try {
       const { nodes, edges, runNode } = get()
-      const layers = topoLayers(nodes, edges)
+      // 传 ids 时只跑指定子图（如 Composer 刚创建的链），不重跑画布上其他节点
+      const subset = ids ? nodes.filter((n) => ids.includes(n.id)) : nodes
+      const subIds = new Set(subset.map((n) => n.id))
+      const subEdges = edges.filter(
+        (e) => subIds.has(e.source) && subIds.has(e.target),
+      )
+      const layers = topoLayers(subset, subEdges)
       for (const layer of layers) {
         // 单节点失败由 runNode 自行兜成 error 状态，不阻断整条管线
         await Promise.allSettled(layer.map((nid) => runNode(nid)))
@@ -650,6 +657,54 @@ export const useStudioStore = create<StudioState>()(
     } finally {
       set({ pipelineRunning: false })
     }
+  },
+
+  createPipelineFromBrief: (brief) => {
+    // 放在现有节点下方一行，避免叠在已有内容上
+    const baseY =
+      get().nodes.reduce((m, n) => Math.max(m, n.position.y), 0) + 320
+    const script = newNode(
+      'script',
+      '剧本 · 来自 Composer',
+      { brief, tone: 'cinematic', length: 'short' } satisfies ScriptParams,
+      { x: 80, y: baseY },
+    )
+    const storyboard = newNode(
+      'storyboard',
+      '分镜 · 自动拆分',
+      { screenplay: '', splitter: '', mode: 'auto' } satisfies StoryboardParams,
+      { x: 560, y: baseY },
+    )
+    const shot = newNode(
+      'shot',
+      '分镜图 · 首镜',
+      { shotDescription: '', aspectRatio: '16:9' } satisfies ShotParams,
+      { x: 1040, y: baseY },
+    )
+    // commit 在 150ms 窗口内合并，整条链的创建是一步撤销
+    commit()
+    set((s) => ({
+      nodes: [...s.nodes, script, storyboard, shot],
+      edges: [
+        ...s.edges,
+        {
+          id: `e-${script.id}-${storyboard.id}`,
+          source: script.id,
+          target: storyboard.id,
+          animated: true,
+          style: { stroke: '#FF6A3D' },
+        },
+        {
+          id: `e-${storyboard.id}-${shot.id}`,
+          source: storyboard.id,
+          target: shot.id,
+          animated: true,
+          style: { stroke: '#FF6A3D' },
+        },
+      ],
+      selectedNodeId: script.id,
+    }))
+    return [script.id, storyboard.id, shot.id]
   },
 
   exportProject: () => {

@@ -2,7 +2,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Play, Loader2, type LucideIcon } from 'lucide-react'
 import { useStudioStore } from '../store'
 import type { AspectRatio, NodeKind, PineNode } from '../types'
-import { ImageThumb, StatusBadge } from './shared'
+import { ImageThumb, NodeActionBar, StatusBadge } from './shared'
 
 type GridParams = {
   description: string
@@ -52,6 +52,12 @@ export default function GridImageNode({
       }`}
       style={{ color: accent }}
     >
+      <NodeActionBar
+        id={id}
+        status={status}
+        output={data.output}
+        filename={`${data.title || 'pineline'}.png`}
+      />
       <Handle
         type="target"
         position={Position.Left}
