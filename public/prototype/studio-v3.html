@@ -104,10 +104,16 @@
   .help-pop .keys { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line);
     color: var(--ink2); font-size: 11px; }
 
-  /* ===== 空画布引导卡 ===== */
+  /* ===== 空画布引导卡（仅新工程初始态，可关闭） ===== */
   .guide { position: absolute; inset: 0; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 18px; z-index: 5; }
   .guide.hide { display: none; }
+  .guide-close { position: absolute; top: -34px; right: -6px; width: 26px; height: 26px;
+    border-radius: 8px; border: 1px solid var(--line); color: var(--ink2);
+    background: rgba(21,21,30,.85); font-size: 12px; }
+  .guide-close:hover { color: #fff; }
+  .guide-inner { position: relative; display: flex; flex-direction: column;
+    align-items: center; gap: 18px; }
   .guide p { color: var(--ink2); font-size: 13px; }
   .guide-cards { display: flex; gap: 14px; }
   .gcard { width: 150px; border: 1px solid var(--line); border-radius: 14px;
@@ -275,7 +281,8 @@
       <button title="撤销">↶</button>
       <button title="重做">↷</button>
       <button title="帮助" onclick="togglePop(event)">?</button>
-      <button class="reset-btn" onclick="resetProto()" title="清空 mock 节点，回到空画布引导态">↺ 重置回空画布</button>
+      <button onclick="showGuide()" title="打开模板引导卡">⊞ 模板</button>
+      <button class="reset-btn" onclick="resetProto()" title="清空一切，回到完全空白的画布">↺ 重置回空白画布</button>
     </div>
 
     <div class="help-pop" id="helpPop">
@@ -289,24 +296,27 @@
       <div class="keys">⌘Enter 运行 · ⌘D 复制 · ⌘Z 撤销 · Del 删除</div>
     </div>
 
-    <!-- 空画布引导卡 -->
+    <!-- 空画布引导卡（仅新工程初始态出现，可关闭） -->
     <div class="guide" id="guide">
-      <p>从一个模板开始，或在下方输入一句话创意 ↓</p>
-      <div class="guide-cards">
-        <button class="gcard" onclick="applyTemplate()">
-          <span class="emoji">🎬</span><b>短剧</b>
-          <span>剧本 → 分镜 → 分镜图</span>
-        </button>
-        <button class="gcard" onclick="applyTemplate()">
-          <span class="emoji">📦</span><b>产品广告</b>
-          <span>场景 + 道具 → 合成镜头</span>
-        </button>
-        <button class="gcard" onclick="applyTemplate()">
-          <span class="emoji">🎵</span><b>MV</b>
-          <span>场景四宫格 → 分镜图</span>
-        </button>
+      <div class="guide-inner">
+        <button class="guide-close" onclick="closeGuide()" title="关闭引导，使用空白画布">✕</button>
+        <p>从一个模板开始，或在下方输入一句话创意 ↓</p>
+        <div class="guide-cards">
+          <button class="gcard" onclick="applyTemplate()">
+            <span class="emoji">🎬</span><b>短剧</b>
+            <span>剧本 → 分镜 → 分镜图</span>
+          </button>
+          <button class="gcard" onclick="applyTemplate()">
+            <span class="emoji">📦</span><b>产品广告</b>
+            <span>场景 + 道具 → 合成镜头</span>
+          </button>
+          <button class="gcard" onclick="applyTemplate()">
+            <span class="emoji">🎵</span><b>MV</b>
+            <span>场景四宫格 → 分镜图</span>
+          </button>
+        </div>
+        <span class="guide-arrow">▽</span>
       </div>
-      <span class="guide-arrow">▽</span>
     </div>
 
     <!-- 连线（模板铺出后显示） -->
@@ -431,7 +441,7 @@
 
 <div class="review-banner">
   <b>Studio v3 静态原型</b>
-  可点：模板卡 / 节点选中→工具条 / 双击空白→菜单 / 双击节点标题改名 / 左栏资产 / ? 帮助 / 左上角「↺ 重置回空画布」
+  可点：模板卡（✕ 可关）/ 节点选中→工具条 / 双击空白→菜单 / 双击标题改名 / 左栏资产 / ? 帮助 / ⊞ 模板 / ↺ 重置=完全空白
 </div>
 
 <script>
@@ -449,18 +459,26 @@
     $('wires').style.display = 'block'
     toast('已铺出节点链（mock）— 点节点查看新版卡片')
   }
+  /* 重置 = 完全空白：无节点、无引导卡 */
   function resetProto() {
-    $('guide').classList.remove('hide')
+    $('guide').classList.add('hide')
     $('nodes').style.display = 'none'
     $('wires').style.display = 'none'
     document.querySelectorAll('.node.sel').forEach((n) => n.classList.remove('sel'))
-    toast('已重置回空画布引导态')
+    toast('已重置为空白画布（左上角「⊞ 模板」可重新打开引导）')
+  }
+  /* 引导卡：仅新工程初始态；可关闭、可从工具栏唤起 */
+  function closeGuide() { $('guide').classList.add('hide'); toast('已关闭引导，可直接双击画布或使用底部输入框') }
+  function showGuide() {
+    $('nodes').style.display = 'none'
+    $('wires').style.display = 'none'
+    $('guide').classList.remove('hide')
   }
 
-  /* 原型中「返回」= 重置；真实应用中为返回首页路由 */
+  /* 原型中「返回」= 回到新工程初始态（含引导卡）；真实应用中为返回首页路由 */
   function goBack() {
-    resetProto()
-    toast('（原型）已重置回空画布；真实应用中此按钮返回首页')
+    showGuide()
+    toast('（原型）已回到新工程初始态；真实应用中此按钮返回首页')
   }
 
   /* 节点选中 → 工具条 */
