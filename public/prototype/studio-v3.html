@@ -88,10 +88,11 @@
 
   /* 左上角浮动按钮组 */
   .canvas-tools { position: absolute; top: 10px; left: 10px; z-index: 20; display: flex; gap: 4px; }
-  .canvas-tools button { width: 28px; height: 28px; border-radius: 8px;
+  .canvas-tools button { height: 28px; min-width: 28px; padding: 0 8px; border-radius: 8px;
     border: 1px solid var(--line); background: rgba(21,21,30,.85); color: var(--ink1);
-    font-size: 13px; }
+    font-size: 12px; }
   .canvas-tools button:hover { color: #fff; }
+  .canvas-tools .reset-btn { color: var(--cyan); border-color: rgba(34,211,238,.35); }
 
   .help-pop { position: absolute; top: 46px; left: 10px; z-index: 21; width: 270px;
     background: rgba(14,14,20,.96); border: 1px solid var(--line); border-radius: 12px;
@@ -228,7 +229,7 @@
 <!-- 顶栏：项目名真实可编辑，无假导航/假头像 -->
 <header>
   <div class="h-left">
-    <span class="back">← 返回</span>
+    <span class="back" onclick="goBack()" style="cursor:pointer" title="原型中：重置回空画布；真实应用中：返回首页">← 返回</span>
     <span class="divider"></span>
     <span class="logo"></span>
     <span class="divider"></span>
@@ -274,6 +275,7 @@
       <button title="撤销">↶</button>
       <button title="重做">↷</button>
       <button title="帮助" onclick="togglePop(event)">?</button>
+      <button class="reset-btn" onclick="resetProto()" title="清空 mock 节点，回到空画布引导态">↺ 重置回空画布</button>
     </div>
 
     <div class="help-pop" id="helpPop">
@@ -429,8 +431,7 @@
 
 <div class="review-banner">
   <b>Studio v3 静态原型</b>
-  可点：模板卡 / 节点选中→工具条 / 双击空白→菜单 / 双击节点标题改名 / 左栏资产 / ? 帮助
-  <button onclick="resetProto()">↺ 重置回空画布</button>
+  可点：模板卡 / 节点选中→工具条 / 双击空白→菜单 / 双击节点标题改名 / 左栏资产 / ? 帮助 / 左上角「↺ 重置回空画布」
 </div>
 
 <script>
@@ -453,6 +454,13 @@
     $('nodes').style.display = 'none'
     $('wires').style.display = 'none'
     document.querySelectorAll('.node.sel').forEach((n) => n.classList.remove('sel'))
+    toast('已重置回空画布引导态')
+  }
+
+  /* 原型中「返回」= 重置；真实应用中为返回首页路由 */
+  function goBack() {
+    resetProto()
+    toast('（原型）已重置回空画布；真实应用中此按钮返回首页')
   }
 
   /* 节点选中 → 工具条 */
