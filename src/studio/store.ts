@@ -353,23 +353,18 @@ export const useStudioStore = create<StudioState>()(
 
   requestFitView: () => set((s) => ({ fitViewTick: s.fitViewTick + 1 })),
 
+  // 模板 = 起一个新工作流：清空并替换画布（评审反馈）；commit 在前，⌘Z 一步可撤回原画布
   applyTemplate: (id) => {
     const tpl = buildTemplate(id)
-    // 画布已有内容时整体下移一行，避免叠在现有节点上
-    const baseY = get().nodes.reduce((m, n) => Math.max(m, n.position.y), -320) + 320
-    const nodes = tpl.nodes.map((n) => ({
-      ...n,
-      position: { x: n.position.x, y: n.position.y + baseY },
-    }))
     commit()
-    set((s) => ({
-      nodes: [...s.nodes, ...nodes],
-      edges: [...s.edges, ...tpl.edges],
-      selectedNodeId: nodes[0]?.id ?? null,
+    set({
+      nodes: tpl.nodes,
+      edges: tpl.edges,
+      selectedNodeId: tpl.nodes[0]?.id ?? null,
       guideOpen: false,
-    }))
+    })
     get().requestFitView()
-    return nodes.map((n) => n.id)
+    return tpl.nodes.map((n) => n.id)
   },
 
   updateNodeParams: (id, patch) =>

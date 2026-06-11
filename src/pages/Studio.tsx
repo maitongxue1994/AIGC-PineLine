@@ -107,12 +107,22 @@ function ProjectName() {
   )
 }
 
-/** 空画布引导卡：3 个模板配方，一键铺出预连节点链 */
+/** 空画布引导卡：3 个模板配方，一键铺出预连节点链（应用=清空并替换画布） */
 function EmptyCanvasGuide() {
   const guideOpen = useStudioStore((s) => s.guideOpen)
   const setGuideOpen = useStudioStore((s) => s.setGuideOpen)
   const applyTemplate = useStudioStore((s) => s.applyTemplate)
+  const hasNodes = useStudioStore((s) => s.nodes.length > 0)
   if (!guideOpen) return null
+
+  const handlePick = (id: (typeof TEMPLATES)[number]['id']) => {
+    if (
+      hasNodes &&
+      !window.confirm('应用模板会清空当前画布（可先「导出」备份，⌘/Ctrl+Z 可撤销）。继续？')
+    )
+      return
+    applyTemplate(id)
+  }
 
   return (
     <div className="absolute inset-0 z-10">
@@ -135,7 +145,7 @@ function EmptyCanvasGuide() {
           {TEMPLATES.map((t) => (
             <button
               key={t.id}
-              onClick={() => applyTemplate(t.id)}
+              onClick={() => handlePick(t.id)}
               className="w-[150px] rounded-2xl border border-white/[0.08] bg-bg-2/95 p-4 text-left backdrop-blur transition hover:-translate-y-0.5 hover:border-white/30"
             >
               <span className="text-xl">{t.emoji}</span>
