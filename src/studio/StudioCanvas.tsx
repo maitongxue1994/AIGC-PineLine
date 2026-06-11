@@ -11,7 +11,7 @@ import {
   type NodeTypes,
   type OnConnectEnd,
 } from '@xyflow/react'
-import { HelpCircle, Redo2, Undo2, X } from 'lucide-react'
+import { HelpCircle, LayoutTemplate, Redo2, Undo2, X } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
 import ScriptNode from './nodes/ScriptNode'
@@ -60,6 +60,7 @@ function StudioCanvasInner() {
   const redo = useStudioStore((s) => s.redo)
   const canUndo = useStudioStore((s) => s.past.length > 0)
   const canRedo = useStudioStore((s) => s.future.length > 0)
+  const setGuideOpen = useStudioStore((s) => s.setGuideOpen)
 
   const { screenToFlowPosition } = useReactFlow()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -322,6 +323,14 @@ function StudioCanvasInner() {
             className="rounded-md border border-white/[0.07] bg-bg-2/80 p-1.5 text-ink-1 backdrop-blur transition hover:bg-bg-2 hover:text-white"
           >
             <HelpCircle size={13} />
+          </button>
+          <button
+            title="打开模板引导卡"
+            onClick={() => setGuideOpen(true)}
+            className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-bg-2/80 px-2 py-1.5 text-[10px] text-ink-1 backdrop-blur transition hover:bg-bg-2 hover:text-white"
+          >
+            <LayoutTemplate size={13} />
+            模板
           </button>
           <span className="ml-1 hidden self-center text-[10px] text-ink-3 lg:inline">
             双击空白新建节点 · 拖图片进画布作参考

@@ -9,39 +9,21 @@ import {
   MoreHorizontal,
   Upload,
   FilePlus2,
-  FileText,
-  Clapperboard,
-  Film,
-  Image as ImageIcon,
-  Mountain,
-  Users,
-  Music2,
-  Package,
+  LayoutGrid,
   Plus,
   Sparkles,
+  X,
 } from 'lucide-react'
 import Logo from '../components/Logo'
 import StudioCanvas from '../studio/StudioCanvas'
 import { useStudioStore } from '../studio/store'
+import { TEMPLATES } from '../studio/templates'
 import type { NodeKind, ScriptParams } from '../studio/types'
 
-const TOOLS = [
-  { id: 'script',     icon: FileText,     label: '剧本' },
-  { id: 'storyboard', icon: Clapperboard, label: '分镜' },
-  { id: 'scene',      icon: Mountain,     label: '场景' },
-  { id: 'shot',       icon: Film,         label: '镜头' },
-  { id: 'character',  icon: Users,        label: '角色' },
-  { id: 'prop',       icon: Package,      label: '道具' },
-  { id: 'image',      icon: ImageIcon,    label: '素材' },
-  { id: 'audio',      icon: Music2,       label: '音画' },
-]
-
 export default function Studio() {
-  // 画布优先：抽屉默认收起，点工具开/再点收起；新建节点走面板「+」、双击画布或拖线菜单
-  // v3：右侧 Inspector 已移除——节点的所有编辑（参数/输出/重命名/运行）都在节点上完成
-  const [activeTool, setActiveTool] = useState<string | null>(null)
-  const handleToolClick = (id: string) =>
-    setActiveTool((prev) => (prev === id ? null : id))
+  // 画布优先（v3 M2）：左栏只剩「资产」单入口；右侧无 Inspector；
+  // 节点的所有编辑（参数/输出/重命名/运行）都在节点上完成
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
     <motion.main
@@ -51,8 +33,8 @@ export default function Studio() {
       transition={{ duration: 0.3 }}
       className="flex h-screen w-full flex-col overflow-hidden bg-bg-0 text-ink-0"
     >
-      {/* top bar */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-bg-1/70 px-3 backdrop-blur">
+      {/* top bar（relative z-30：让「更多」下拉菜单浮在画布之上，否则被 react-flow pane 盖住点不动） */}
+      <header className="relative z-30 flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-bg-1/70 px-3 backdrop-blur">
         <div className="flex items-center gap-2">
           <Link to="/" className="group flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-ink-1 transition hover:bg-white/5 hover:text-white">
             <ChevronLeft size={14} />
@@ -61,34 +43,27 @@ export default function Studio() {
           <div className="mx-2 h-5 w-px bg-white/10" />
           <Logo size={20} />
           <div className="mx-2 h-5 w-px bg-white/10" />
-          <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm">
-            <span className="text-ink-2">项目</span>
-            <span className="font-medium text-white">《无声之城》· Ch.2</span>
-            <span className="chip !py-0 !text-[10px]">auto-saved</span>
-          </div>
+          <ProjectName />
         </div>
 
         <ProjectActions />
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* left tool rail（点击开/合抽屉） */}
+        {/* 左栏：唯一「资产」入口（v3 M2，原 8 工具收敛） */}
         <aside className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-white/[0.06] bg-bg-1/50 py-3">
-          {TOOLS.map((t) => (
-            <button
-              key={t.id}
-              title={`${t.label}（点击${activeTool === t.id ? '收起' : '打开'}面板）`}
-              onClick={() => handleToolClick(t.id)}
-              className={`group flex h-10 w-10 flex-col items-center justify-center rounded-xl transition ${
-                activeTool === t.id
-                  ? 'bg-white/[0.08] text-white'
-                  : 'text-ink-2 hover:bg-white/[0.04] hover:text-white'
-              }`}
-            >
-              <t.icon size={16} />
-              <span className="mt-0.5 text-[9px] opacity-70">{t.label}</span>
-            </button>
-          ))}
+          <button
+            title="资产库（画布全部产出，点击开/合）"
+            onClick={() => setDrawerOpen((v) => !v)}
+            className={`flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-xl text-[9px] transition ${
+              drawerOpen
+                ? 'bg-white/[0.08] text-white'
+                : 'text-ink-2 hover:bg-white/[0.04] hover:text-white'
+            }`}
+          >
+            <LayoutGrid size={16} />
+            资产
+          </button>
         </aside>
 
         {/* 满屏画布 + 浮动层 */}
@@ -96,17 +71,77 @@ export default function Studio() {
           <StudioCanvas />
 
           {/* 资产抽屉（按需浮出） */}
-          {activeTool && (
+          {drawerOpen && (
             <div className="absolute bottom-0 left-0 top-0 z-20">
-              <SecondaryPanel tool={activeTool} />
+              <AssetDrawer />
             </div>
           )}
+
+          {/* 空画布模板引导卡（仅新工程初始态；✕ 可关；⊞ 模板可唤起） */}
+          <EmptyCanvasGuide />
 
           {/* 底部中央 Composer：一句话起一条管线 */}
           <Composer />
         </section>
       </div>
     </motion.main>
+  )
+}
+
+/** 顶栏工程名：真实数据，可编辑，随 localStorage 持久化、随导出 JSON 携带 */
+function ProjectName() {
+  const projectName = useStudioStore((s) => s.projectName)
+  const setProjectName = useStudioStore((s) => s.setProjectName)
+  return (
+    <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm">
+      <input
+        value={projectName}
+        onChange={(e) => setProjectName(e.target.value)}
+        onBlur={(e) => {
+          if (!e.target.value.trim()) setProjectName('未命名工程')
+        }}
+        title="点击编辑工程名"
+        className="w-[150px] rounded-md border border-transparent bg-transparent px-1.5 py-0.5 font-medium text-white outline-none transition hover:border-white/10 focus:border-white/30"
+      />
+      <span className="chip !py-0 !text-[10px]">auto-saved</span>
+    </div>
+  )
+}
+
+/** 空画布引导卡：3 个模板配方，一键铺出预连节点链 */
+function EmptyCanvasGuide() {
+  const guideOpen = useStudioStore((s) => s.guideOpen)
+  const setGuideOpen = useStudioStore((s) => s.setGuideOpen)
+  const applyTemplate = useStudioStore((s) => s.applyTemplate)
+  if (!guideOpen) return null
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-4">
+      <div className="pointer-events-auto relative flex flex-col items-center gap-4">
+        <button
+          onClick={() => setGuideOpen(false)}
+          title="关闭引导，使用空白画布"
+          className="absolute -right-2 -top-9 rounded-lg border border-white/[0.08] bg-bg-2/90 p-1.5 text-ink-2 backdrop-blur transition hover:text-white"
+        >
+          <X size={13} />
+        </button>
+        <p className="text-[13px] text-ink-2">从一个模板开始，或在下方输入一句话创意 ↓</p>
+        <div className="flex gap-3.5">
+          {TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => applyTemplate(t.id)}
+              className="w-[150px] rounded-2xl border border-white/[0.08] bg-bg-2/70 p-4 text-left backdrop-blur transition hover:-translate-y-0.5 hover:border-white/30"
+            >
+              <span className="text-xl">{t.emoji}</span>
+              <span className="mt-2 block text-[13px] font-semibold text-white">{t.title}</span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-ink-2">{t.desc}</span>
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-ink-3">▽</span>
+      </div>
+    </div>
   )
 }
 
@@ -194,7 +229,8 @@ function ProjectActions() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `pineline-${new Date().toISOString().slice(0, 10)}.json`
+    const name = useStudioStore.getState().projectName.trim() || 'pineline'
+    a.download = `${name}-${new Date().toISOString().slice(0, 10)}.json`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -336,25 +372,26 @@ function useAdders(): Record<string, (() => string) | undefined> {
   }
 }
 
-function SecondaryPanel({ tool }: { tool: string }) {
-  // 注意：这里的 key 必须和左侧工具栏 TOOLS 的 id 保持一致，否则标题与内容会错位
-  const TITLES: Record<string, string> = {
-    script:     '剧本 Outline',
-    storyboard: '分镜 Board',
-    scene:      '场景库',
-    shot:       '镜头库',
-    character:  '数字演员',
-    prop:       '道具库',
-    image:      '素材库',
-    audio:      '音画资产',
-  }
+/** 统一资产抽屉（v3 M2）：原 8 个面板按类型收敛为 tab，内容全部来自画布真实节点 */
+const DRAWER_TABS = ['全部', '剧本', '分镜', '图像', '角色', '素材'] as const
+type DrawerTab = (typeof DRAWER_TABS)[number]
+
+function AssetDrawer() {
+  const [tab, setTab] = useState<DrawerTab>('全部')
   const adders = useAdders()
-  const onAdd = adders[tool]
+  // 各 tab 的「+」新建动作；全部/素材没有单一对应节点类型
+  const ADD_BY_TAB: Partial<Record<DrawerTab, (() => string) | undefined>> = {
+    剧本: adders.script,
+    分镜: adders.storyboard,
+    图像: adders.image,
+    角色: adders.character,
+  }
+  const onAdd = ADD_BY_TAB[tab]
 
   return (
     <aside className="flex h-full w-[260px] flex-col border-r border-white/[0.06] bg-bg-1/90 shadow-2xl backdrop-blur">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
-        <div className="font-display text-sm font-semibold text-white">{TITLES[tool] ?? '资产'}</div>
+        <div className="font-display text-sm font-semibold text-white">资产库</div>
         {onAdd && (
           <button
             onClick={() => onAdd()}
@@ -366,48 +403,45 @@ function SecondaryPanel({ tool }: { tool: string }) {
         )}
       </div>
 
+      <div className="flex flex-wrap gap-1 border-b border-white/[0.06] px-3 py-2">
+        {DRAWER_TABS.map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`rounded-full px-2.5 py-1 text-[11px] transition ${
+              tab === t
+                ? 'bg-white/10 text-white'
+                : 'text-ink-2 hover:bg-white/[0.04] hover:text-ink-1'
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {tool === 'script' && <ScriptPanel />}
-        {tool === 'storyboard' && <BoardPanel />}
-        {tool === 'shot' && (
+        {tab === '全部' && (
           <NodeImageLibrary
-            kinds={['shot']}
-            emptyText="还没有分镜图节点。把分镜/场景/角色/道具连进「分镜图」，合成单张镜头画面。"
-            addLabel="新建分镜图节点"
-            addKind="shot"
+            kinds={['image', 'asset', 'scene', 'character', 'prop', 'shot']}
+            emptyText="画布上所有节点的产出图会汇总到这里。从模板或底部 Composer 开始创作吧。"
           />
         )}
-        {tool === 'scene' && (
+        {tab === '剧本' && <ScriptPanel />}
+        {tab === '分镜' && <BoardPanel />}
+        {tab === '图像' && (
           <NodeImageLibrary
-            kinds={['scene']}
-            emptyText="还没有场景节点。填一句场景描述，生成四宫格视角参考。"
-            addLabel="新建场景节点"
-            addKind="scene"
-          />
-        )}
-        {tool === 'prop' && (
-          <NodeImageLibrary
-            kinds={['prop']}
-            emptyText="还没有道具节点。填一句道具描述，生成三视图。"
-            addLabel="新建道具节点"
-            addKind="prop"
-          />
-        )}
-        {tool === 'image' && (
-          <NodeImageLibrary
-            kinds={['image', 'asset']}
-            emptyText="还没有图像产出。新建「通用图像」节点，或直接把图片拖进画布作为上传素材。"
+            kinds={['image', 'scene', 'prop', 'shot']}
+            emptyText="还没有生成图。新建「图像」节点，或运行场景/道具/分镜图节点。"
             addLabel="新建图像节点"
             addKind="image"
           />
         )}
-        {tool === 'character' && <ActorLibrary />}
-        {tool === 'audio' && (
-          <div className="px-4 py-10 text-center text-[11px] leading-relaxed text-ink-3">
-            音画节点在路线图中（P2-7）：
-            <br />
-            配乐 / 音效 / 配音将作为画布节点接入时间线。
-          </div>
+        {tab === '角色' && <ActorLibrary />}
+        {tab === '素材' && (
+          <NodeImageLibrary
+            kinds={['asset']}
+            emptyText="把图片直接拖进画布，会生成「上传素材」节点并汇总到这里，连到下游作参考图。"
+          />
         )}
       </div>
     </aside>
@@ -417,8 +451,8 @@ function SecondaryPanel({ tool }: { tool: string }) {
 function PanelStatus({ status }: { status: string }) {
   const MAP: Record<string, [string, string]> = {
     running: ['生成中', 'text-brand'],
-    done: ['ready', 'text-[#B6FF5F]'],
-    error: ['error', 'text-red-400'],
+    done: ['完成', 'text-[#B6FF5F]'],
+    error: ['失败', 'text-red-400'],
     idle: ['待运行', 'text-ink-3'],
   }
   const [label, cls] = MAP[status] ?? MAP.idle
@@ -484,7 +518,7 @@ function ScriptPanel() {
               <PanelStatus status={n.data.status} />
             </div>
             <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-ink-2">
-              {n.data.output || p.brief || '（空白，点击在 Inspector 中填写）'}
+              {n.data.output || p.brief || '（空白，点击选中后在节点上填写）'}
             </p>
           </button>
         )
@@ -557,8 +591,8 @@ function NodeImageLibrary({
 }: {
   kinds: NodeKind[]
   emptyText: string
-  addLabel: string
-  addKind: string
+  addLabel?: string
+  addKind?: string
 }) {
   const nodes = useStudioStore((s) => s.nodes)
   const focusNode = useStudioStore((s) => s.focusNode)
@@ -578,7 +612,13 @@ function NodeImageLibrary({
   })
 
   if (!owned.length)
-    return <PanelEmpty text={emptyText} actionLabel={addLabel} onAdd={adders[addKind]} />
+    return (
+      <PanelEmpty
+        text={emptyText}
+        actionLabel={addLabel}
+        onAdd={addKind ? adders[addKind] : undefined}
+      />
+    )
 
   if (!items.length)
     return (

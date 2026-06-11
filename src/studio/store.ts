@@ -8,7 +8,7 @@ import {
   type EdgeChange,
   type NodeChange,
 } from '@xyflow/react'
-import { defaultEdges, defaultNodes } from './defaultGraph'
+import { buildTemplate, type TemplateId } from './templates'
 import {
   generateImage,
   generateImageGrid,
@@ -40,6 +40,9 @@ type StudioState = {
   nodes: PineNode[]
   edges: PineEdge[]
   selectedNodeId: string | null
+  projectName: string
+  // 空画布模板引导卡：仅新工程初始态默认展示；清空=完全空白，可经「模板」按钮唤起
+  guideOpen: boolean
   past: GraphSnapshot[]
   future: GraphSnapshot[]
   onNodesChange: (changes: NodeChange<PineNode>[]) => void
@@ -47,6 +50,9 @@ type StudioState = {
   onConnect: (conn: Connection) => void
   selectNode: (id: string | null) => void
   focusNode: (id: string) => void
+  setProjectName: (name: string) => void
+  setGuideOpen: (open: boolean) => void
+  applyTemplate: (id: TemplateId) => string[]
   updateNodeParams: (id: string, patch: Partial<PineNodeData['params']>) => void
   updateNodeTitle: (id: string, title: string) => void
   updateNodeOutput: (id: string, output: string) => void
@@ -289,14 +295,21 @@ export const useStudioStore = create<StudioState>()(
 
       const pushNode = (node: PineNode): string => {
         commit()
-        set((s) => ({ nodes: [...s.nodes, node], selectedNodeId: node.id }))
+        set((s) => ({
+          nodes: [...s.nodes, node],
+          selectedNodeId: node.id,
+          guideOpen: false,
+        }))
         return node.id
       }
 
       return {
-  nodes: defaultNodes,
-  edges: defaultEdges,
-  selectedNodeId: 'script-1',
+  // v3 M2：默认空工程，首次体验交给空画布引导卡（模板）+ Composer
+  nodes: [],
+  edges: [],
+  selectedNodeId: null,
+  projectName: '未命名工程',
+  guideOpen: true,
   past: [],
   future: [],
   pipelineRunning: false,
@@ -329,6 +342,28 @@ export const useStudioStore = create<StudioState>()(
       selectedNodeId: id,
       nodes: s.nodes.map((n) => ({ ...n, selected: n.id === id })),
     })),
+
+  setProjectName: (name) => set({ projectName: name }),
+
+  setGuideOpen: (open) => set({ guideOpen: open }),
+
+  applyTemplate: (id) => {
+    const tpl = buildTemplate(id)
+    // 画布已有内容时整体下移一行，避免叠在现有节点上
+    const baseY = get().nodes.reduce((m, n) => Math.max(m, n.position.y), -320) + 320
+    const nodes = tpl.nodes.map((n) => ({
+      ...n,
+      position: { x: n.position.x, y: n.position.y + baseY },
+    }))
+    commit()
+    set((s) => ({
+      nodes: [...s.nodes, ...nodes],
+      edges: [...s.edges, ...tpl.edges],
+      selectedNodeId: nodes[0]?.id ?? null,
+      guideOpen: false,
+    }))
+    return nodes.map((n) => n.id)
+  },
 
   updateNodeParams: (id, patch) =>
     set((s) => ({
@@ -705,15 +740,23 @@ export const useStudioStore = create<StudioState>()(
         },
       ],
       selectedNodeId: script.id,
+      guideOpen: false,
     }))
     return [script.id, storyboard.id, shot.id]
   },
 
   exportProject: () => {
-    const { nodes, edges } = get()
+    const { nodes, edges, projectName } = get()
     // 内存中保留完整 base64 图片，导出文件因此是用户可留存/转交的完整工程
     return JSON.stringify(
-      { app: 'pineline', version: 1, exportedAt: new Date().toISOString(), nodes, edges },
+      {
+        app: 'pineline',
+        version: 1,
+        projectName,
+        exportedAt: new Date().toISOString(),
+        nodes,
+        edges,
+      },
       null,
       2,
     )
@@ -726,7 +769,7 @@ export const useStudioStore = create<StudioState>()(
     } catch {
       throw new Error('文件不是合法 JSON')
     }
-    const obj = data as { nodes?: unknown; edges?: unknown }
+    const obj = data as { nodes?: unknown; edges?: unknown; projectName?: unknown }
     if (!obj || !Array.isArray(obj.nodes) || !Array.isArray(obj.edges)) {
       throw new Error('工程文件格式不正确：缺少 nodes / edges 数组')
     }
@@ -739,29 +782,36 @@ export const useStudioStore = create<StudioState>()(
         sourceHandle: undefined,
         targetHandle: undefined,
       })),
+      ...(typeof obj.projectName === 'string' && obj.projectName.trim()
+        ? { projectName: obj.projectName.trim() }
+        : {}),
       selectedNodeId: null,
       pipelineRunning: false,
+      guideOpen: false,
     })
   },
 
+  // 清空 = 完全空白画布（不强弹引导卡，可经「模板」按钮唤起）
   resetProject: () => {
     commit()
     set({
-      nodes: defaultNodes,
-      edges: defaultEdges,
-      selectedNodeId: 'script-1',
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
       pipelineRunning: false,
+      guideOpen: false,
     })
   },
       }
     },
     {
       name: 'pineline-studio-v1',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       // v2：shot 节点从 4 个分色输入桩收敛为单桩，旧边携带的 handle id
       // （text/scene/character/prop）已不存在，剥离后 ReactFlow 才能正常渲染
-      migrate: (persisted) => {
+      // v3：新增 projectName / guideOpen；老用户画布有内容时不弹引导卡
+      migrate: (persisted, version) => {
         const s = persisted as StudioState
         if (Array.isArray(s?.edges)) {
           s.edges = s.edges.map((e) => ({
@@ -770,6 +820,10 @@ export const useStudioStore = create<StudioState>()(
             targetHandle: undefined,
           }))
         }
+        if (version < 3) {
+          s.projectName = s.projectName || '未命名工程'
+          s.guideOpen = !(Array.isArray(s.nodes) && s.nodes.length > 0)
+        }
         return s
       },
       partialize: (state) =>
@@ -777,6 +831,8 @@ export const useStudioStore = create<StudioState>()(
           nodes: state.nodes.map(stripHeavyOutputs),
           edges: state.edges,
           selectedNodeId: state.selectedNodeId,
+          projectName: state.projectName,
+          guideOpen: state.guideOpen,
         }) as unknown as StudioState,
     },
   ),
