@@ -8,7 +8,6 @@ import {
   Share2,
   MoreHorizontal,
   Upload,
-  FilePlus2,
   LayoutGrid,
   Plus,
   Sparkles,
@@ -116,8 +115,14 @@ function EmptyCanvasGuide() {
   if (!guideOpen) return null
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-4">
-      <div className="pointer-events-auto relative flex flex-col items-center gap-4">
+    <div className="absolute inset-0 z-10">
+      {/* 蒙层：压暗背后节点避免视觉重叠，点击即关闭 */}
+      <div
+        className="absolute inset-0 bg-bg-0/80 backdrop-blur-[2px]"
+        onClick={() => setGuideOpen(false)}
+      />
+      <div className="pointer-events-none relative flex h-full flex-col items-center justify-center gap-4">
+        <div className="pointer-events-auto relative flex flex-col items-center gap-4">
         <button
           onClick={() => setGuideOpen(false)}
           title="关闭引导，使用空白画布"
@@ -131,15 +136,16 @@ function EmptyCanvasGuide() {
             <button
               key={t.id}
               onClick={() => applyTemplate(t.id)}
-              className="w-[150px] rounded-2xl border border-white/[0.08] bg-bg-2/70 p-4 text-left backdrop-blur transition hover:-translate-y-0.5 hover:border-white/30"
+              className="w-[150px] rounded-2xl border border-white/[0.08] bg-bg-2/95 p-4 text-left backdrop-blur transition hover:-translate-y-0.5 hover:border-white/30"
             >
               <span className="text-xl">{t.emoji}</span>
               <span className="mt-2 block text-[13px] font-semibold text-white">{t.title}</span>
               <span className="mt-0.5 block text-[11px] leading-snug text-ink-2">{t.desc}</span>
             </button>
           ))}
+          </div>
+          <span className="text-xs text-ink-3">▽</span>
         </div>
-        <span className="text-xs text-ink-3">▽</span>
       </div>
     </div>
   )
@@ -204,7 +210,6 @@ function ProjectActions() {
   const pipelineRunning = useStudioStore((s) => s.pipelineRunning)
   const exportProject = useStudioStore((s) => s.exportProject)
   const importProject = useStudioStore((s) => s.importProject)
-  const resetProject = useStudioStore((s) => s.resetProject)
 
   const [toast, setToast] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -264,14 +269,6 @@ function ProjectActions() {
     reader.readAsText(file)
   }
 
-  const handleNew = () => {
-    setMenuOpen(false)
-    if (window.confirm('新建空工程会清空当前画布（可先「导出」备份），确定继续？')) {
-      resetProject()
-      flash('已新建空工程')
-    }
-  }
-
   return (
     <div className="flex items-center gap-2">
       <button
@@ -315,6 +312,7 @@ function ProjectActions() {
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
             <div className="absolute right-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-lg border border-white/10 bg-bg-2/95 py-1 text-xs shadow-xl backdrop-blur">
+              {/* 「新建空工程」已与画布左上角「↺ 清空画布」合并（评审反馈：藏在这里太隐蔽） */}
               <button
                 onClick={() => {
                   setMenuOpen(false)
@@ -323,12 +321,6 @@ function ProjectActions() {
                 className="flex w-full items-center gap-2 px-3 py-2 text-ink-1 transition hover:bg-white/5 hover:text-white"
               >
                 <Upload size={13} /> 导入工程…
-              </button>
-              <button
-                onClick={handleNew}
-                className="flex w-full items-center gap-2 px-3 py-2 text-ink-1 transition hover:bg-white/5 hover:text-white"
-              >
-                <FilePlus2 size={13} /> 新建空工程
               </button>
             </div>
           </>

@@ -11,7 +11,7 @@ import {
   type NodeTypes,
   type OnConnectEnd,
 } from '@xyflow/react'
-import { HelpCircle, LayoutTemplate, Redo2, Undo2, X } from 'lucide-react'
+import { HelpCircle, LayoutTemplate, Redo2, RotateCcw, Undo2, X } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
 import ScriptNode from './nodes/ScriptNode'
@@ -61,8 +61,10 @@ function StudioCanvasInner() {
   const canUndo = useStudioStore((s) => s.past.length > 0)
   const canRedo = useStudioStore((s) => s.future.length > 0)
   const setGuideOpen = useStudioStore((s) => s.setGuideOpen)
+  const resetProject = useStudioStore((s) => s.resetProject)
+  const fitViewTick = useStudioStore((s) => s.fitViewTick)
 
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, fitView } = useReactFlow()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const pendingConnectRef = useRef<{
     fromNodeId: string
@@ -76,7 +78,18 @@ function StudioCanvasInner() {
     null,
   )
   const [notice, setNotice] = useState<string | null>(null)
-  const [helpOpen, setHelpOpen] = useState(false)
+  // 首次进入自动展示一次帮助；引导卡打开时让位（新用户的 onboarding 是模板卡，
+  // 两个浮层叠加会让帮助被蒙层压住）。persist 同步水合，mount 时 guideOpen 已就绪。
+  const [helpOpen, setHelpOpen] = useState(() => {
+    try {
+      return (
+        !localStorage.getItem('pineline-help-seen') &&
+        !useStudioStore.getState().guideOpen
+      )
+    } catch {
+      return false
+    }
+  })
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const flash = useCallback((msg: string) => {
@@ -91,6 +104,25 @@ function StudioCanvasInner() {
     },
     [],
   )
+
+  // 模板/Composer 铺链后自动把新节点带入视野（等渲染一帧再适配）
+  useEffect(() => {
+    if (fitViewTick === 0) return
+    const raf = requestAnimationFrame(() => {
+      void fitView({ padding: 0.2, maxZoom: 1, duration: 400 })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [fitViewTick, fitView])
+
+  // 帮助实际展示过（自动或手动）才写「已看过」标记
+  useEffect(() => {
+    if (!helpOpen) return
+    try {
+      localStorage.setItem('pineline-help-seen', '1')
+    } catch {
+      /* 隐私模式等场景拿不到 localStorage，忽略 */
+    }
+  }, [helpOpen])
 
   const handleSelectionChange = useCallback(
     ({ nodes }: { nodes: { id: string }[] }) => {
@@ -163,16 +195,47 @@ function StudioCanvasInner() {
     [screenToFlowPosition],
   )
 
-  // 双击空白画布 → 在落点弹新建菜单（TapNow 同款交互）
+  // 新建落点避让右下角 MiniMap：节点若铺在小地图底下会被遮住（M1 测试发现）
+  const MINIMAP_ZONE = { w: 230, h: 180 }
+  const avoidMiniMap = useCallback((x: number, y: number) => {
+    const rect = wrapperRef.current?.getBoundingClientRect()
+    if (!rect) return { x, y }
+    const inZone = x > rect.right - MINIMAP_ZONE.w && y > rect.bottom - MINIMAP_ZONE.h
+    if (!inZone) return { x, y }
+    // 节点卡片约 320px 宽，整体左移/上移出小地图区域
+    return {
+      x: Math.min(x, rect.right - MINIMAP_ZONE.w - 340),
+      y: Math.min(y, rect.bottom - MINIMAP_ZONE.h - 80),
+    }
+  }, [MINIMAP_ZONE.w, MINIMAP_ZONE.h])
+
+  // 双击/右键空白画布 → 在落点弹新建菜单（TapNow 同款交互）
+  const openPaletteAt = useCallback(
+    (clientX: number, clientY: number) => {
+      pendingConnectRef.current = null
+      pendingAddPosRef.current = screenToFlowPosition(avoidMiniMap(clientX, clientY))
+      setMenu({ screenX: clientX, screenY: clientY })
+    },
+    [screenToFlowPosition, avoidMiniMap],
+  )
+
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       const target = e.target as HTMLElement
       if (!target.classList.contains('react-flow__pane')) return
-      pendingConnectRef.current = null
-      pendingAddPosRef.current = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-      setMenu({ screenX: e.clientX, screenY: e.clientY })
+      openPaletteAt(e.clientX, e.clientY)
     },
-    [screenToFlowPosition],
+    [openPaletteAt],
+  )
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.classList.contains('react-flow__pane')) return
+      e.preventDefault()
+      openPaletteAt(e.clientX, e.clientY)
+    },
+    [openPaletteAt],
   )
 
   // 拖图片文件进画布 → 生成「上传素材」节点，可直接作下游参考图
@@ -202,17 +265,14 @@ function StudioCanvasInner() {
         }
         const reader = new FileReader()
         reader.onload = () => {
-          const pos = screenToFlowPosition({
-            x: base.x + i * 48,
-            y: base.y + i * 48,
-          })
-          addAssetNode(String(reader.result ?? ''), pos)
+          const pt = avoidMiniMap(base.x + i * 48, base.y + i * 48)
+          addAssetNode(String(reader.result ?? ''), screenToFlowPosition(pt))
         }
         reader.onerror = () => flash(`读取「${file.name}」失败`)
         reader.readAsDataURL(file)
       })
     },
-    [addAssetNode, flash, screenToFlowPosition],
+    [addAssetNode, flash, screenToFlowPosition, avoidMiniMap],
   )
 
   const handlePick = useCallback(
@@ -282,6 +342,7 @@ function StudioCanvasInner() {
       ref={wrapperRef}
       className="relative h-full w-full bg-bg-0"
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -332,8 +393,25 @@ function StudioCanvasInner() {
             <LayoutTemplate size={13} />
             模板
           </button>
+          <button
+            title="清空画布（=新建空工程，⌘/Ctrl+Z 可撤销）"
+            onClick={() => {
+              if (
+                window.confirm(
+                  '清空画布（=新建空工程）。建议先「导出」备份；清空后可用 ⌘/Ctrl+Z 撤销。确定继续？',
+                )
+              ) {
+                resetProject()
+                flash('已清空画布（⌘/Ctrl+Z 可撤销）')
+              }
+            }}
+            className="flex items-center gap-1 rounded-md border border-[#22D3EE]/40 bg-bg-2/80 px-2 py-1.5 text-[10px] text-[#22D3EE] backdrop-blur transition hover:bg-bg-2 hover:text-white"
+          >
+            <RotateCcw size={12} />
+            清空画布
+          </button>
           <span className="ml-1 hidden self-center text-[10px] text-ink-3 lg:inline">
-            双击空白新建节点 · 拖图片进画布作参考
+            双击/右键空白新建节点 · 拖图片进画布作参考
           </span>
         </Panel>
 
@@ -353,7 +431,7 @@ function StudioCanvasInner() {
               </div>
               <ol className="ml-4 list-decimal space-y-1 leading-relaxed text-ink-1">
                 <li>底部输入一句创意 → 「创建并运行」直接起一条管线</li>
-                <li>或双击画布空白新建「剧本」，填创意 → ▶</li>
+                <li>或双击/右键画布空白新建节点，左上角「模板」一键铺链</li>
                 <li>从节点右端口拖线到空白 → 选下一环（分镜/场景…）</li>
                 <li>把图片拖进画布 → 成为下游参考图</li>
                 <li>选中节点 → 上方工具条可运行/复制/下载/删除</li>

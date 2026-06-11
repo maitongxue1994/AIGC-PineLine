@@ -163,7 +163,9 @@ v3 不加任何新功能，**只做减法和统一**。
 |---|---|---|---|
 | **M1 节点统一 + 去冗余** | 节点卡片规范 v3 落地：砍底部按钮、状态徽章统一、参数全部上节点、删死参数、shot 单桩、上游指示条、双击重命名；移除 Inspector | `src/studio/nodes/*`、`src/studio/types.ts`、`src/studio/store.ts`、删 `src/components/InspectorPanel.tsx` | ✅ 已实施（23 项 Playwright 冒烟全过） |
 | **M2 布局简化 + 首次体验** | 左栏 8 工具砍为「资产」单入口（tab 化抽屉）、真实可编辑工程名、空画布模板引导卡、默认空工程；新增 `templates.ts`、删 `defaultGraph.ts`；persist 升 v3 | `src/pages/Studio.tsx`、`src/studio/templates.ts`、`src/studio/store.ts` | ✅ 已实施（23 项冒烟全过；附带修复「更多」菜单被画布遮挡的 z-index bug） |
-| **M3 收尾** | 右键菜单建节点、首次进入自动弹帮助、节点落点避让 MiniMap、3 色收敛全局复查 | `src/studio/StudioCanvas.tsx` 等 | ⏳ |
+| **M3 收尾 + 评审反馈** | 右键空白建节点、首次自动弹帮助（引导卡打开时让位）、新建落点避让 MiniMap；评审反馈三连修：引导卡加蒙层（有节点时不再视觉重叠，点蒙层关闭）、铺链后自动 fitView 居中、「清空画布」按钮上画布工具条（与隐蔽的「新建空工程」菜单项合并） | `src/studio/StudioCanvas.tsx`、`src/pages/Studio.tsx`、`src/studio/store.ts` | ✅ 已实施（16 项冒烟全过） |
+
+> v3 三期（M1/M2/M3）全部完成。后续进入 P3 backlog：Agent 编排 API、R2 图片托管、视频节点+时间线。
 
 每期独立可部署、可回滚；M1 是体验提升最大的一期。
 

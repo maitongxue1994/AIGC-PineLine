@@ -70,6 +70,9 @@ type StudioState = {
   redo: () => void
   runNode: (id: string) => Promise<void>
   pipelineRunning: boolean
+  // 自增信号：画布监听后执行 fitView（模板/Composer 铺链后自动把新节点带入视野）
+  fitViewTick: number
+  requestFitView: () => void
   runPipeline: (ids?: string[]) => Promise<void>
   createPipelineFromBrief: (brief: string) => string[]
   exportProject: () => string
@@ -313,6 +316,7 @@ export const useStudioStore = create<StudioState>()(
   past: [],
   future: [],
   pipelineRunning: false,
+  fitViewTick: 0,
 
   onNodesChange: (changes) => {
     if (changes.some((c) => c.type === 'remove')) commit()
@@ -347,6 +351,8 @@ export const useStudioStore = create<StudioState>()(
 
   setGuideOpen: (open) => set({ guideOpen: open }),
 
+  requestFitView: () => set((s) => ({ fitViewTick: s.fitViewTick + 1 })),
+
   applyTemplate: (id) => {
     const tpl = buildTemplate(id)
     // 画布已有内容时整体下移一行，避免叠在现有节点上
@@ -362,6 +368,7 @@ export const useStudioStore = create<StudioState>()(
       selectedNodeId: nodes[0]?.id ?? null,
       guideOpen: false,
     }))
+    get().requestFitView()
     return nodes.map((n) => n.id)
   },
 
@@ -742,6 +749,7 @@ export const useStudioStore = create<StudioState>()(
       selectedNodeId: script.id,
       guideOpen: false,
     }))
+    get().requestFitView()
     return [script.id, storyboard.id, shot.id]
   },
 
