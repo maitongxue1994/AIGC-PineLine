@@ -20,6 +20,7 @@ export default function NodeShell({
   selected,
   width,
   typeIcon,
+  labelExtra,
   hasTarget = true,
   hasSource = true,
   onSaveToLibrary,
@@ -32,6 +33,8 @@ export default function NodeShell({
   selected?: boolean
   width: number
   typeIcon: ReactNode
+  /** 外置标签行追加内容（如视频合规蓝勾徽章） */
+  labelExtra?: ReactNode
   hasTarget?: boolean
   hasSource?: boolean
   onSaveToLibrary?: () => void
@@ -95,6 +98,7 @@ export default function NodeShell({
       <div className="mb-2 flex items-center gap-1.5 text-[13px]" style={{ color: '#9A9AA2' }}>
         <span className="shrink-0 [&>svg]:h-3.5 [&>svg]:w-3.5">{typeIcon}</span>
         <NodeTitle id={id} title={data.title} />
+        {labelExtra}
         {running && (
           <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px]" style={{ color: TOKENS.accent }}>
             <span className="h-1.5 w-1.5 animate-pulseDot rounded-full" style={{ background: TOKENS.accent }} />
@@ -128,16 +132,17 @@ export default function NodeShell({
         >
           {children}
 
-          {/* 悬停：左上收藏 ★ */}
-          <button
-            title={onSaveToLibrary ? '保存到素材库' : '保存到素材库（即将上线）'}
-            disabled={!onSaveToLibrary}
-            onClick={(e) => { e.stopPropagation(); onSaveToLibrary?.() }}
-            className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-[10px] text-white opacity-0 backdrop-blur transition group-hover/shell:opacity-100 disabled:cursor-not-allowed"
-            style={{ background: 'rgba(10,10,12,0.65)' }}
-          >
-            <Star size={15} />
-          </button>
+          {/* 悬停：左上收藏 ★（视频节点自带静音/收藏组，不重复渲染） */}
+          {onSaveToLibrary && data.kind !== 'video' && (
+            <button
+              title="保存到素材库"
+              onClick={(e) => { e.stopPropagation(); onSaveToLibrary() }}
+              className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-[10px] text-white opacity-0 backdrop-blur transition group-hover/shell:opacity-100"
+              style={{ background: 'rgba(10,10,12,0.65)' }}
+            >
+              <Star size={15} />
+            </button>
+          )}
 
           {/* 右上：批次切换徽章 */}
           {stacked && (

@@ -33,7 +33,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
     items: [
       { key: 'text', label: '文本', subtitle: '脚本、广告词、品牌文案', icon: <FileText size={17} />, kind: 'text', preset: 'script' },
       { key: 'image', label: '图片', icon: <ImageIcon size={17} />, kind: 'image', preset: 'single' },
-      { key: 'video', label: '视频', icon: <Video size={17} />, disabled: true, badge: '规划中' },
+      { key: 'video', label: '视频', subtitle: '上传/剪辑/截帧；生成接入规划中', icon: <Video size={17} />, kind: 'video' },
       { key: 'audio', label: '音频', icon: <Music size={17} />, disabled: true, badge: '规划中' },
       { key: 'world', label: '3D 世界', icon: <Box size={17} />, disabled: true, badge: 'Beta' },
     ],
@@ -95,8 +95,8 @@ export default function AddNodePanel() {
                   fileRef.current?.click()
                   return
                 }
-                if (it.kind && it.preset) {
-                  addNode(it.kind, it.preset, centerPos())
+                if (it.kind) {
+                  addNode(it.kind, it.preset ?? null, centerPos())
                   setActivePanel(null)
                 }
               }}

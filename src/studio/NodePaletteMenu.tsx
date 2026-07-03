@@ -16,7 +16,7 @@ import {
 import type { NodeKind, NodePreset } from './types'
 import { KIND_ACCENTS } from './nodeCatalog'
 
-export type PaletteChoice = { kind: NodeKind; preset: NodePreset }
+export type PaletteChoice = { kind: NodeKind; preset: NodePreset | null }
 
 type Props = {
   x: number
@@ -113,7 +113,7 @@ const GROUPS: Group[] = [
   {
     title: '更多',
     items: [
-      { title: '视频', desc: '规划中', color: '#4A4A52', icon: <Video size={14} />, disabled: true },
+      { choice: { kind: 'video', preset: null }, title: '视频', desc: '上传/剪辑/截帧', color: KIND_ACCENTS.video, icon: <Video size={14} /> },
       { title: '音频', desc: '规划中', color: '#4A4A52', icon: <Music size={14} />, disabled: true },
       { title: '3D 世界', desc: 'Beta · 规划中', color: '#4A4A52', icon: <Box size={14} />, disabled: true },
     ],

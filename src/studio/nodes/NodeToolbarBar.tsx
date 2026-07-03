@@ -30,8 +30,8 @@ import type { NodeKind, PinColor } from '../types'
 
 export type OpsPanelKind = 'angle' | 'inpaint' | 'light' | 'camera'
 
-/** 44px 圆形图标按钮 + 上方 400ms 延迟 tooltip（设计稿 §03） */
-function TBtn({
+/** 44px 圆形图标按钮 + 上方 400ms 延迟 tooltip（设计稿 §03）；视频工具栏等复用 */
+export function TBtn({
   tip,
   active,
   disabled,
@@ -76,9 +76,10 @@ function TBtn({
   )
 }
 
-function Divider() {
+export function ToolbarDivider() {
   return <span className="mx-1.5 h-6 w-px shrink-0 bg-white/[0.12]" />
 }
+const Divider = ToolbarDivider
 
 /**
  * 节点上方浮动工具栏（设计稿 §03）：编辑 · Pin 标记 · 归档 三组。

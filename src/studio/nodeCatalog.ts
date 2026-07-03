@@ -18,12 +18,14 @@ export const KIND_ACCENTS: Record<NodeKind, string> = {
   text: '#FF6A3D',
   image: '#7C5CFF',
   asset: '#22D3EE',
+  video: '#F06AC5',
 }
 
 export const KIND_LABELS: Record<NodeKind, string> = {
   text: '文本',
   image: '图片',
   asset: '素材',
+  video: '视频',
 }
 
 export type PresetMeta = {
@@ -220,10 +222,35 @@ export const PIN_COLORS: Record<PinColor, string> = {
   purple: '#9B6DF2',
 }
 
+// ---------------- 视频模型示例数据（video-node-tools §7；UI 展示用） ----------------
+
+export type VideoModelInfo = {
+  id: string
+  name: string
+  badge?: { text: string; kind: 'new' | 'hot' | 'discount' }
+  quality: string
+  durationRange: string
+  audio?: boolean
+  locked?: boolean
+}
+
+export const VIDEO_MODELS: VideoModelInfo[] = [
+  { id: 'seedance-1.5-pro', name: 'Seedance 1.5 Pro', quality: '1080P', durationRange: '5-10S', audio: true },
+  { id: 'wan-2.6', name: 'Wan 2.6', quality: '1080P', durationRange: '2-15S', audio: true },
+  { id: 'hailuo-02', name: 'Hailuo-02', quality: '1080P', durationRange: '6-10S' },
+  { id: 'kling-o1', name: 'Kling O1', quality: '1080P', durationRange: '5-10S', locked: true },
+  { id: 'veo-3.1-lite', name: 'VEO3.1-Lite', badge: { text: 'NEW', kind: 'new' }, quality: '1080P', durationRange: '4-8S', locked: true },
+  { id: 'veo-3.1-fast', name: 'VEO3.1-Fast', badge: { text: '6.7折', kind: 'discount' }, quality: '4K', durationRange: '4-8S', audio: true, locked: true },
+]
+
+export const DEFAULT_VIDEO_MODEL = 'seedance-1.5-pro'
+
 // ---------------- 假积分定价（本地模拟，无真实计费） ----------------
 
 const IMAGE_COST: Record<ImageQuality, number> = { '1K': 6, '2K': 9, '4K': 15 }
 const TEXT_COST = 2
+/** 视频估价（README §5/§6 示例：10s→202、5s→100，× 倍数） */
+const VIDEO_COST: Record<number, number> = { 5: 100, 10: 202 }
 
 /** 估算一次运行的积分消耗（设计稿：积分随倍数即时换算） */
 export function estimateCost(
@@ -233,6 +260,9 @@ export function estimateCost(
 ): number {
   if (kind === 'asset') return 0
   if (kind === 'text') return TEXT_COST
+  if (kind === 'video') {
+    return (VIDEO_COST[params.videoDuration ?? 10] ?? 202) * (params.videoMultiplier ?? 1)
+  }
   const per = IMAGE_COST[params.quality ?? '1K']
   const gridCount =
     preset === 'scene-grid' ? 4 : preset === 'char-triview' || preset === 'prop-triview' ? 3 : 0
@@ -255,6 +285,16 @@ export function buildNode(
 ): PineNode {
   const meta = presetMeta(preset)
   const id = `${kind}-${crypto.randomUUID()}`
+  const kindDefaults: NodeParams =
+    kind === 'video'
+      ? {
+          videoMode: 'frames',
+          videoRatio: 'auto',
+          videoDuration: 10,
+          videoMultiplier: 1,
+          videoModel: DEFAULT_VIDEO_MODEL,
+        }
+      : {}
   return {
     id,
     type: kind,
@@ -262,9 +302,12 @@ export function buildNode(
     data: {
       kind,
       preset,
-      title: init?.title ?? meta?.defaultTitle ?? '上传素材',
+      title:
+        init?.title ??
+        meta?.defaultTitle ??
+        (kind === 'video' ? '新视频' : '上传素材'),
       prompt: init?.prompt ?? '',
-      params: { ...(meta?.defaultParams ?? {}), ...(init?.params ?? {}) },
+      params: { ...kindDefaults, ...(meta?.defaultParams ?? {}), ...(init?.params ?? {}) },
       versions: [],
       activeVersion: 0,
       status: 'idle',

@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "agentation": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "agentation-mcp",
+        "server",
+        "--mcp-only",
+        "--http-url",
+        "http://localhost:4747"
+      ],
+      "env": {},
+      "description": "Agentation MCP — 老板在 PineLine 页面上点元素加注释，Claude Code 实时读取。HTTP server 由 launchd 常驻。"
+    }
+  }
+}

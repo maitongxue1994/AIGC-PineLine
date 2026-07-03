@@ -1,10 +1,11 @@
 import type { Node, Edge } from '@xyflow/react'
 
 /**
- * v4 节点体系：8 类业务节点收敛为 3 类内容节点（TapNow 式）。
+ * v4 节点体系：8 类业务节点收敛为内容节点（TapNow 式）。
  * 业务语义（剧本/分镜/三视图/四宫格…）下沉为节点上的「生成预设」preset。
+ * video：视频内容节点（上传/播放/截帧/软剪辑为本地真实能力；生成后端接入规划中）。
  */
-export type NodeKind = 'text' | 'image' | 'asset'
+export type NodeKind = 'text' | 'image' | 'asset' | 'video'
 
 export type TextPreset = 'free' | 'script' | 'storyboard' | 'ad-copy'
 
@@ -41,6 +42,11 @@ export type BatchCount = 1 | 2 | 4
 /** Pin 标记六色（设计稿 §01 色板） */
 export type PinColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple'
 
+/** 视频生成方式（video-node-tools §6） */
+export type VideoMode = 'frames' | 'omni'
+export type VideoRatio = 'auto' | '16:9' | '9:16' | '1:1'
+export type VideoDuration = 5 | 10
+
 export type ShotItem = {
   id: string
   title: string
@@ -71,6 +77,18 @@ export type NodeParams = {
   batch?: BatchCount
   /** 摄影机预设摘要（摄影机面板「保存」回填，注入生成提示词） */
   camera?: string
+  // ---- 视频节点参数（video-node-tools §5/§6；附加可选字段，persist 不升版） ----
+  videoMode?: VideoMode
+  videoRatio?: VideoRatio
+  videoDuration?: VideoDuration
+  videoMultiplier?: 1 | 2
+  videoModel?: string
+  /** 软剪辑区间（秒）：播放范围 clamp；由剪辑模式确认写入 */
+  trim?: { start: number; end: number }
+  /** Seedance 合规验证（本地模拟）通过标记 → 节点标签蓝勾 */
+  compliance?: boolean
+  /** 视频增强配置 */
+  enhance?: { resolution: string; frameRate: string; slowdown: string }
 }
 
 export type PineNodeData = {
@@ -102,6 +120,10 @@ export function activeContent(data: PineNodeData): string | null {
 
 export function isImageContent(s: string | null | undefined): boolean {
   return !!s && s.startsWith('data:image')
+}
+
+export function isVideoContent(s: string | null | undefined): boolean {
+  return !!s && s.startsWith('data:video')
 }
 
 // ---------------- API 契约 ----------------

@@ -71,6 +71,17 @@ type StudioState = {
     init?: { title?: string; prompt?: string; params?: NodeParams },
   ) => string
   addAssetNode: (dataUrl: string, position?: Position) => string
+  /** 上传视频 → 视频节点（内容即本体） */
+  addVideoNode: (dataUrl: string, position?: Position) => string
+  /** 剪辑/增强派生下游视频节点并连线 */
+  deriveVideoNode: (
+    sourceId: string,
+    opts: {
+      title: string
+      trim?: { start: number; end: number }
+      enhance?: { resolution: string; frameRate: string; slowdown: string }
+    },
+  ) => string | null
   setPreset: (id: string, preset: NodePreset) => void
   setPrompt: (id: string, prompt: string) => void
   updateNodeParams: (id: string, patch: Partial<NodeParams>) => void
@@ -181,8 +192,9 @@ function newVersion(content: string | null, label?: string, error?: string | nul
  */
 function stripHeavyOutputs(node: PineNode): PineNode {
   const data = node.data
-  const hasImage = data.versions.some((v) => isImageContent(v.content))
-  if (!hasImage) {
+  // 图片/视频等 data: 媒体一律不落盘（视频体积更大）
+  const hasHeavy = data.versions.some((v) => !!v.content && v.content.startsWith('data:'))
+  if (!hasHeavy) {
     return data.status === 'running'
       ? { ...node, data: { ...data, status: 'idle' } }
       : node
@@ -380,6 +392,35 @@ export const useStudioStore = create<StudioState>()(
           return pushNode(node)
         },
 
+        addVideoNode: (dataUrl, position) => {
+          const node = buildNode('video', null, positionFor(600, position))
+          node.data.versions = [newVersion(dataUrl)]
+          node.data.status = 'done'
+          return pushNode(node)
+        },
+
+        // 剪辑/增强确认后：派生下游视频节点并连线（trim=软剪辑区间；enhance=增强配置占位节点）
+        deriveVideoNode: (sourceId, opts) => {
+          const src = get().nodes.find((n) => n.id === sourceId)
+          if (!src) return null
+          const node = buildNode(
+            'video',
+            null,
+            { x: src.position.x + 560, y: src.position.y },
+            { title: opts.title, params: { ...src.data.params, ...(opts.trim ? { trim: opts.trim } : {}), ...(opts.enhance ? { enhance: opts.enhance } : {}), compliance: undefined } },
+          )
+          if (opts.trim) {
+            // 软剪辑：复用源视频内容，播放范围 clamp 到 trim
+            node.data.versions = src.data.versions
+            node.data.activeVersion = src.data.activeVersion
+            node.data.status = 'done'
+          }
+          const id = pushNode(node)
+          get().onConnect({ source: sourceId, sourceHandle: null, target: id, targetHandle: null })
+          get().focusNode(id)
+          return id
+        },
+
         setPreset: (id, preset) => {
           const meta = presetMeta(preset)
           if (!meta) return
@@ -568,6 +609,13 @@ export const useStudioStore = create<StudioState>()(
 
           // 上传素材节点不调模型，内容即本体
           if (node.data.kind === 'asset') return
+          // 视频生成后端接入规划中：诚实提示，不扣积分、不进 running
+          if (node.data.kind === 'video') {
+            window.dispatchEvent(
+              new CustomEvent('pineline:flash', { detail: '视频生成模型接入规划中，可先上传视频体验剪辑/截帧' }),
+            )
+            return
+          }
 
           const g = generation
           const { kind, preset, params } = node.data

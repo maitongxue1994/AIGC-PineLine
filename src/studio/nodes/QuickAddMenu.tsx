@@ -4,7 +4,7 @@ import { Box, FileText, Image as ImageIcon, SlidersHorizontal, Video } from 'luc
 import { SHADOWS, TOKENS } from '../designTokens'
 import type { NodeKind, NodePreset } from '../types'
 
-export type QuickAddChoice = { kind: NodeKind; preset: NodePreset }
+export type QuickAddChoice = { kind: NodeKind; preset: NodePreset | null }
 
 /**
  * ⊕「引用该节点生成」菜单（TapNow 同款）：
@@ -52,7 +52,7 @@ export default function QuickAddMenu({
       choice: { kind: 'text', preset: side === 'source' ? 'free' : 'script' },
     },
     { label: '图片生成', icon: <ImageIcon size={16} />, choice: { kind: 'image', preset: 'single' } },
-    { label: '视频生成', icon: <Video size={16} />, disabled: true },
+    { label: '视频生成', subtitle: '上传/剪辑/截帧', icon: <Video size={16} />, choice: { kind: 'video', preset: null } },
     { label: '图片编辑器', icon: <SlidersHorizontal size={16} />, disabled: true },
     { label: '3D 世界', subtitle: 'Beta', icon: <Box size={16} />, disabled: true },
   ]

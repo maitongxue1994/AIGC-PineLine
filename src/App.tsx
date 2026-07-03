@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
+import { Agentation } from 'agentation'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Landing from './pages/Landing'
@@ -45,6 +46,7 @@ export default function App() {
         </Routes>
       </AnimatePresence>
       {!isStudio && <Footer />}
+      {import.meta.env.DEV && <Agentation endpoint="http://localhost:4747" />}
     </div>
   )
 }

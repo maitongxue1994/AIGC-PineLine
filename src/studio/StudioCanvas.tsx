@@ -17,6 +17,7 @@ import { TOKENS } from './designTokens'
 import TextNode from './nodes/TextNode'
 import ImageNode from './nodes/ImageNode'
 import AssetNode from './nodes/AssetNode'
+import VideoNode from './nodes/video/VideoNode'
 import NodePaletteMenu, { type PaletteChoice } from './NodePaletteMenu'
 import CanvasContextMenu from './CanvasContextMenu'
 
@@ -24,6 +25,7 @@ const nodeTypes: NodeTypes = {
   text: TextNode,
   image: ImageNode,
   asset: AssetNode,
+  video: VideoNode,
 }
 
 const MAX_DROP_FILES = 4
@@ -45,6 +47,7 @@ export default function StudioCanvas() {
   const runNode = useStudioStore((s) => s.runNode)
   const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
   const addAssetNode = useStudioStore((s) => s.addAssetNode)
+  const addVideoNode = useStudioStore((s) => s.addVideoNode)
   const duplicateNode = useStudioStore((s) => s.duplicateNode)
   const copySelection = useStudioStore((s) => s.copySelection)
   const pasteClipboard = useStudioStore((s) => s.pasteClipboard)
@@ -296,13 +299,26 @@ export default function StudioCanvas() {
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
-      // 无条件 preventDefault：拖入非图片文件时浏览器默认会导航打开该文件
+      // 无条件 preventDefault：拖入其他类型文件时浏览器默认会导航打开该文件
       if (e.dataTransfer.types.includes('Files')) e.preventDefault()
-      const files = Array.from(e.dataTransfer.files).filter((f) =>
-        f.type.startsWith('image/'),
-      )
+      const all = Array.from(e.dataTransfer.files)
+      // 视频文件 → 视频节点（≤64MB）
+      const videos = all.filter((f) => f.type.startsWith('video/'))
+      videos.slice(0, 2).forEach((file, i) => {
+        if (file.size > 64 * 1024 * 1024) {
+          flash(`「${file.name}」超过 64MB，已跳过`)
+          return
+        }
+        const reader = new FileReader()
+        reader.onload = () => {
+          const pt = avoidMiniMap(e.clientX + i * 48, e.clientY + i * 48)
+          addVideoNode(String(reader.result ?? ''), screenToFlowPosition(pt))
+        }
+        reader.readAsDataURL(file)
+      })
+      const files = all.filter((f) => f.type.startsWith('image/'))
       if (!files.length) {
-        if (e.dataTransfer.files.length) flash('仅支持拖入图片文件')
+        if (all.length && !videos.length) flash('仅支持拖入图片或视频文件')
         return
       }
 
@@ -324,7 +340,7 @@ export default function StudioCanvas() {
         reader.readAsDataURL(file)
       })
     },
-    [addAssetNode, flash, screenToFlowPosition, avoidMiniMap],
+    [addAssetNode, addVideoNode, flash, screenToFlowPosition, avoidMiniMap],
   )
 
   const handlePick = useCallback(
@@ -391,7 +407,7 @@ export default function StudioCanvas() {
         zoomOnScroll={false}
         zoomActivationKeyCode={['Meta', 'Control']}
         panActivationKeyCode="Space"
-        panOnDrag={false}
+        panOnDrag={[1]}
         selectionOnDrag
         multiSelectionKeyCode="Shift"
         deleteKeyCode={['Backspace', 'Delete']}
@@ -447,8 +463,19 @@ export default function StudioCanvas() {
       )}
 
       {notice && (
-        <div className="pointer-events-none absolute left-1/2 top-16 z-50 -translate-x-1/2 rounded-md border border-white/10 bg-bg-2/95 px-4 py-2 text-xs text-white shadow-xl backdrop-blur">
-          {notice}
+        <div
+          className="pointer-events-none absolute bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2.5 rounded-[12px] border border-white/[0.08] px-[18px] py-3 text-[14px] text-white shadow-xl"
+          style={{ background: '#232326' }}
+        >
+          {notice.startsWith('✓') && (
+            <span
+              className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+              style={{ background: '#1F8A5B' }}
+            >
+              ✓
+            </span>
+          )}
+          {notice.replace(/^✓\s*/, '')}
         </div>
       )}
     </div>
