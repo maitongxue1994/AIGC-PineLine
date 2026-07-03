@@ -6,6 +6,7 @@ import LeftRail from '../studio/LeftRail'
 import BottomControls from '../studio/BottomControls'
 import EmptyViewportHint from '../studio/EmptyViewportHint'
 import SearchDialog from '../studio/SearchDialog'
+import AgentPanel, { AgentLauncher } from '../studio/agent/AgentPanel'
 import { TOKENS } from '../studio/designTokens'
 
 /**
@@ -30,6 +31,8 @@ export default function Studio() {
         <BottomControls />
         <EmptyViewportHint />
         <SearchDialog />
+        <AgentLauncher />
+        <AgentPanel />
       </motion.main>
     </ReactFlowProvider>
   )

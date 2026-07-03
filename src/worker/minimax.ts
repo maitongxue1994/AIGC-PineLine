@@ -3,23 +3,19 @@ import { fetchWithTimeout } from './utils'
 const MINIMAX_ENDPOINT = 'https://api.minimaxi.com/v1/text/chatcompletion_v2'
 const MODEL = 'MiniMax-M2.7'
 
-type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
+export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
 
 type MiniMaxResponse = {
   choices?: Array<{ message?: { content?: string } }>
   base_resp?: { status_code?: number; status_msg?: string }
 }
 
-export async function callMinimaxText(
-  systemPrompt: string,
-  userPrompt: string,
+/** 多轮对话通道（Agent 编排等）；callMinimaxText 是其 system+user 两条消息的薄封装 */
+export async function callMinimaxChat(
+  messages: ChatMessage[],
   apiKey: string,
+  opts: { temperature?: number; maxTokens?: number } = {},
 ): Promise<string> {
-  const messages: ChatMessage[] = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ]
-
   const res = await fetchWithTimeout(
     MINIMAX_ENDPOINT,
     {
@@ -31,8 +27,8 @@ export async function callMinimaxText(
       body: JSON.stringify({
         model: MODEL,
         messages,
-        temperature: 0.7,
-        max_tokens: 2048,
+        temperature: opts.temperature ?? 0.7,
+        max_tokens: opts.maxTokens ?? 2048,
       }),
     },
     60_000,
@@ -51,4 +47,18 @@ export async function callMinimaxText(
   const content = json.choices?.[0]?.message?.content
   if (!content) throw new Error('MiniMax 未返回内容')
   return content
+}
+
+export function callMinimaxText(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+): Promise<string> {
+  return callMinimaxChat(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    apiKey,
+  )
 }

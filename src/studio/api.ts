@@ -9,6 +9,7 @@ import type {
   StoryboardRequest,
   StoryboardResponse,
 } from './types'
+import type { AgentChatRequest, AgentChatResponse } from './agent/types'
 
 const AUTH_TOKEN = (import.meta.env.VITE_PINELINE_API_KEY as string | undefined)?.trim()
 
@@ -52,4 +53,8 @@ export function generateImageGrid(
     '/api/generate/image-grid',
     req,
   )
+}
+
+export function agentChat(req: AgentChatRequest): Promise<AgentChatResponse> {
+  return postJson<AgentChatRequest, AgentChatResponse>('/api/agent/chat', req)
 }

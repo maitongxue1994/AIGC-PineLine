@@ -11,6 +11,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
 import { useUIStore } from './uiStore'
+import { useAgentStore } from './agent/agentStore'
 import { KIND_ACCENTS } from './nodeCatalog'
 import { TOKENS } from './designTokens'
 import TextNode from './nodes/TextNode'
@@ -176,6 +177,9 @@ export default function StudioCanvas() {
       } else if (key === 'f') {
         e.preventDefault()
         setSearchOpen(true)
+      } else if (key === 'j') {
+        e.preventDefault()
+        useAgentStore.getState().toggle()
       } else if (e.key === '=' || e.key === '+') {
         e.preventDefault()
         void zoomIn({ duration: 150 })

@@ -2,6 +2,7 @@ import generateScript from './routes/generateScript'
 import generateImage from './routes/generateImage'
 import generateStoryboard from './routes/generateStoryboard'
 import generateImageGrid from './routes/generateImageGrid'
+import agentChat from './routes/agentChat'
 import {
   assertAuth,
   assertBodySize,
@@ -22,6 +23,7 @@ const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
   '/api/generate/image': generateImage,
   '/api/generate/storyboard': generateStoryboard,
   '/api/generate/image-grid': generateImageGrid,
+  '/api/agent/chat': agentChat,
 }
 
 function isApiPath(p: string): boolean {
