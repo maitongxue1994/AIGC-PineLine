@@ -80,6 +80,8 @@ export type NodeParams = {
   batch?: BatchCount
   /** 摄影机预设摘要（摄影机面板「保存」回填，注入生成提示词） */
   camera?: string
+  /** 分镜图节点绑定的镜头下标（读上游 storyboard 节点的 shots[shotIndex]） */
+  shotIndex?: number
   // ---- 视频节点参数（video-node-tools §5/§6；附加可选字段，persist 不升版） ----
   videoMode?: VideoMode
   videoRatio?: VideoRatio
@@ -138,8 +140,8 @@ export type ScriptRequest = {
   brief: string
   tone?: NodeParams['tone']
   length?: NodeParams['length']
-  /** 文本预设：script=剧本（默认）/ ad-copy=广告词 / free=自由文本 */
-  preset?: 'script' | 'ad-copy' | 'free'
+  /** 文本预设：script=剧本（默认）/ ad-copy=广告词 / free=自由文本 / image-prompt=镜头描述→生图提示词 */
+  preset?: 'script' | 'ad-copy' | 'free' | 'image-prompt'
 }
 
 export type ScriptResponse = {

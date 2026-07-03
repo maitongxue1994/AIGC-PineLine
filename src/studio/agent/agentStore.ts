@@ -112,6 +112,26 @@ export const useAgentStore = create<AgentState>()(
           if (!session) return
           const message = session.messages.find((m) => m.id === messageId)
           if (!message?.ops || message.opsState === 'executed') return
+          // 清空画布是破坏性操作：无论手动/自动模式，画布非空时都必须经用户确认
+          if (
+            message.ops.some((o) => o.op === 'clear_canvas') &&
+            useStudioStore.getState().nodes.length > 0
+          ) {
+            const okToClear = window.confirm(
+              'Agent 将清空当前画布，再创建新管线（清空后可用 ⌘/Ctrl+Z 撤销）。确定继续？',
+            )
+            if (!okToClear) {
+              patchSession(session.id, (s) => ({
+                ...s,
+                messages: s.messages.map((m) =>
+                  m.id === messageId
+                    ? { ...m, opsState: 'dismissed' as const, result: '已取消：用户不同意清空画布' }
+                    : m,
+                ),
+              }))
+              return
+            }
+          }
           const result = await executeOps(message.ops)
           patchSession(session.id, (s) => ({
             ...s,

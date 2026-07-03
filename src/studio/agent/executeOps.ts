@@ -78,6 +78,11 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
           runTargets.push(...op.ids.map(resolve))
           ok++
           break
+        case 'clear_canvas':
+          // 确认已在 agentStore 执行前完成；commit 合并窗内整批 ⌘Z 一步可撤
+          s.resetProject()
+          ok++
+          break
       }
     } catch {
       skipped++

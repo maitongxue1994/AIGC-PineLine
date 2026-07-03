@@ -6,8 +6,8 @@ type Body = {
   brief?: string
   tone?: 'cinematic' | 'commercial' | 'drama' | 'documentary'
   length?: 'short' | 'medium' | 'long'
-  /** 文本预设：script=剧本（默认）/ ad-copy=广告词 / free=自由文本 */
-  preset?: 'script' | 'ad-copy' | 'free'
+  /** 文本预设：script=剧本（默认）/ ad-copy=广告词 / free=自由文本 / image-prompt=镜头描述→生图提示词 */
+  preset?: 'script' | 'ad-copy' | 'free' | 'image-prompt'
 }
 
 const TONE_LABEL: Record<NonNullable<Body['tone']>, string> = {
@@ -42,6 +42,16 @@ function buildSystemPrompt(
       '你是一位专业中文写作助手。请按用户要求直接产出文字内容。',
       `篇幅：${length === 'short' ? '简短' : length === 'long' ? '详尽' : '适中'}。`,
       '只输出正文，不要寒暄、不要解释、不要 markdown 标题。',
+    ].join('\n')
+  }
+  if (preset === 'image-prompt') {
+    // 分镜两段式第一段：镜头描述 → 可确认/编辑的生图提示词
+    return [
+      '你是一位文生图提示词专家。请把用户给出的分镜镜头描述改写为一条高质量的中文生图提示词。',
+      `画面风格基调：${toneDesc}。`,
+      '要求：明确主体与动作、环境与时间、光线氛围、景别与构图、材质细节与整体风格；',
+      '写成一段 60~120 字的连续描述，信息密度高、可直接喂给文生图模型。',
+      '只输出提示词本身：不要编号、不要引号、不要解释、不要 markdown。',
     ].join('\n')
   }
   const scenes = LENGTH_SCENES[length]

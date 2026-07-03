@@ -30,7 +30,7 @@ import {
   VIDEO_MODELS,
 } from './nodeCatalog'
 import { migrateGraph, migrateLegacyEdge } from './migrate'
-import { appendHistory } from './assetdb'
+import { appendHistory, getProject, putProject } from './assetdb'
 import {
   activeContent,
   isImageContent,
@@ -125,6 +125,12 @@ type StudioState = {
   requestFitView: () => void
   runPipeline: (ids?: string[]) => Promise<void>
   createPipelineFromBrief: (brief: string) => string[]
+  /**
+   * 分镜两段式派生：为选中镜头各建一个分镜图节点并连线，
+   * 随后调 image-prompt 端点生成生图提示词回填（节点保持 idle，用户确认/编辑后再生图）。
+   * 返回派生节点 id（供「全部生成图片」批量运行）。
+   */
+  deriveShotImageNodes: (storyboardId: string, indices: number[]) => Promise<string[]>
   exportProject: () => string
   importProject: (raw: string) => void
   resetProject: () => void
@@ -132,6 +138,17 @@ type StudioState = {
   /** 各视频供应商密钥就绪状态（模型选择器显示可用/需配置；不持久化） */
   videoReadiness: VideoReadiness | null
   loadVideoReadiness: () => Promise<void>
+  // ---- 多项目管理（项目档案在 IndexedDB projects 库） ----
+  /** 当前画布归属的项目 id；null = 尚未建档（首次变更时自动建档） */
+  currentProjectId: string | null
+  /** 立即快照当前画布进项目档案（画布变更 2s 防抖自动调用） */
+  snapshotCurrentProject: () => Promise<void>
+  /** 载入项目档案替换画布；返回是否成功 */
+  loadProject: (id: string) => Promise<boolean>
+  /** 新建空项目并切换过去，返回新项目 id */
+  createProject: () => Promise<string>
+  /** 项目被删除后的解绑（删的是当前项目时清空画布） */
+  detachProject: (id: string) => void
 }
 
 function mutateNode(
@@ -192,6 +209,28 @@ function newVersion(content: string | null, label?: string, error?: string | nul
     ...(label ? { label } : {}),
     ...(error ? { error } : {}),
     createdAt: Date.now(),
+  }
+}
+
+/** 项目缩略图：首张图缩放到 ≤320px 宽 jpeg（IndexedDB 里不存原图大小的缩略） */
+async function makeThumb(dataUrl: string): Promise<string | null> {
+  try {
+    const img = new Image()
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('thumb'))
+      img.src = dataUrl
+    })
+    const scale = Math.min(1, 320 / img.width)
+    const w = Math.max(1, Math.round(img.width * scale))
+    const h = Math.max(1, Math.round(img.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    canvas.getContext('2d')?.drawImage(img, 0, 0, w, h)
+    return canvas.toDataURL('image/jpeg', 0.72)
+  } catch {
+    return null
   }
 }
 
@@ -758,7 +797,9 @@ export const useStudioStore = create<StudioState>()(
                 recordHistory(id, 'image', preset, desc, gridVersions)
               } else {
                 const fallback =
-                  preset === 'shot' ? firstShotDescription(upstreamText) : upstreamText || ''
+                  preset === 'shot'
+                    ? shotDescriptionFor(state.nodes, state.edges, id, params.shotIndex)
+                    : upstreamText || ''
                 const basePrompt = node.data.prompt.trim() || fallback || ''
                 if (!basePrompt)
                   throw new Error('缺少提示词：请在下方输入，或从上游节点连线')
@@ -950,6 +991,62 @@ export const useStudioStore = create<StudioState>()(
           return [script.id, storyboard.id, shot.id]
         },
 
+        deriveShotImageNodes: async (storyboardId, indices) => {
+          const state = get()
+          const sb = state.nodes.find((n) => n.id === storyboardId)
+          const shots = sb?.data.shots ?? []
+          const chosen = indices.filter((i) => i >= 0 && i < shots.length)
+          if (!sb || !chosen.length) return []
+
+          const flash = (msg: string) =>
+            window.dispatchEvent(new CustomEvent('pineline:flash', { detail: msg }))
+
+          // 第一步：派生节点 + 连线（commit 由 addNode/onConnect 的 150ms 合并窗归并成一步撤销）
+          const baseX = sb.position.x + 460
+          const baseY = sb.position.y
+          const ids: string[] = []
+          chosen.forEach((shotIdx, k) => {
+            const shot = shots[shotIdx]
+            const id = get().addNode(
+              'image',
+              'shot',
+              { x: baseX + (k % 3) * 420, y: baseY + Math.floor(k / 3) * 480 },
+              {
+                title: `#${shotIdx + 1} ${shot.title}`.slice(0, 24),
+                params: { shotIndex: shotIdx },
+              },
+            )
+            get().onConnect({ source: storyboardId, sourceHandle: null, target: id, targetHandle: null })
+            ids.push(id)
+          })
+          get().requestFitView()
+
+          // 第二步：逐镜生成生图提示词回填（节点保持 idle，等用户确认后再生图）
+          flash(`正在为 ${chosen.length} 个镜头生成生图提示词…`)
+          const results = await Promise.allSettled(
+            chosen.map(async (shotIdx, k) => {
+              const shot = shots[shotIdx]
+              const res = await generateScript({
+                brief: `${shot.title}\n${shot.description}`,
+                tone: sb.data.params.tone,
+                preset: 'image-prompt',
+              })
+              const nid = ids[k]
+              // 期间用户可能删了节点/清了画布
+              if (get().nodes.some((n) => n.id === nid)) {
+                get().setPrompt(nid, res.script.trim())
+              }
+            }),
+          )
+          const ok = results.filter((r) => r.status === 'fulfilled').length
+          flash(
+            ok
+              ? `✓ 已生成 ${ok}/${chosen.length} 条生图提示词，确认或编辑后可生成图片`
+              : '生图提示词生成失败，可在节点输入栏手动填写',
+          )
+          return ids
+        },
+
         exportProject: () => {
           const { nodes, edges, projectName } = get()
           // 内存中保留完整 base64 图片，导出文件因此是用户可留存/转交的完整工程
@@ -1042,6 +1139,91 @@ export const useStudioStore = create<StudioState>()(
             // 本地无 Worker/离线时静默：选择器按「未知」展示，不打扰
           }
         },
+
+        // ---- 多项目管理 ----
+        currentProjectId: null,
+
+        snapshotCurrentProject: async () => {
+          const s = get()
+          // 空画布且未建档：不生成空档案
+          if (!s.currentProjectId && s.nodes.length === 0) return
+          const id = s.currentProjectId ?? `p-${crypto.randomUUID()}`
+          if (!s.currentProjectId) set({ currentProjectId: id })
+          const firstImage =
+            s.nodes
+              .flatMap((n) => n.data.versions)
+              .find((v) => isImageContent(v.content))?.content ?? null
+          const thumb = firstImage ? await makeThumb(firstImage) : null
+          // 本次画布无图（如刷新后媒体被剥离）时保留档案里的旧缩略图
+          const prev = thumb ? null : await getProject(id)
+          await putProject({
+            id,
+            name: s.projectName,
+            updatedAt: Date.now(),
+            thumb: thumb ?? prev?.thumb ?? null,
+            graph: { nodes: s.nodes.map(stripHeavyOutputs), edges: s.edges },
+            credits: s.credits,
+          })
+        },
+
+        loadProject: async (id) => {
+          const rec = await getProject(id)
+          if (!rec) return false
+          // 切换前先落档当前画布，避免丢工作
+          await get().snapshotCurrentProject()
+          commit()
+          generation++
+          set({
+            nodes: (rec.graph.nodes as PineNode[]).map((n) => ({
+              ...n,
+              selected: false,
+              dragging: false,
+            })),
+            edges: rec.graph.edges as PineEdge[],
+            projectName: rec.name,
+            credits: rec.credits,
+            selectedNodeId: null,
+            currentProjectId: id,
+          })
+          get().requestFitView()
+          return true
+        },
+
+        createProject: async () => {
+          await get().snapshotCurrentProject()
+          const id = `p-${crypto.randomUUID()}`
+          commit()
+          generation++
+          set({
+            nodes: [],
+            edges: [],
+            selectedNodeId: null,
+            projectName: '未命名项目',
+            currentProjectId: id,
+          })
+          await putProject({
+            id,
+            name: '未命名项目',
+            updatedAt: Date.now(),
+            thumb: null,
+            graph: { nodes: [], edges: [] },
+            credits: get().credits,
+          })
+          return id
+        },
+
+        detachProject: (id) => {
+          if (get().currentProjectId !== id) return
+          commit()
+          generation++
+          set({
+            nodes: [],
+            edges: [],
+            selectedNodeId: null,
+            projectName: '未命名工程',
+            currentProjectId: null,
+          })
+        },
       }
     },
     {
@@ -1080,10 +1262,26 @@ export const useStudioStore = create<StudioState>()(
           selectedNodeId: state.selectedNodeId,
           projectName: state.projectName,
           credits: state.credits,
+          currentProjectId: state.currentProjectId,
         }) as unknown as StudioState,
     },
   ),
 )
+
+// 画布/工程名变更 2s 防抖自动快照进项目档案（首次变更自动建档）
+let snapshotTimer: ReturnType<typeof setTimeout> | null = null
+useStudioStore.subscribe((state, prev) => {
+  if (
+    state.nodes === prev.nodes &&
+    state.edges === prev.edges &&
+    state.projectName === prev.projectName
+  )
+    return
+  if (snapshotTimer) clearTimeout(snapshotTimer)
+  snapshotTimer = setTimeout(() => {
+    void useStudioStore.getState().snapshotCurrentProject()
+  }, 2000)
+})
 
 /** 内存剪贴板（模块级：跨组件共享，刷新即失效） */
 let clipboard: Clipboard = null
@@ -1113,6 +1311,29 @@ function firstShotDescription(text: string | null): string {
   if (!text) return ''
   const first = text.split(/\n\n/)[0] ?? ''
   return first.replace(/^#\d+\s+[^\n]*\n?/, '').trim()
+}
+
+/**
+ * 分镜图节点取镜逻辑：优先读上游 storyboard 节点的结构化 shots[shotIndex]
+ * （params.shotIndex 由「生成分镜图」派生时写入，用户也可在多个分镜图间自选镜头）；
+ * 上游无结构化 shots 时回退旧的文本切分（取第一镜）。
+ */
+function shotDescriptionFor(
+  nodes: PineNode[],
+  edges: PineEdge[],
+  nodeId: string,
+  shotIndex?: number,
+): string {
+  for (const e of edges) {
+    if (e.target !== nodeId) continue
+    const src = nodes.find((n) => n.id === e.source)
+    const shots = src?.data.shots
+    if (shots?.length) {
+      const s = shots[Math.max(0, Math.min(shotIndex ?? 0, shots.length - 1))]
+      return `${s.title}：${s.description}`.replace(/^：/, '').trim()
+    }
+  }
+  return firstShotDescription(getUpstreamTextOutput(nodes, edges, nodeId))
 }
 
 export type { ShotItem }

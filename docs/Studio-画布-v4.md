@@ -1,5 +1,12 @@
 # Studio 画布 v4 — TapNow 式工作空间（2026-07）
 
+> **v4.2 增量（2026-07-03）**：
+> - **视频生成真实接入**：Worker Provider 抽象（`src/worker/video/`），Seedance 2.0（主模型，需 ARK_API_KEY）与 MiniMax 海螺（复用现有 key）完整实现，Wan/Kling/Veo 预留桩；`/api/generate/video|video-status|video-file`（取件代理现查现取）；前端 runNode(video) 8s 轮询 + 代际守卫 + 倍数并行；模型选择器按密钥就绪态显示 🔑。接入步骤见 `docs/视频生成接入指南.md`，调研依据 `docs/模型API调研-2026-07.md`
+> - **分镜两段式**：分镜节点「生成分镜图」勾选面板（全选/单选）→ 派生 image/shot 节点（params.shotIndex 绑定镜头）→ image-prompt 端点生成生图提示词回填（idle 可确认/编辑）→「全部生成图片」批量；runNode shot 改读上游结构化 shots
+> - **Agent clear_canvas op**：新建管线且画布非空时先清空（手动/自动模式都强制弹确认，⌘Z 可撤）
+> - **多项目管理**：IndexedDB v2 `projects` 库（图剥离媒体+缩略图）；画布 2s 防抖自动落档；`/studio/projects` 网格页（搜索/新建/重命名/删除/当前徽章）；顶栏 logo 改回项目列表
+> - **交互修复**：节点工具栏全部下拉改向下展开（原向上生长冲出视口）；双击建节点清除浏览器选区；侧栏面板点空白收起；左下控制条对齐 TapNow 语义（小地图开关/**网格吸附** snapToGrid/重置 + 即时 tooltip，点阵常显，滑杆去动画）
+
 > 本轮改造依据：`docs/design/工作空间UI组件规范.html`（Claude Design 设计稿，视觉唯一依据）+ TapNow 真实画布实地考察记录（交互行为依据）。
 
 ## 一、节点体系（v4 核心变化）

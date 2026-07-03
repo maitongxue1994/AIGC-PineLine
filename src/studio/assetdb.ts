@@ -29,8 +29,19 @@ export type HistoryEntry = {
 
 export type LibraryFolder = { id: string; name: string }
 
+/** 项目档案：画布图（剥离 data: 媒体）+ 缩略图 + 元数据（v2 新增 projects 库） */
+export type ProjectRecord = {
+  id: string
+  name: string
+  updatedAt: number
+  /** ≤320px jpeg dataURL；无图项目为 null（页面显示渐变占位） */
+  thumb: string | null
+  graph: { nodes: unknown[]; edges: unknown[] }
+  credits: number
+}
+
 const DB_NAME = 'pineline-studio'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const HISTORY_LIMIT = 200
 const FOLDERS_KEY = 'pineline-library-v1'
 
@@ -47,6 +58,7 @@ let persistent = true
 // 降级内存兜底
 const memAssets = new Map<string, LibraryAsset>()
 const memHistory: HistoryEntry[] = []
+const memProjects = new Map<string, ProjectRecord>()
 
 export function isPersistent(): boolean {
   return persistent
@@ -67,6 +79,10 @@ function openDb(): Promise<IDBDatabase | null> {
           const s = db.createObjectStore('history', { keyPath: 'id' })
           s.createIndex('createdAt', 'createdAt')
         }
+        if (!db.objectStoreNames.contains('projects')) {
+          const s = db.createObjectStore('projects', { keyPath: 'id' })
+          s.createIndex('updatedAt', 'updatedAt')
+        }
       }
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => {
@@ -82,7 +98,7 @@ function openDb(): Promise<IDBDatabase | null> {
 }
 
 function tx<T>(
-  store: 'assets' | 'history',
+  store: 'assets' | 'history' | 'projects',
   mode: IDBTransactionMode,
   fn: (s: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T | null> {
@@ -156,6 +172,30 @@ export async function updateAsset(id: string, patch: Partial<LibraryAsset>): Pro
 export async function removeAsset(id: string): Promise<void> {
   await tx('assets', 'readwrite', (s) => s.delete(id))
   memAssets.delete(id)
+}
+
+// ---------------- 项目档案（多项目管理） ----------------
+
+export async function listProjects(): Promise<ProjectRecord[]> {
+  const rows = await tx<ProjectRecord[]>('projects', 'readonly', (s) => s.getAll())
+  if (rows) return rows.sort((a, b) => b.updatedAt - a.updatedAt)
+  return [...memProjects.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+export async function getProject(id: string): Promise<ProjectRecord | null> {
+  const row = await tx<ProjectRecord>('projects', 'readonly', (s) => s.get(id))
+  return row ?? memProjects.get(id) ?? null
+}
+
+/** upsert：新建与自动快照共用 */
+export async function putProject(record: ProjectRecord): Promise<void> {
+  const ok = await tx('projects', 'readwrite', (s) => s.put(record))
+  if (ok === null) memProjects.set(record.id, record)
+}
+
+export async function removeProject(id: string): Promise<void> {
+  await tx('projects', 'readwrite', (s) => s.delete(id))
+  memProjects.delete(id)
 }
 
 // ---------------- 生成历史（上限 200，LRU 裁剪） ----------------

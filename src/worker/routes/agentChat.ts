@@ -15,6 +15,7 @@ type AgentOp =
   | { op: 'connect'; source: string; target: string }
   | { op: 'delete_node'; id: string }
   | { op: 'run'; ids: string[] }
+  | { op: 'clear_canvas' }
 
 type Body = {
   messages?: { role: 'user' | 'assistant'; content: string }[]
@@ -34,7 +35,7 @@ type Body = {
   selection?: string[]
 }
 
-const VALID_OPS = new Set(['add_node', 'set_prompt', 'set_params', 'rename', 'connect', 'delete_node', 'run'])
+const VALID_OPS = new Set(['add_node', 'set_prompt', 'set_params', 'rename', 'connect', 'delete_node', 'run', 'clear_canvas'])
 const VALID_KINDS = new Set(['text', 'image'])
 const VALID_PRESETS = new Set([
   'free', 'script', 'storyboard', 'ad-copy',
@@ -59,6 +60,7 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 - {"op":"connect","source":"…","target":"…"}
 - {"op":"delete_node","id":"…"}
 - {"op":"run","ids":["…"]}（按依赖顺序运行这些节点）
+- {"op":"clear_canvas"}（清空画布；前端执行前会向用户二次确认）
 
 ## 规则
 1. 只输出一个 JSON 对象：{"reply":"给用户的中文回复","ops":[…]}。不要 markdown 代码围栏，不要任何解释文字。
@@ -67,7 +69,8 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 4. 用户让你修改「这个/选中的节点」时用 selection 里的 id。
 5. 需求不明确时 ops 留空 []，在 reply 里追问。
 6. 不确定的事不要编造；删除节点等破坏性操作要保守，用户明确要求才做。
-7. reply 简洁（1-3 句），说明你做了什么或要问什么。`
+7. 用户要求「新建/重新生成一条管线」且画布快照非空时，ops 第一条必须是 {"op":"clear_canvas"}（避免新旧节点叠在一起），并在 reply 里说明会先清空画布；用户只是追加节点/修改现有管线时不要 clear_canvas。
+8. reply 简洁（1-3 句），说明你做了什么或要问什么。`
 
 function stripFences(s: string): string {
   return s.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
@@ -152,6 +155,9 @@ function sanitizeOps(rawOps: unknown[]): { ops: AgentOp[]; dropped: number } {
       case 'run':
         if (!Array.isArray(o.ids) || !o.ids.every((x) => typeof x === 'string')) { dropped++; continue }
         ops.push({ op: 'run', ids: o.ids.slice(0, MAX_OPS) as string[] })
+        break
+      case 'clear_canvas':
+        ops.push({ op: 'clear_canvas' })
         break
     }
   }

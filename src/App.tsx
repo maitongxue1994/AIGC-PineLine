@@ -10,6 +10,7 @@ import Showcase from './pages/Showcase'
 import Pricing from './pages/Pricing'
 
 const Studio = lazy(() => import('./pages/Studio'))
+const Projects = lazy(() => import('./pages/Projects'))
 
 function StudioFallback() {
   return (
@@ -37,6 +38,14 @@ export default function App() {
             element={
               <Suspense fallback={<StudioFallback />}>
                 <Studio />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/studio/projects"
+            element={
+              <Suspense fallback={<StudioFallback />}>
+                <Projects />
               </Suspense>
             }
           />

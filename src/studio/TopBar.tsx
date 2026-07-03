@@ -13,8 +13,8 @@ export default function TopBar() {
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between p-4">
       <div className="pointer-events-auto flex items-center gap-3">
         <Link
-          to="/"
-          title="返回首页"
+          to="/studio/projects"
+          title="返回项目列表"
           className="block h-[34px] w-[34px] shrink-0 rounded-[10px] transition hover:scale-105"
           style={{ background: TOKENS.brandGradient }}
         />

@@ -16,6 +16,8 @@ export type AgentOp =
   | { op: 'connect'; source: string; target: string }
   | { op: 'delete_node'; id: string }
   | { op: 'run'; ids: string[] }
+  /** 清空画布再新建管线：前端执行前必弹确认（无论手动/自动模式） */
+  | { op: 'clear_canvas' }
 
 export type AgentChatRequest = {
   messages: { role: 'user' | 'assistant'; content: string }[]
@@ -76,5 +78,7 @@ export function describeOp(op: AgentOp): string {
       return `删除节点 ${op.id}`
     case 'run':
       return `运行 ${op.ids.length} 个节点`
+    case 'clear_canvas':
+      return '⚠ 清空当前画布（执行前会再次确认，⌘Z 可撤销）'
   }
 }
