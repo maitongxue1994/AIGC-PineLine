@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { motion } from 'framer-motion'
+import { useStudioStore } from '../studio/store'
 import StudioCanvas from '../studio/StudioCanvas'
 import TopBar from '../studio/TopBar'
 import LeftRail from '../studio/LeftRail'
@@ -15,6 +17,12 @@ import { TOKENS } from '../studio/designTokens'
  * ReactFlowProvider 上提到页面级：左栏面板/搜索/控制条都要调画布视口 API。
  */
 export default function Studio() {
+  const restoreCurrentProject = useStudioStore((s) => s.restoreCurrentProject)
+  // localStorage 恢复的画布不含 data: 媒体；从项目档案（IndexedDB 完整版）找回图片/视频
+  useEffect(() => {
+    void restoreCurrentProject()
+  }, [restoreCurrentProject])
+
   return (
     <ReactFlowProvider>
       <motion.main

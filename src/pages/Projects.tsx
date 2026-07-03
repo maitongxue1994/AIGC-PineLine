@@ -43,6 +43,7 @@ export default function Projects() {
   const snapshotCurrentProject = useStudioStore((s) => s.snapshotCurrentProject)
   const currentProjectId = useStudioStore((s) => s.currentProjectId)
 
+  const restoreCurrentProject = useStudioStore((s) => s.restoreCurrentProject)
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null)
   const [keyword, setKeyword] = useState('')
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -50,9 +51,12 @@ export default function Projects() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    // 进页面先把当前画布落档，保证列表里能看到「当前项目」的最新状态
-    void snapshotCurrentProject().then(() => listProjects().then(setProjects))
-  }, [snapshotCurrentProject])
+    // 先从档案恢复完整画布（刷新后 localStorage 是剥离版），再落档并刷新列表——
+    // 顺序颠倒会用无图画布污染完整档案
+    void restoreCurrentProject()
+      .then(() => snapshotCurrentProject())
+      .then(() => listProjects().then(setProjects))
+  }, [restoreCurrentProject, snapshotCurrentProject])
 
   const filtered = useMemo(() => {
     const list = projects ?? []

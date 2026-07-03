@@ -146,6 +146,11 @@ type StudioState = {
   currentProjectId: string | null
   /** 立即快照当前画布进项目档案（画布变更 2s 防抖自动调用） */
   snapshotCurrentProject: () => Promise<void>
+  /**
+   * Studio 挂载时从项目档案恢复完整画布：
+   * localStorage 剥离了 data: 媒体，档案（IndexedDB）是完整版——刷新后图片由此回来。
+   */
+  restoreCurrentProject: () => Promise<void>
   /** 载入项目档案替换画布；返回是否成功 */
   loadProject: (id: string) => Promise<boolean>
   /** 新建空项目并切换过去，返回新项目 id */
@@ -214,6 +219,26 @@ function newVersion(content: string | null, label?: string, error?: string | nul
     createdAt: Date.now(),
   }
 }
+
+/**
+ * 项目档案的节点整理：与 localStorage 的 stripHeavyOutputs 不同，
+ * IndexedDB 配额以 GB 计，**媒体完整保留**（剥离媒体曾导致重开项目分镜图全丢）；
+ * 只做状态归位：running→idle、清除选中/拖拽标记。
+ */
+function sanitizeForArchive(node: PineNode): PineNode {
+  return {
+    ...node,
+    selected: false,
+    dragging: false,
+    data:
+      node.data.status === 'running'
+        ? { ...node.data, status: 'idle' as const, error: undefined }
+        : node.data,
+  }
+}
+
+/** 恢复档案期间挂起自动快照，防止把 localStorage 剥离版（无图）写回档案 */
+let restoringProject = false
 
 /** 项目缩略图：首张图缩放到 ≤320px 宽 jpeg（IndexedDB 里不存原图大小的缩略） */
 async function makeThumb(dataUrl: string): Promise<string | null> {
@@ -1178,6 +1203,7 @@ export const useStudioStore = create<StudioState>()(
         currentProjectId: null,
 
         snapshotCurrentProject: async () => {
+          if (restoringProject) return
           const s = get()
           // 空画布且未建档：不生成空档案
           if (!s.currentProjectId && s.nodes.length === 0) return
@@ -1190,14 +1216,60 @@ export const useStudioStore = create<StudioState>()(
           const thumb = firstImage ? await makeThumb(firstImage) : null
           // 本次画布无图（如刷新后媒体被剥离）时保留档案里的旧缩略图
           const prev = thumb ? null : await getProject(id)
+
+          // 防污染：画布无任何 data: 媒体而档案有 → 画布疑似 localStorage 剥离态，
+          // 只刷新元数据、不用无图 graph 覆盖完整档案
+          const canvasHasMedia = s.nodes.some((n) =>
+            n.data.versions.some((v) => v.content?.startsWith('data:')),
+          )
+          const prevNodes = (prev?.graph.nodes ?? []) as PineNode[]
+          const prevHasMedia = prevNodes.some((n) =>
+            n.data?.versions?.some((v) => v.content?.startsWith('data:')),
+          )
+          if (!canvasHasMedia && prevHasMedia && prev) {
+            await putProject({
+              ...prev,
+              name: s.projectName,
+              updatedAt: Date.now(),
+              credits: s.credits,
+            })
+            return
+          }
+
           await putProject({
             id,
             name: s.projectName,
             updatedAt: Date.now(),
             thumb: thumb ?? prev?.thumb ?? null,
-            graph: { nodes: s.nodes.map(stripHeavyOutputs), edges: s.edges },
+            // 媒体完整入档（IndexedDB）——localStorage 才需要剥离
+            graph: { nodes: s.nodes.map(sanitizeForArchive), edges: s.edges },
             credits: s.credits,
           })
+        },
+
+        restoreCurrentProject: async () => {
+          const pid = get().currentProjectId
+          if (!pid) return
+          restoringProject = true
+          try {
+            const rec = await getProject(pid)
+            if (!rec) return
+            const nodes = rec.graph.nodes as PineNode[]
+            // 档案无媒体且不比当前画布多内容时不覆盖（罕见：旧版剥离档案）
+            const hasMedia = nodes.some((n) =>
+              n.data.versions.some((v) => v.content?.startsWith('data:')),
+            )
+            if (!hasMedia && nodes.length <= get().nodes.length) return
+            generation++
+            set({
+              nodes: nodes.map((n) => ({ ...n, selected: false, dragging: false })),
+              edges: rec.graph.edges as PineEdge[],
+              projectName: rec.name,
+              selectedNodeId: null,
+            })
+          } finally {
+            restoringProject = false
+          }
         },
 
         loadProject: async (id) => {
