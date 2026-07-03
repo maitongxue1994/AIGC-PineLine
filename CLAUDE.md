@@ -55,5 +55,6 @@ Vite 5 + React 18 + TS 5 + Tailwind 3 + zustand v5(persist) + @xyflow/react v12�
 
 - 视觉唯一依据 = 用户的 Claude Design 设计稿；偏好**设计稿先行**再写 UI。
 - 参照 TapNow 画布（app.tapnow.ai）的交互规范。
-- 授权：调研/计划后可直接实施并推 main，测试通过即可；改动尽量分批 commit（一个语义一个提交）。
+- 授权：调研/计划后可直接实施并推 main，测试通过即可。
+- **自动提交（硬性要求）**：每完成一处修改就自动 `git commit` 到**本地**，无需逐次询问；一个语义一个提交，message 用中文、尾部加 `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`。提交前先 `tsc -b` + `npm run lint` 通过再提交；`push` 到 main（触发部署）仍按需进行，本地提交与推送解耦。
 - 假积分为**本地模拟**（`INITIAL_CREDITS=1000`），非真实计费。
