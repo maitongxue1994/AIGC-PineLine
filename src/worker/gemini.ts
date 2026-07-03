@@ -1,6 +1,7 @@
 import { fetchWithTimeout } from './utils'
 
-const MODEL = 'gemini-3.1-flash-image-preview'
+// 稳定版（preview 版官方已于 2026-06-25 弃用关停，见 docs/模型API调研-2026-07.md 图片模型节）
+const MODEL = 'gemini-3.1-flash-image'
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
 type ImagePart = { inlineData: { mimeType: string; data: string } }
