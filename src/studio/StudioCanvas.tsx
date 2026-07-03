@@ -87,6 +87,16 @@ function StudioCanvasInner() {
     [],
   )
 
+  // 全局轻提示：节点组件等经 CustomEvent 发起（如禁用功能占位提示）
+  useEffect(() => {
+    const onFlash = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail
+      if (detail) flash(detail)
+    }
+    window.addEventListener('pineline:flash', onFlash)
+    return () => window.removeEventListener('pineline:flash', onFlash)
+  }, [flash])
+
   // 模板/建链后自动把新节点带入视野（等渲染一帧再适配）
   useEffect(() => {
     if (fitViewTick === 0) return

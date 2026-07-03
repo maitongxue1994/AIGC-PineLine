@@ -169,3 +169,13 @@
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
 }
+
+/* Studio 画布：连线选中提亮为白（设计稿 §02） */
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path {
+  stroke: #ffffff !important;
+}
+/* ⊕ 连接端口内的加号图标垂直居中 */
+.react-flow__handle svg {
+  pointer-events: none;
+}
