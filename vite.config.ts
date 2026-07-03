@@ -12,6 +12,14 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    // 本地无 .dev.vars/密钥，/api/* 由线上 Worker 处理——dev 时代理到线上，避免 404
+    proxy: {
+      '/api': {
+        target: 'https://aigcpineline0419.mys2388212.workers.dev',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   build: {
     chunkSizeWarningLimit: 700,
