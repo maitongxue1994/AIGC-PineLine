@@ -18,10 +18,8 @@ export default function Studio() {
   return (
     <ReactFlowProvider>
       <motion.main
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
+        initial={false}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.25 }}
         className="relative h-screen w-full overflow-hidden text-ink-0"
         style={{ background: TOKENS.canvasBg }}
       >

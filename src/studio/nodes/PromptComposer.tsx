@@ -128,7 +128,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
     <NodeToolbar position={Position.Bottom} offset={14} className="nodrag">
       <div
         className="relative flex w-[720px] flex-col gap-4 rounded-[24px] border border-white/[0.08] px-5 pb-4 pt-5"
-        style={{ background: TOKENS.inputBg, boxShadow: SHADOWS.panel }}
+        style={{ maxWidth: 'calc(100vw - 32px)', background: TOKENS.inputBg, boxShadow: SHADOWS.panel }}
         onDoubleClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => e.stopPropagation()}
       >

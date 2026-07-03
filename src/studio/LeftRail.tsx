@@ -73,7 +73,8 @@ export default function LeftRail({
     ) : null)
 
   return (
-    <div className="pointer-events-none absolute left-4 top-1/2 z-30 flex -translate-y-1/2 items-start gap-3">
+    // 面板绝对定位、不参与容器高度：打开/切换面板时 rail 图标位置绝不漂移
+    <div className="pointer-events-none absolute left-4 top-1/2 z-30 -translate-y-1/2">
       <div
         className="pointer-events-auto flex flex-col items-center gap-1.5 rounded-full border border-white/[0.07] px-2 py-3"
         style={{ background: TOKENS.railBg, boxShadow: SHADOWS.toolbar }}
@@ -122,7 +123,11 @@ export default function LeftRail({
         </div>
       </div>
 
-      {panel && <div className="pointer-events-auto">{panel}</div>}
+      {panel && (
+        <div className="pointer-events-auto absolute left-full top-1/2 ml-3 -translate-y-1/2">
+          {panel}
+        </div>
+      )}
     </div>
   )
 }

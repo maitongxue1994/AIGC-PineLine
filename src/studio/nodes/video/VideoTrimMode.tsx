@@ -195,7 +195,7 @@ export default function VideoTrimMode({
     <NodeToolbar position={Position.Bottom} offset={14} className="nodrag">
       <div
         className="flex w-[640px] flex-col gap-3 rounded-[20px] border border-white/[0.08] p-4"
-        style={{ background: TOKENS.inputBg, boxShadow: SHADOWS.panel }}
+        style={{ maxWidth: 'calc(100vw - 32px)', background: TOKENS.inputBg, boxShadow: SHADOWS.panel }}
         onDoubleClick={(e) => e.stopPropagation()}
       >
         {/* 隐藏预览元素（Space 试听） */}
