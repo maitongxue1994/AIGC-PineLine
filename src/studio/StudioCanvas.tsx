@@ -1,25 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow,
-  ReactFlowProvider,
   Background,
   BackgroundVariant,
-  Controls,
   MiniMap,
-  Panel,
   useReactFlow,
   type NodeTypes,
   type OnConnectEnd,
 } from '@xyflow/react'
-import { HelpCircle, LayoutTemplate, Redo2, RotateCcw, Undo2, X } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
+import { useUIStore } from './uiStore'
 import { KIND_ACCENTS } from './nodeCatalog'
 import { TOKENS } from './designTokens'
 import TextNode from './nodes/TextNode'
 import ImageNode from './nodes/ImageNode'
 import AssetNode from './nodes/AssetNode'
 import NodePaletteMenu, { type PaletteChoice } from './NodePaletteMenu'
+import CanvasContextMenu from './CanvasContextMenu'
 
 const nodeTypes: NodeTypes = {
   text: TextNode,
@@ -30,7 +28,12 @@ const nodeTypes: NodeTypes = {
 const MAX_DROP_FILES = 4
 const MAX_DROP_BYTES = 8 * 1024 * 1024
 
-function StudioCanvasInner() {
+/**
+ * 画布本体（需包裹在 ReactFlowProvider 内，由 Studio 页面提供）。
+ * 交互对齐 TapNow：滚轮平移 / ⌘滚轮与捏合缩放 / Space 拖拽平移 /
+ * 拖拽框选 / ⇧多选 / 双击空白建节点 / 右键上下文菜单。
+ */
+export default function StudioCanvas() {
   const nodes = useStudioStore((s) => s.nodes)
   const edges = useStudioStore((s) => s.edges)
   const onNodesChange = useStudioStore((s) => s.onNodesChange)
@@ -42,15 +45,18 @@ function StudioCanvasInner() {
   const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
   const addAssetNode = useStudioStore((s) => s.addAssetNode)
   const duplicateNode = useStudioStore((s) => s.duplicateNode)
+  const copySelection = useStudioStore((s) => s.copySelection)
+  const pasteClipboard = useStudioStore((s) => s.pasteClipboard)
   const undo = useStudioStore((s) => s.undo)
   const redo = useStudioStore((s) => s.redo)
-  const canUndo = useStudioStore((s) => s.past.length > 0)
-  const canRedo = useStudioStore((s) => s.future.length > 0)
-  const resetProject = useStudioStore((s) => s.resetProject)
   const fitViewTick = useStudioStore((s) => s.fitViewTick)
   const focusRequest = useStudioStore((s) => s.focusRequest)
 
-  const { screenToFlowPosition, fitView, setCenter, getNode } = useReactFlow()
+  const gridOn = useUIStore((s) => s.gridOn)
+  const minimapOn = useUIStore((s) => s.minimapOn)
+  const setSearchOpen = useUIStore((s) => s.setSearchOpen)
+
+  const { screenToFlowPosition, fitView, setCenter, getNode, zoomIn, zoomOut } = useReactFlow()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const pendingConnectRef = useRef<{
     fromNodeId: string
@@ -60,18 +66,13 @@ function StudioCanvasInner() {
   } | null>(null)
   // 双击空白画布新建节点时的落点（与拖线建节点互斥）
   const pendingAddPosRef = useRef<{ x: number; y: number } | null>(null)
-  const [menu, setMenu] = useState<{ screenX: number; screenY: number } | null>(
-    null,
-  )
+  const [menu, setMenu] = useState<{ screenX: number; screenY: number } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{
+    screenX: number
+    screenY: number
+    flowPos: { x: number; y: number }
+  } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  // 首次进入自动展示一次帮助
-  const [helpOpen, setHelpOpen] = useState(() => {
-    try {
-      return !localStorage.getItem('pineline-help-seen')
-    } catch {
-      return false
-    }
-  })
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const flash = useCallback((msg: string) => {
@@ -106,7 +107,7 @@ function StudioCanvasInner() {
     return () => cancelAnimationFrame(raf)
   }, [fitViewTick, fitView])
 
-  // 面板/搜索点选节点 → 把节点带到视口中心（审计修复：focusNode 不入视口）
+  // 面板/搜索点选节点 → 把节点带到视口中心
   useEffect(() => {
     if (!focusRequest) return
     const node = getNode(focusRequest.id)
@@ -119,16 +120,6 @@ function StudioCanvasInner() {
     })
   }, [focusRequest, getNode, setCenter])
 
-  // 帮助实际展示过（自动或手动）才写「已看过」标记
-  useEffect(() => {
-    if (!helpOpen) return
-    try {
-      localStorage.setItem('pineline-help-seen', '1')
-    } catch {
-      /* 隐私模式等场景拿不到 localStorage，忽略 */
-    }
-  }, [helpOpen])
-
   const handleSelectionChange = useCallback(
     ({ nodes }: { nodes: { id: string }[] }) => {
       selectNode(nodes[0]?.id ?? null)
@@ -136,8 +127,7 @@ function StudioCanvasInner() {
     [selectNode],
   )
 
-  // 键盘快捷键：⌘/Ctrl+Enter 运行选中；⌘/Ctrl+Z 撤销；⌘/Ctrl+Shift+Z 重做；
-  // ⌘/Ctrl+D 复制；Esc 关闭菜单。Delete/Backspace 由 ReactFlow 内置。
+  // 快捷键：⌘Enter 运行 / ⌘Z ⇧⌘Z / ⌘D / ⌘C ⌘V / ⌘F / ⌘± / ⌘I / Esc
   useEffect(() => {
     const isEditable = (el: EventTarget | null) => {
       if (!(el instanceof HTMLElement)) return false
@@ -145,22 +135,25 @@ function StudioCanvasInner() {
       return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && menu) {
-        pendingConnectRef.current = null
-        pendingAddPosRef.current = null
-        setMenu(null)
+      if (e.key === 'Escape') {
+        if (menu || ctxMenu) {
+          pendingConnectRef.current = null
+          pendingAddPosRef.current = null
+          setMenu(null)
+          setCtxMenu(null)
+        }
         return
       }
       if (!(e.metaKey || e.ctrlKey)) return
       if (isEditable(e.target)) return
-      // 按住不放的键盘重复不重复触发（审计修复：连发会产生并发付费请求）
+      // 按住不放的键盘重复不重复触发（避免连发并发付费请求）
       if (e.repeat) return
 
       const key = e.key.toLowerCase()
       if (e.key === 'Enter') {
         if (selectedNodeId) {
           e.preventDefault()
-          runNode(selectedNodeId)
+          void runNode(selectedNodeId)
         }
       } else if (key === 'z') {
         e.preventDefault()
@@ -174,11 +167,47 @@ function StudioCanvasInner() {
           e.preventDefault()
           duplicateNode(selectedNodeId)
         }
+      } else if (key === 'c') {
+        copySelection()
+      } else if (key === 'v') {
+        pasteClipboard(
+          screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }),
+        )
+      } else if (key === 'f') {
+        e.preventDefault()
+        setSearchOpen(true)
+      } else if (e.key === '=' || e.key === '+') {
+        e.preventDefault()
+        void zoomIn({ duration: 150 })
+      } else if (e.key === '-') {
+        e.preventDefault()
+        void zoomOut({ duration: 150 })
+      } else if (key === 'i') {
+        if (selectedNodeId) {
+          e.preventDefault()
+          window.dispatchEvent(
+            new CustomEvent('pineline:focus-composer', { detail: selectedNodeId }),
+          )
+        }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [menu, selectedNodeId, runNode, undo, redo, duplicateNode])
+  }, [
+    menu,
+    ctxMenu,
+    selectedNodeId,
+    runNode,
+    undo,
+    redo,
+    duplicateNode,
+    copySelection,
+    pasteClipboard,
+    screenToFlowPosition,
+    setSearchOpen,
+    zoomIn,
+    zoomOut,
+  ])
 
   const handleConnectEnd: OnConnectEnd = useCallback(
     (event, connectionState) => {
@@ -189,8 +218,7 @@ function StudioCanvasInner() {
       const { clientX, clientY } =
         'changedTouches' in event ? event.changedTouches[0] : (event as MouseEvent)
 
-      // 审计修复：只有松手在画布空白处才弹「新建节点」菜单；
-      // 拖到其他节点身上/自身（无效落点）直接放弃，避免误建重叠节点
+      // 只有松手在画布空白处才弹「新建节点」菜单；拖到节点身上/自身直接放弃
       const target = event.target as HTMLElement | null
       if (!target?.classList?.contains('react-flow__pane')) return
 
@@ -206,21 +234,20 @@ function StudioCanvasInner() {
     [screenToFlowPosition],
   )
 
-  // 新建落点避让右下角 MiniMap：节点若铺在小地图底下会被遮住
-  const MINIMAP_ZONE = { w: 230, h: 180 }
-  const avoidMiniMap = useCallback((x: number, y: number) => {
-    const rect = wrapperRef.current?.getBoundingClientRect()
-    if (!rect) return { x, y }
-    const inZone = x > rect.right - MINIMAP_ZONE.w && y > rect.bottom - MINIMAP_ZONE.h
-    if (!inZone) return { x, y }
-    // 节点卡片约 340px 宽，整体左移/上移出小地图区域
-    return {
-      x: Math.min(x, rect.right - MINIMAP_ZONE.w - 340),
-      y: Math.min(y, rect.bottom - MINIMAP_ZONE.h - 80),
-    }
-  }, [MINIMAP_ZONE.w, MINIMAP_ZONE.h])
+  // 新建落点避让左下角小地图区域
+  const avoidMiniMap = useCallback(
+    (x: number, y: number) => {
+      if (!minimapOn) return { x, y }
+      const rect = wrapperRef.current?.getBoundingClientRect()
+      if (!rect) return { x, y }
+      const inZone = x < rect.left + 240 && y > rect.bottom - 220
+      if (!inZone) return { x, y }
+      return { x: Math.max(x, rect.left + 260), y: Math.min(y, rect.bottom - 240) }
+    },
+    [minimapOn],
+  )
 
-  // 双击/右键空白画布 → 在落点弹新建菜单（TapNow 同款交互）
+  // 双击空白画布 → 在落点弹新建菜单
   const openPaletteAt = useCallback(
     (clientX: number, clientY: number) => {
       pendingConnectRef.current = null
@@ -239,17 +266,23 @@ function StudioCanvasInner() {
     [openPaletteAt],
   )
 
+  // 右键空白 → 上下文菜单（上传/添加节点/撤销/重做/粘贴）
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
       const target = e.target as HTMLElement
       if (!target.classList.contains('react-flow__pane')) return
       e.preventDefault()
-      openPaletteAt(e.clientX, e.clientY)
+      setMenu(null)
+      setCtxMenu({
+        screenX: e.clientX,
+        screenY: e.clientY,
+        flowPos: screenToFlowPosition({ x: e.clientX, y: e.clientY }),
+      })
     },
-    [openPaletteAt],
+    [screenToFlowPosition],
   )
 
-  // 拖图片文件进画布 → 生成「上传素材」节点，可直接作下游参考图
+  // 拖图片文件进画布 → 生成「上传素材」节点
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes('Files')) {
       e.preventDefault()
@@ -259,8 +292,7 @@ function StudioCanvasInner() {
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
-      // 审计修复：无条件 preventDefault——拖入非图片文件（如 .txt）时
-      // 浏览器默认行为是直接导航打开该文件，内存中的生成图会全部丢失
+      // 无条件 preventDefault：拖入非图片文件时浏览器默认会导航打开该文件
       if (e.dataTransfer.types.includes('Files')) e.preventDefault()
       const files = Array.from(e.dataTransfer.files).filter((f) =>
         f.type.startsWith('image/'),
@@ -327,7 +359,8 @@ function StudioCanvasInner() {
   return (
     <div
       ref={wrapperRef}
-      className="relative h-full w-full bg-bg-0"
+      className="absolute inset-0"
+      style={{ background: TOKENS.canvasBg }}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onDragOver={handleDragOver}
@@ -350,112 +383,34 @@ function StudioCanvasInner() {
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
         zoomOnDoubleClick={false}
+        panOnScroll
+        zoomOnScroll={false}
+        zoomActivationKeyCode={['Meta', 'Control']}
+        panActivationKeyCode="Space"
+        panOnDrag={false}
+        selectionOnDrag
+        multiSelectionKeyCode="Shift"
+        deleteKeyCode={['Backspace', 'Delete']}
       >
-        <Panel position="top-left" className="!m-2 flex gap-1">
-          <button
-            title="撤销 (⌘/Ctrl+Z)"
-            onClick={undo}
-            disabled={!canUndo}
-            className="rounded-md border border-white/[0.07] bg-bg-2/80 p-1.5 text-ink-1 backdrop-blur transition hover:bg-bg-2 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Undo2 size={13} />
-          </button>
-          <button
-            title="重做 (⌘/Ctrl+Shift+Z)"
-            onClick={redo}
-            disabled={!canRedo}
-            className="rounded-md border border-white/[0.07] bg-bg-2/80 p-1.5 text-ink-1 backdrop-blur transition hover:bg-bg-2 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Redo2 size={13} />
-          </button>
-          <button
-            title="快速开始与快捷键"
-            onClick={() => setHelpOpen((v) => !v)}
-            className="rounded-md border border-white/[0.07] bg-bg-2/80 p-1.5 text-ink-1 backdrop-blur transition hover:bg-bg-2 hover:text-white"
-          >
-            <HelpCircle size={13} />
-          </button>
-          <button
-            title="从模板开始"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent('pineline:open-templates'))
-            }}
-            className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-bg-2/80 px-2 py-1.5 text-[10px] text-ink-1 backdrop-blur transition hover:bg-bg-2 hover:text-white"
-          >
-            <LayoutTemplate size={13} />
-            模板
-          </button>
-          <button
-            title="清空画布（=新建空工程，⌘/Ctrl+Z 可撤销）"
-            onClick={() => {
-              if (
-                window.confirm(
-                  '清空画布（=新建空工程）。建议先「导出」备份；清空后可用 ⌘/Ctrl+Z 撤销。确定继续？',
-                )
-              ) {
-                resetProject()
-                flash('已清空画布（⌘/Ctrl+Z 可撤销）')
-              }
-            }}
-            className="flex items-center gap-1 rounded-md border border-[#22D3EE]/40 bg-bg-2/80 px-2 py-1.5 text-[10px] text-[#22D3EE] backdrop-blur transition hover:bg-bg-2 hover:text-white"
-          >
-            <RotateCcw size={12} />
-            清空画布
-          </button>
-          <span className="ml-1 hidden self-center text-[10px] text-ink-3 lg:inline">
-            双击/右键空白新建节点 · 拖图片进画布作参考
-          </span>
-        </Panel>
-
-        {helpOpen && (
-          <Panel position="top-left" className="!m-2 !mt-12">
-            <div className="w-[300px] rounded-xl border border-white/10 bg-bg-1/95 p-4 text-[12px] shadow-2xl backdrop-blur">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-2">
-                  快速开始
-                </span>
-                <button
-                  onClick={() => setHelpOpen(false)}
-                  className="rounded p-0.5 text-ink-2 hover:bg-white/5 hover:text-white"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-              <ol className="ml-4 list-decimal space-y-1 leading-relaxed text-ink-1">
-                <li>双击/右键画布空白新建节点，左上角「模板」一键铺链</li>
-                <li>从节点右端口拖线到空白 → 选下一环（分镜/图片…）</li>
-                <li>把图片拖进画布 → 成为下游参考图</li>
-                <li>选中节点 → 上方工具条可运行/复制/下载/删除</li>
-              </ol>
-              <div className="mt-3 border-t border-white/[0.06] pt-2 leading-relaxed text-ink-2">
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3">
-                  快捷键
-                </div>
-                <div>⌘/Ctrl+Enter 运行选中 · ⌘/Ctrl+D 复制</div>
-                <div>⌘/Ctrl+Z 撤销 · ⌘/Ctrl+Shift+Z 重做</div>
-                <div>Delete 删除 · Esc 关闭菜单</div>
-              </div>
-              <div className="mt-2 text-[10px] text-ink-3">积分为本地模拟，仅作演示。</div>
-            </div>
-          </Panel>
+        {gridOn && (
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={TOKENS.canvasDotGap}
+            size={1}
+            color="#222"
+          />
         )}
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={TOKENS.canvasDotGap}
-          size={1}
-          color="#222"
-        />
-        <Controls
-          className="!border !border-white/[0.07] !bg-bg-2/80 !shadow-none [&>button]:!border-white/[0.07] [&>button]:!bg-bg-1 [&>button]:!text-ink-1 [&>button:hover]:!bg-bg-2"
-          showInteractive={false}
-        />
-        <MiniMap
-          className="!border !border-white/[0.07] !bg-bg-2/70"
-          nodeColor={(n) => KIND_ACCENTS[(n.type ?? 'image') as keyof typeof KIND_ACCENTS] ?? '#7C5CFF'}
-          maskColor="rgba(7,7,11,0.6)"
-          pannable
-          zoomable
-        />
+        {minimapOn && (
+          <MiniMap
+            position="bottom-left"
+            className="!mb-[68px] !ml-4 !h-[128px] !w-[200px] !rounded-[14px] !border !border-white/[0.08]"
+            style={{ background: 'rgba(22,22,24,0.95)' }}
+            nodeColor={(n) => KIND_ACCENTS[(n.type ?? 'image') as keyof typeof KIND_ACCENTS] ?? '#7C5CFF'}
+            maskColor="rgba(7,7,11,0.6)"
+            pannable
+            zoomable
+          />
+        )}
       </ReactFlow>
 
       {menu && (
@@ -471,19 +426,27 @@ function StudioCanvasInner() {
         />
       )}
 
+      {ctxMenu && (
+        <CanvasContextMenu
+          x={ctxMenu.screenX}
+          y={ctxMenu.screenY}
+          flowPos={ctxMenu.flowPos}
+          onAddNode={() => {
+            const { screenX, screenY, flowPos } = ctxMenu
+            setCtxMenu(null)
+            pendingConnectRef.current = null
+            pendingAddPosRef.current = flowPos
+            setMenu({ screenX, screenY })
+          }}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
+
       {notice && (
-        <div className="pointer-events-none absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-md border border-white/10 bg-bg-2/95 px-4 py-2 text-xs text-white shadow-xl backdrop-blur">
+        <div className="pointer-events-none absolute left-1/2 top-16 z-50 -translate-x-1/2 rounded-md border border-white/10 bg-bg-2/95 px-4 py-2 text-xs text-white shadow-xl backdrop-blur">
           {notice}
         </div>
       )}
     </div>
-  )
-}
-
-export default function StudioCanvas() {
-  return (
-    <ReactFlowProvider>
-      <StudioCanvasInner />
-    </ReactFlowProvider>
   )
 }

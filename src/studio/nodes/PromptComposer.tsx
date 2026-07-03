@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import {
   ArrowUp,
@@ -111,6 +111,16 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
 
   const [openPop, setOpenPop] = useState<'preset' | 'ratio' | 'batch' | 'tone' | 'length' | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const textRef = useRef<HTMLTextAreaElement | null>(null)
+
+  // ⌘I：聚焦选中节点的提示词输入
+  useEffect(() => {
+    const onFocusReq = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === id) textRef.current?.focus()
+    }
+    window.addEventListener('pineline:focus-composer', onFocusReq)
+    return () => window.removeEventListener('pineline:focus-composer', onFocusReq)
+  }, [id])
 
   const { kind, preset, params, status } = data
   const meta = presetMeta(preset)
@@ -191,6 +201,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
 
         {/* 中区：提示词 */}
         <textarea
+          ref={textRef}
           value={data.prompt}
           placeholder={meta?.promptPlaceholder ?? '描述任何你想要生成的内容'}
           onChange={(e) => setPrompt(id, e.target.value)}
