@@ -9,9 +9,10 @@ type UIState = {
   activePanel: RailPanel
   setActivePanel: (p: RailPanel) => void
   minimapOn: boolean
-  gridOn: boolean
+  /** 网格吸附（TapNow 语义：拖动节点对齐网格；点阵背景常显） */
+  snapOn: boolean
   toggleMinimap: () => void
-  toggleGrid: () => void
+  toggleSnap: () => void
   searchOpen: boolean
   setSearchOpen: (v: boolean) => void
   helpOpen: boolean
@@ -24,9 +25,9 @@ export const useUIStore = create<UIState>()(
       activePanel: null,
       setActivePanel: (p) => set((s) => ({ activePanel: s.activePanel === p ? null : p })),
       minimapOn: true,
-      gridOn: true,
+      snapOn: false,
       toggleMinimap: () => set((s) => ({ minimapOn: !s.minimapOn })),
-      toggleGrid: () => set((s) => ({ gridOn: !s.gridOn })),
+      toggleSnap: () => set((s) => ({ snapOn: !s.snapOn })),
       searchOpen: false,
       setSearchOpen: (v) => set({ searchOpen: v }),
       helpOpen: false,
@@ -36,7 +37,7 @@ export const useUIStore = create<UIState>()(
       name: 'pineline-ui-v1',
       storage: createJSONStorage(() => localStorage),
       partialize: (s) =>
-        ({ minimapOn: s.minimapOn, gridOn: s.gridOn }) as unknown as UIState,
+        ({ minimapOn: s.minimapOn, snapOn: s.snapOn }) as unknown as UIState,
     },
   ),
 )

@@ -148,7 +148,8 @@ export default function NodePaletteMenu({ x, y, onPick, onClose }: Props) {
       />
       <div
         ref={ref}
-        className="fixed z-50 max-h-[70vh] w-[240px] overflow-y-auto rounded-lg border border-white/[0.08] bg-bg-1/95 shadow-2xl backdrop-blur"
+        // select-none：双击建节点时浏览器选区会把菜单文字整片高亮
+        className="fixed z-50 max-h-[70vh] w-[240px] select-none overflow-y-auto rounded-lg border border-white/[0.08] bg-bg-1/95 shadow-2xl backdrop-blur"
         style={pos}
         onClick={(e) => e.stopPropagation()}
       >

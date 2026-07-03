@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Clock, FolderOpen, LayoutGrid, MessageCircle, Plus, Search, User } from 'lucide-react'
 import { useUIStore, type RailPanel } from './uiStore'
 import { SHADOWS, TOKENS } from './designTokens'
@@ -58,6 +59,20 @@ export default function LeftRail({
   const activePanel = useUIStore((s) => s.activePanel)
   const setActivePanel = useUIStore((s) => s.setActivePanel)
   const setSearchOpen = useUIStore((s) => s.setSearchOpen)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // 点击画布空白（rail/面板之外）自动收起面板；pointerdown 不拦截该次点击本身
+  useEffect(() => {
+    if (!activePanel) return
+    const onPointerDown = (e: PointerEvent) => {
+      const root = rootRef.current
+      if (root && e.target instanceof Node && !root.contains(e.target)) {
+        setActivePanel(null)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [activePanel, setActivePanel])
 
   const injected = renderPanel?.(activePanel)
   const panel =
@@ -74,7 +89,7 @@ export default function LeftRail({
 
   return (
     // 面板绝对定位、不参与容器高度：打开/切换面板时 rail 图标位置绝不漂移
-    <div className="pointer-events-none absolute left-4 top-1/2 z-30 -translate-y-1/2">
+    <div ref={rootRef} className="pointer-events-none absolute left-4 top-1/2 z-30 -translate-y-1/2">
       <div
         className="pointer-events-auto flex flex-col items-center gap-1.5 rounded-full border border-white/[0.07] px-2 py-3"
         style={{ background: TOKENS.railBg, boxShadow: SHADOWS.toolbar }}

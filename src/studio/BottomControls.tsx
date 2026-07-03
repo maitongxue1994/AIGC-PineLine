@@ -1,29 +1,59 @@
+import type { ReactNode } from 'react'
 import { useReactFlow, useViewport } from '@xyflow/react'
-import { Grid3x3, HelpCircle, Map, Scan, X } from 'lucide-react'
+import { HelpCircle, Magnet, Map, Scan, X } from 'lucide-react'
 import { useUIStore } from './uiStore'
 import { SHADOWS, TOKENS } from './designTokens'
 
 const MIN_ZOOM = 0.1
 const MAX_ZOOM = 2
 
+/** 控制条按钮：34px 圆钮 + 上方即时黑胶囊 tooltip（原生 title 延迟长且被小地图遮挡） */
+function CtrlBtn({
+  tip,
+  active,
+  onClick,
+  children,
+}: {
+  tip: string
+  active?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <div className="group relative">
+      <button
+        onClick={onClick}
+        className="flex h-[34px] w-[34px] items-center justify-center rounded-full transition hover:text-white"
+        style={{
+          color: active ? '#F5F5F7' : TOKENS.textMuted,
+          background: active ? 'rgba(255,255,255,0.1)' : undefined,
+        }}
+      >
+        {children}
+      </button>
+      <span
+        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/[0.08] px-3.5 py-1.5 text-[13px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
+        style={{ background: '#2A2A2D', boxShadow: SHADOWS.tooltip }}
+      >
+        {tip}
+      </span>
+    </div>
+  )
+}
+
 /**
- * 左下控制区（设计稿 §07）：控制条胶囊（地图开关/网格开关/适配视图/缩放滑杆）+ 帮助。
+ * 左下控制区（TapNow 语义对照）：小地图开关 / 网格吸附 / 重置 / 缩放滑杆 + 帮助。
  * 小地图本体渲染在 StudioCanvas 内（MiniMap position=bottom-left）。
  */
 export default function BottomControls() {
   const minimapOn = useUIStore((s) => s.minimapOn)
-  const gridOn = useUIStore((s) => s.gridOn)
+  const snapOn = useUIStore((s) => s.snapOn)
   const toggleMinimap = useUIStore((s) => s.toggleMinimap)
-  const toggleGrid = useUIStore((s) => s.toggleGrid)
+  const toggleSnap = useUIStore((s) => s.toggleSnap)
   const helpOpen = useUIStore((s) => s.helpOpen)
   const setHelpOpen = useUIStore((s) => s.setHelpOpen)
   const { fitView, zoomTo } = useReactFlow()
   const { zoom } = useViewport()
-
-  const btn = (active: boolean) =>
-    `flex h-[34px] w-[34px] items-center justify-center rounded-full transition hover:text-white ${
-      active ? 'text-white' : ''
-    }`
 
   // 滑杆用对数刻度：小缩放段更细腻
   const sliderVal = Math.log(zoom / MIN_ZOOM) / Math.log(MAX_ZOOM / MIN_ZOOM)
@@ -34,46 +64,36 @@ export default function BottomControls() {
         className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/[0.08] px-2.5 py-1.5"
         style={{ background: TOKENS.railBg, boxShadow: SHADOWS.toolbar }}
       >
-        <button
-          title={minimapOn ? '隐藏小地图' : '显示小地图'}
-          onClick={toggleMinimap}
-          className={btn(minimapOn)}
-          style={{
-            color: minimapOn ? '#F5F5F7' : TOKENS.textMuted,
-            background: minimapOn ? 'rgba(255,255,255,0.1)' : undefined,
-          }}
-        >
+        <CtrlBtn tip={minimapOn ? '关闭小地图' : '打开小地图'} active={minimapOn} onClick={toggleMinimap}>
           <Map size={15} />
-        </button>
-        <button
-          title={gridOn ? '隐藏网格' : '显示网格'}
-          onClick={toggleGrid}
-          className={btn(gridOn)}
-          style={{ color: gridOn ? '#F5F5F7' : TOKENS.textMuted }}
-        >
-          <Grid3x3 size={15} />
-        </button>
-        <button
-          title="适配视图（显示全部节点）"
-          onClick={() => void fitView({ padding: 0.2, maxZoom: 1, duration: 300 })}
-          className={btn(false)}
-          style={{ color: TOKENS.textMuted }}
-        >
+        </CtrlBtn>
+        <CtrlBtn tip={snapOn ? '关闭网格吸附' : '网格吸附'} active={snapOn} onClick={toggleSnap}>
+          <Magnet size={15} />
+        </CtrlBtn>
+        <CtrlBtn tip="重置（显示全部节点）" onClick={() => void fitView({ padding: 0.2, maxZoom: 1, duration: 300 })}>
           <Scan size={15} />
-        </button>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={sliderVal}
-          title={`缩放 ${(zoom * 100).toFixed(0)}%`}
-          onChange={(e) => {
-            const t = Number(e.target.value)
-            void zoomTo(MIN_ZOOM * Math.pow(MAX_ZOOM / MIN_ZOOM, t), { duration: 50 })
-          }}
-          className="studio-zoom-slider mx-1.5 w-[70px]"
-        />
+        </CtrlBtn>
+        <div className="group relative flex items-center">
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={sliderVal}
+            onChange={(e) => {
+              const t = Number(e.target.value)
+              // duration 0：连续拖动时多段动画竞争会抖动
+              void zoomTo(MIN_ZOOM * Math.pow(MAX_ZOOM / MIN_ZOOM, t))
+            }}
+            className="studio-zoom-slider mx-1.5 w-[70px]"
+          />
+          <span
+            className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-3 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/[0.08] px-3.5 py-1.5 text-[13px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ background: '#2A2A2D', boxShadow: SHADOWS.tooltip }}
+          >
+            缩放 {(zoom * 100).toFixed(0)}%
+          </span>
+        </div>
       </div>
 
       <div className="pointer-events-auto relative">

@@ -126,7 +126,8 @@ export default function NodeToolbarBar({
   ]
 
   return (
-    <NodeToolbar position={Position.Top} offset={12} className="flex flex-col items-center gap-2">
+    // 工具栏容器锚定节点上方；菜单/色板绝对定位向下展开（容器向上生长会冲出视口顶——用户实测反馈）
+    <NodeToolbar position={Position.Top} offset={12} className="relative">
       <div
         className="flex items-center gap-0.5 rounded-full border border-white/[0.07] px-2.5 py-2"
         style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
@@ -173,10 +174,10 @@ export default function NodeToolbarBar({
         </TBtn>
       </div>
 
-      {/* Pin 色板浮条 */}
+      {/* Pin 色板浮条：向下覆盖节点展开 */}
       {pinOpen && (
         <div
-          className="flex items-center gap-3.5 rounded-full border border-white/[0.07] px-5 py-3"
+          className="absolute left-1/2 top-full z-40 mt-2 flex -translate-x-1/2 items-center gap-3.5 rounded-full border border-white/[0.07] px-5 py-3"
           style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
         >
           <button
@@ -201,11 +202,11 @@ export default function NodeToolbarBar({
         </div>
       )}
 
-      {/* 更多菜单（浏览全部）：复制/删除可用；图像高级操作为禁用占位 */}
+      {/* 更多菜单（浏览全部）：向下覆盖节点展开 + 视口内滚动，杜绝冲出屏幕 */}
       {moreOpen && (
         <div
-          className="w-[300px] rounded-[18px] border border-white/[0.08] p-2.5"
-          style={{ background: TOKENS.chipBg, boxShadow: SHADOWS.menu }}
+          className="absolute left-1/2 top-full z-40 mt-2 w-[300px] -translate-x-1/2 overflow-y-auto rounded-[18px] border border-white/[0.08] p-2.5"
+          style={{ background: TOKENS.chipBg, boxShadow: SHADOWS.menu, maxHeight: 'min(60vh, 480px)' }}
         >
           <button
             onClick={() => { setMoreOpen(false); duplicateNode(id) }}

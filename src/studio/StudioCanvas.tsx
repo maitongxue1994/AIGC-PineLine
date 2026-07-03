@@ -56,7 +56,7 @@ export default function StudioCanvas() {
   const fitViewTick = useStudioStore((s) => s.fitViewTick)
   const focusRequest = useStudioStore((s) => s.focusRequest)
 
-  const gridOn = useUIStore((s) => s.gridOn)
+  const snapOn = useUIStore((s) => s.snapOn)
   const minimapOn = useUIStore((s) => s.minimapOn)
   const setSearchOpen = useUIStore((s) => s.setSearchOpen)
 
@@ -268,6 +268,8 @@ export default function StudioCanvas() {
     (e: React.MouseEvent) => {
       const target = e.target as HTMLElement
       if (!target.classList.contains('react-flow__pane')) return
+      // 双击会触发浏览器文本选择，菜单弹出后整片文字呈选中高亮——先清选区
+      window.getSelection()?.removeAllRanges()
       openPaletteAt(e.clientX, e.clientY)
     },
     [openPaletteAt],
@@ -411,15 +413,16 @@ export default function StudioCanvas() {
         selectionOnDrag
         multiSelectionKeyCode="Shift"
         deleteKeyCode={['Backspace', 'Delete']}
+        // 网格吸附（TapNow 语义）：开关只管吸附，点阵背景常显
+        snapToGrid={snapOn}
+        snapGrid={[TOKENS.canvasDotGap, TOKENS.canvasDotGap]}
       >
-        {gridOn && (
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={TOKENS.canvasDotGap}
-            size={1}
-            color="#222"
-          />
-        )}
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={TOKENS.canvasDotGap}
+          size={1}
+          color="#222"
+        />
         {minimapOn && (
           <MiniMap
             position="bottom-left"

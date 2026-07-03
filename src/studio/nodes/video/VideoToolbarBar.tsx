@@ -140,7 +140,8 @@ export default function VideoToolbarBar({
     'flex w-full items-center gap-3 rounded-[9px] px-3.5 py-[11px] text-left text-[15px] transition hover:bg-white/[0.06]'
 
   return (
-    <NodeToolbar position={Position.Top} offset={12} className="flex flex-col items-center gap-2">
+    // 下拉一律绝对定位向下展开：容器向上生长会把菜单顶出视口（与 NodeToolbarBar 同修）
+    <NodeToolbar position={Position.Top} offset={12} className="relative">
       <div
         className="flex items-center gap-0.5 rounded-full border border-white/[0.07] px-2.5 py-2"
         style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
@@ -202,7 +203,7 @@ export default function VideoToolbarBar({
       {/* 截帧下拉（220px） */}
       {menu === 'frame' && (
         <div
-          className="w-[220px] rounded-[14px] border border-white/[0.08] p-2"
+          className="absolute left-1/2 top-full z-40 mt-2 w-[220px] -translate-x-1/2 rounded-[14px] border border-white/[0.08] p-2"
           style={{ background: TOKENS.chipBg, boxShadow: SHADOWS.menu }}
         >
           {(
@@ -222,7 +223,7 @@ export default function VideoToolbarBar({
       {/* 更多菜单（260px）：解析（占位）/ 合规验证（本地模拟） */}
       {menu === 'more' && (
         <div
-          className="w-[260px] rounded-[14px] border border-white/[0.08] p-2"
+          className="absolute left-1/2 top-full z-40 mt-2 w-[260px] -translate-x-1/2 rounded-[14px] border border-white/[0.08] p-2"
           style={{ background: TOKENS.chipBg, boxShadow: SHADOWS.menu }}
         >
           <div className={`${menuRow} cursor-not-allowed opacity-45 hover:bg-transparent`} style={{ color: TOKENS.textBody }}>
@@ -248,7 +249,7 @@ export default function VideoToolbarBar({
       {/* Pin 色板浮条 */}
       {menu === 'pin' && (
         <div
-          className="flex items-center gap-3.5 rounded-full border border-white/[0.07] px-5 py-3"
+          className="absolute left-1/2 top-full z-40 mt-2 flex -translate-x-1/2 items-center gap-3.5 rounded-full border border-white/[0.07] px-5 py-3"
           style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
         >
           <button
