@@ -3,6 +3,8 @@ import { useUIStore, type RailPanel } from './uiStore'
 import { SHADOWS, TOKENS } from './designTokens'
 import AddNodePanel from './panels/AddNodePanel'
 import TemplatePanel from './panels/TemplatePanel'
+import AssetLibraryPanel from './panels/AssetLibraryPanel'
+import HistoryPanel from './panels/HistoryPanel'
 
 function RailBtn({
   title,
@@ -64,13 +66,10 @@ export default function LeftRail({
       <AddNodePanel />
     ) : activePanel === 'templates' ? (
       <TemplatePanel />
-    ) : activePanel === 'library' || activePanel === 'history' ? (
-      <div
-        className="w-[240px] rounded-[20px] border border-white/[0.07] p-5 text-center text-[13px] leading-relaxed"
-        style={{ background: TOKENS.panelBg, boxShadow: SHADOWS.panel, color: TOKENS.textFaint }}
-      >
-        {activePanel === 'library' ? '素材库' : '生成历史'}即将上线
-      </div>
+    ) : activePanel === 'library' ? (
+      <AssetLibraryPanel />
+    ) : activePanel === 'history' ? (
+      <HistoryPanel />
     ) : null)
 
   return (

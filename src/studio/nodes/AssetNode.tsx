@@ -6,6 +6,7 @@ import { TOKENS } from '../designTokens'
 import NodeShell from './NodeShell'
 import NodeToolbarBar from './NodeToolbarBar'
 import PreviewLightbox from '../components/PreviewLightbox'
+import SaveToLibraryDialog from '../dialogs/SaveToLibraryDialog'
 import { useStudioStore } from '../store'
 
 const CARD_W = 260
@@ -13,6 +14,7 @@ const CARD_W = 260
 /** 上传素材节点：内容即本体，不调模型；只有右侧输出端口。 */
 function AssetNodeInner({ id, data, selected }: NodeProps<PineNode>) {
   const [preview, setPreview] = useState(false)
+  const [saveOpen, setSaveOpen] = useState(false)
   const setActiveVersion = useStudioStore((s) => s.setActiveVersion)
   const output = activeContent(data)
 
@@ -24,6 +26,7 @@ function AssetNodeInner({ id, data, selected }: NodeProps<PineNode>) {
       width={CARD_W}
       typeIcon={<ImagePlus />}
       hasTarget={false}
+      onSaveToLibrary={output ? () => setSaveOpen(true) : undefined}
       toolbar={
         <NodeToolbarBar
           id={id}
@@ -32,6 +35,7 @@ function AssetNodeInner({ id, data, selected }: NodeProps<PineNode>) {
           output={output}
           filename={`${data.title}.png`}
           onPreview={() => setPreview(true)}
+          onSaveToLibrary={output ? () => setSaveOpen(true) : undefined}
         />
       }
     >
@@ -63,6 +67,15 @@ function AssetNodeInner({ id, data, selected }: NodeProps<PineNode>) {
           title={data.title}
           onIndexChange={(i) => setActiveVersion(id, i)}
           onClose={() => setPreview(false)}
+        />
+      )}
+
+      {saveOpen && output && (
+        <SaveToLibraryDialog
+          dataUrl={output}
+          defaultName={data.title}
+          sourceNodeId={id}
+          onClose={() => setSaveOpen(false)}
         />
       )}
     </NodeShell>

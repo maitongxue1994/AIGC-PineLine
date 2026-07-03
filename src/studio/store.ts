@@ -24,6 +24,7 @@ import {
   presetMeta,
 } from './nodeCatalog'
 import { migrateGraph, migrateLegacyEdge } from './migrate'
+import { appendHistory } from './assetdb'
 import {
   activeContent,
   isImageContent,
@@ -580,14 +581,16 @@ export const useStudioStore = create<StudioState>()(
                 const shotsText = res.shots
                   .map((s, i) => `#${i + 1} ${s.title}\n${s.description}`)
                   .join('\n\n')
+                const sbVersions = [newVersion(shotsText)]
                 safeSet(g, (s) => ({
                   nodes: mutateNode(s.nodes, id, {
                     status: 'done',
                     shots: res.shots,
-                    versions: [newVersion(shotsText)],
+                    versions: sbVersions,
                     activeVersion: 0,
                   }),
                 }))
+                recordHistory(id, 'text', preset, screenplay, sbVersions)
               } else {
                 const upstream = getUpstreamTextOutput(state.nodes, state.edges, id)
                 const brief = node.data.prompt.trim() || upstream || ''
@@ -599,13 +602,15 @@ export const useStudioStore = create<StudioState>()(
                   length: params.length,
                   preset: preset === 'ad-copy' ? 'ad-copy' : preset === 'free' ? 'free' : 'script',
                 })
+                const txtVersions = [newVersion(res.script)]
                 safeSet(g, (s) => ({
                   nodes: mutateNode(s.nodes, id, {
                     status: 'done',
-                    versions: [newVersion(res.script)],
+                    versions: txtVersions,
                     activeVersion: 0,
                   }),
                 }))
+                recordHistory(id, 'text', preset, brief, txtVersions)
               }
             } else if (kind === 'image') {
               const upstreamText = getUpstreamTextOutput(state.nodes, state.edges, id)
@@ -626,15 +631,17 @@ export const useStudioStore = create<StudioState>()(
                   aspectRatio: params.aspectRatio,
                   quality: params.quality,
                 })
+                const gridVersions = res.images.map((img, i) =>
+                  newVersion(img, gridLabels[i], res.errors?.[i] ?? null),
+                )
                 safeSet(g, (s) => ({
                   nodes: mutateNode(s.nodes, id, {
                     status: 'done',
-                    versions: res.images.map((img, i) =>
-                      newVersion(img, gridLabels[i], res.errors?.[i] ?? null),
-                    ),
+                    versions: gridVersions,
                     activeVersion: Math.max(0, res.images.findIndex((x) => !!x)),
                   }),
                 }))
+                recordHistory(id, 'image', preset, desc, gridVersions)
               } else {
                 const fallback =
                   preset === 'shot' ? firstShotDescription(upstreamText) : upstreamText || ''
@@ -650,15 +657,17 @@ export const useStudioStore = create<StudioState>()(
                     aspectRatio: params.aspectRatio,
                     quality: params.quality,
                   })
+                  const batchVersions = res.images.map((img, i) =>
+                    newVersion(img, undefined, res.errors?.[i] ?? null),
+                  )
                   safeSet(g, (s) => ({
                     nodes: mutateNode(s.nodes, id, {
                       status: 'done',
-                      versions: res.images.map((img, i) =>
-                        newVersion(img, undefined, res.errors?.[i] ?? null),
-                      ),
+                      versions: batchVersions,
                       activeVersion: Math.max(0, res.images.findIndex((x) => !!x)),
                     }),
                   }))
+                  recordHistory(id, 'image', preset, prompt, batchVersions)
                 } else {
                   const res = await generateImage({
                     prompt,
@@ -666,13 +675,15 @@ export const useStudioStore = create<StudioState>()(
                     aspectRatio: params.aspectRatio,
                     quality: params.quality,
                   })
+                  const oneVersion = [newVersion(res.image)]
                   safeSet(g, (s) => ({
                     nodes: mutateNode(s.nodes, id, {
                       status: 'done',
-                      versions: [newVersion(res.image)],
+                      versions: oneVersion,
                       activeVersion: 0,
                     }),
                   }))
+                  recordHistory(id, 'image', preset, prompt, oneVersion)
                 }
               }
             }
@@ -857,6 +868,27 @@ export const useStudioStore = create<StudioState>()(
 
 /** 内存剪贴板（模块级：跨组件共享，刷新即失效） */
 let clipboard: Clipboard = null
+
+/** 生成历史（IndexedDB，非关键路径，失败静默） */
+function recordHistory(
+  nodeId: string,
+  kind: 'text' | 'image',
+  preset: string | null,
+  prompt: string,
+  versions: NodeVersion[],
+) {
+  const entries = versions
+    .filter((v) => v.content)
+    .map((v) => ({
+      nodeId,
+      kind,
+      preset,
+      prompt: prompt.slice(0, 200),
+      content: v.content as string,
+      ...(v.label ? { label: v.label } : {}),
+    }))
+  if (entries.length) void appendHistory(entries)
+}
 
 function firstShotDescription(text: string | null): string {
   if (!text) return ''

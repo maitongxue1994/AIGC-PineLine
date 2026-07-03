@@ -8,6 +8,7 @@ import NodeShell from './NodeShell'
 import NodeToolbarBar from './NodeToolbarBar'
 import PromptComposer from './PromptComposer'
 import PreviewLightbox from '../components/PreviewLightbox'
+import SaveToLibraryDialog from '../dialogs/SaveToLibraryDialog'
 import { useStudioStore } from '../store'
 
 const CARD_W = 340
@@ -26,6 +27,7 @@ function placeholderHeight(aspect?: string): number {
  */
 function ImageNodeInner({ id, data, selected }: NodeProps<PineNode>) {
   const [preview, setPreview] = useState(false)
+  const [saveOpen, setSaveOpen] = useState(false)
   const setActiveVersion = useStudioStore((s) => s.setActiveVersion)
 
   const meta = presetMeta(data.preset)
@@ -47,6 +49,7 @@ function ImageNodeInner({ id, data, selected }: NodeProps<PineNode>) {
       selected={selected}
       width={CARD_W}
       typeIcon={<ImageIcon />}
+      onSaveToLibrary={output ? () => setSaveOpen(true) : undefined}
       toolbar={
         <NodeToolbarBar
           id={id}
@@ -56,6 +59,7 @@ function ImageNodeInner({ id, data, selected }: NodeProps<PineNode>) {
           filename={`${data.title}.png`}
           onOpenPanel={openPanel}
           onPreview={() => setPreview(true)}
+          onSaveToLibrary={output ? () => setSaveOpen(true) : undefined}
         />
       }
       composer={<PromptComposer id={id} data={data} />}
@@ -103,6 +107,15 @@ function ImageNodeInner({ id, data, selected }: NodeProps<PineNode>) {
           quality={data.params.quality}
           onIndexChange={(i) => setActiveVersion(id, i)}
           onClose={() => setPreview(false)}
+        />
+      )}
+
+      {saveOpen && output && (
+        <SaveToLibraryDialog
+          dataUrl={output}
+          defaultName={data.title}
+          sourceNodeId={id}
+          onClose={() => setSaveOpen(false)}
         />
       )}
     </NodeShell>

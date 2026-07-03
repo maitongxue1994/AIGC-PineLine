@@ -20,6 +20,7 @@ import {
   TEXT_PRESETS,
 } from '../nodeCatalog'
 import { SHADOWS, TOKENS } from '../designTokens'
+import AssetPickerDialog from '../dialogs/AssetPickerDialog'
 import {
   isImageContent,
   type AspectRatio,
@@ -109,7 +110,8 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
   })
   const refs = JSON.parse(upstreamRefs) as { nodeId: string; src: string }[]
 
-  const [openPop, setOpenPop] = useState<'preset' | 'ratio' | 'batch' | 'tone' | 'length' | null>(null)
+  const [openPop, setOpenPop] = useState<'preset' | 'ratio' | 'batch' | 'tone' | 'length' | 'addref' | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const textRef = useRef<HTMLTextAreaElement | null>(null)
 
@@ -132,20 +134,23 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
 
   const node = useStudioStore((s) => s.nodes.find((n) => n.id === id))
 
+  // 参考图落为素材节点（放在本节点左侧）并自动连线
+  const attachRef = (dataUrl: string) => {
+    if (!node) return
+    const assetId = addAssetNode(dataUrl, {
+      x: node.position.x - 320,
+      y: node.position.y + 40,
+    })
+    onConnect({ source: assetId, sourceHandle: null, target: id, targetHandle: null })
+    focusNode(id)
+  }
+
   const handleAddRef = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
-    if (!file || !file.type.startsWith('image/') || !node) return
+    if (!file || !file.type.startsWith('image/')) return
     const reader = new FileReader()
-    reader.onload = () => {
-      // 参考图落为素材节点（放在本节点左侧）并自动连线
-      const assetId = addAssetNode(String(reader.result ?? ''), {
-        x: node.position.x - 320,
-        y: node.position.y + 40,
-      })
-      onConnect({ source: assetId, sourceHandle: null, target: id, targetHandle: null })
-      focusNode(id)
-    }
+    reader.onload = () => attachRef(String(reader.result ?? ''))
     reader.readAsDataURL(file)
   }
 
@@ -187,14 +192,36 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
             </button>
           ))}
           {kind !== 'asset' && (
-            <button
-              title="添加参考图（上传为素材节点并连线）"
-              onClick={() => fileRef.current?.click()}
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] border-[1.5px] border-dashed border-white/20 transition hover:border-white/40"
-              style={{ color: TOKENS.textMuted }}
-            >
-              <Plus size={20} />
-            </button>
+            <div className="relative">
+              <button
+                title="添加参考图"
+                onClick={() => setOpenPop(openPop === 'addref' ? null : 'addref')}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] border-[1.5px] border-dashed border-white/20 transition hover:border-white/40"
+                style={{ color: TOKENS.textMuted }}
+              >
+                <Plus size={20} />
+              </button>
+              {openPop === 'addref' && (
+                <Popover width={170}>
+                  <div className="p-2">
+                    <button
+                      onClick={() => { setOpenPop(null); fileRef.current?.click() }}
+                      className="w-full rounded-[12px] px-3 py-2.5 text-left text-[14px] transition hover:bg-white/[0.05]"
+                      style={{ color: TOKENS.textBody }}
+                    >
+                      本地上传
+                    </button>
+                    <button
+                      onClick={() => { setOpenPop(null); setPickerOpen(true) }}
+                      className="w-full rounded-[12px] px-3 py-2.5 text-left text-[14px] transition hover:bg-white/[0.05]"
+                      style={{ color: TOKENS.textBody }}
+                    >
+                      从素材库选择
+                    </button>
+                  </div>
+                </Popover>
+              )}
+            </div>
           )}
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAddRef} />
         </div>
@@ -471,6 +498,17 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
             </button>
           </div>
         </div>
+
+        {pickerOpen && (
+          <AssetPickerDialog
+            title="选择参考图"
+            onPick={(a) => {
+              setPickerOpen(false)
+              attachRef(a.dataUrl)
+            }}
+            onClose={() => setPickerOpen(false)}
+          />
+        )}
       </div>
     </NodeToolbar>
   )
