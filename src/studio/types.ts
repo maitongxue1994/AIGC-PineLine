@@ -82,6 +82,9 @@ export type NodeParams = {
   camera?: string
   /** 分镜图节点绑定的镜头下标（读上游 storyboard 节点的 shots[shotIndex]） */
   shotIndex?: number
+  /** 文本/图像模型选择（TEXT_MODELS/IMAGE_MODELS 的 id；缺省 MiniMax/Gemini） */
+  textModel?: string
+  imageModel?: string
   // ---- 视频节点参数（video-node-tools §5/§6；附加可选字段，persist 不升版） ----
   videoMode?: VideoMode
   videoRatio?: VideoRatio
@@ -142,6 +145,8 @@ export type ScriptRequest = {
   length?: NodeParams['length']
   /** 文本预设：script=剧本（默认）/ ad-copy=广告词 / free=自由文本 / image-prompt=镜头描述→生图提示词 */
   preset?: 'script' | 'ad-copy' | 'free' | 'image-prompt'
+  /** 缺省 MiniMax；doubao-seed-* 走方舟 */
+  model?: string
 }
 
 export type ScriptResponse = {
@@ -154,6 +159,8 @@ export type ImageRequest = {
   referenceImages?: string[]
   aspectRatio?: AspectRatio
   quality?: ImageQuality
+  /** 缺省 Gemini；doubao-seedream-* 走方舟 */
+  model?: string
 }
 
 export type ImageResponse = {
@@ -163,6 +170,7 @@ export type ImageResponse = {
 export type StoryboardRequest = {
   screenplay: string
   splitter?: string
+  model?: string
 }
 
 export type StoryboardResponse = {
@@ -174,6 +182,7 @@ export type ImageGridRequest = {
   referenceImages?: string[]
   aspectRatio?: AspectRatio
   quality?: ImageQuality
+  model?: string
 }
 
 export type ImageGridResponse = {

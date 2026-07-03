@@ -223,6 +223,35 @@ export const PIN_COLORS: Record<PinColor, string> = {
   purple: '#9B6DF2',
 }
 
+// ---------------- 文本/图像模型目录（多供应商；ark 系共用 ARK_API_KEY） ----------------
+
+export type ChatModelInfo = {
+  id: string
+  name: string
+  /** minimax=默认通道；ark=方舟（豆包/Seedream，需 ARK_API_KEY）；gemini=默认图像通道 */
+  provider: 'minimax' | 'ark' | 'gemini'
+  /** 传给 Worker 的真实模型 ID（默认通道可为空） */
+  apiModel?: string
+  desc?: string
+}
+
+export const TEXT_MODELS: ChatModelInfo[] = [
+  { id: 'minimax-m2.7', name: 'MiniMax M2.7', provider: 'minimax', desc: '默认 · 推理型' },
+  { id: 'doubao-seed-2.0-pro', name: 'Doubao Seed 2.0 Pro', provider: 'ark', apiModel: 'doubao-seed-2-0-pro-260215', desc: '豆包旗舰' },
+  { id: 'doubao-seed-2.0-lite', name: 'Doubao Seed 2.0 Lite', provider: 'ark', apiModel: 'doubao-seed-2-0-lite-260428', desc: '轻快省' },
+  { id: 'doubao-seed-evolving', name: 'Doubao Seed Evolving', provider: 'ark', apiModel: 'doubao-seed-evolving', desc: '自进化' },
+]
+
+export const IMAGE_MODELS: ChatModelInfo[] = [
+  { id: 'gemini-3.1-flash', name: 'Gemini 3.1 Flash', provider: 'gemini', desc: '默认 · Nano Banana 2' },
+  { id: 'seedream-5.0', name: 'Seedream 5.0', provider: 'ark', apiModel: 'doubao-seedream-5-0-260128', desc: '字节 · 2K/4K' },
+]
+
+/** 由节点 params 里的模型选择解析出要传给 Worker 的 model 字段（默认通道返回 undefined） */
+export function resolveApiModel(list: ChatModelInfo[], id?: string): string | undefined {
+  return list.find((m) => m.id === id)?.apiModel
+}
+
 // ---------------- 视频模型（真实 provider 映射；调研依据 docs/模型API调研-2026-07.md） ----------------
 
 export type VideoModelInfo = {

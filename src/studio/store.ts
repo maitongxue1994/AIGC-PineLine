@@ -25,8 +25,11 @@ import {
   estimateCost,
   gridPrompts,
   GRID_VIEW_LABELS,
+  IMAGE_MODELS,
   INITIAL_CREDITS,
   presetMeta,
+  resolveApiModel,
+  TEXT_MODELS,
   VIDEO_MODELS,
 } from './nodeCatalog'
 import { migrateGraph, migrateLegacyEdge } from './migrate'
@@ -730,6 +733,7 @@ export const useStudioStore = create<StudioState>()(
                     params.splitMode === 'manual' && params.splitter
                       ? params.splitter
                       : undefined,
+                  model: resolveApiModel(TEXT_MODELS, params.textModel),
                 })
                 const shotsText = res.shots
                   .map((s, i) => `#${i + 1} ${s.title}\n${s.description}`)
@@ -754,6 +758,7 @@ export const useStudioStore = create<StudioState>()(
                   tone: params.tone,
                   length: params.length,
                   preset: preset === 'ad-copy' ? 'ad-copy' : preset === 'free' ? 'free' : 'script',
+                  model: resolveApiModel(TEXT_MODELS, params.textModel),
                 })
                 const txtVersions = [newVersion(res.script)]
                 safeSet(g, (s) => ({
@@ -783,6 +788,7 @@ export const useStudioStore = create<StudioState>()(
                   referenceImages: refImgs.length ? refImgs : undefined,
                   aspectRatio: params.aspectRatio,
                   quality: params.quality,
+                  model: resolveApiModel(IMAGE_MODELS, params.imageModel),
                 })
                 const gridVersions = res.images.map((img, i) =>
                   newVersion(img, gridLabels[i], res.errors?.[i] ?? null),
@@ -813,6 +819,7 @@ export const useStudioStore = create<StudioState>()(
                     referenceImages: refImgs.length ? refImgs : undefined,
                     aspectRatio: params.aspectRatio,
                     quality: params.quality,
+                    model: resolveApiModel(IMAGE_MODELS, params.imageModel),
                   })
                   const batchVersions = res.images.map((img, i) =>
                     newVersion(img, undefined, res.errors?.[i] ?? null),
@@ -831,6 +838,7 @@ export const useStudioStore = create<StudioState>()(
                     referenceImages: refImgs.length ? refImgs : undefined,
                     aspectRatio: params.aspectRatio,
                     quality: params.quality,
+                    model: resolveApiModel(IMAGE_MODELS, params.imageModel),
                   })
                   const oneVersion = [newVersion(res.image)]
                   safeSet(g, (s) => ({
@@ -922,6 +930,7 @@ export const useStudioStore = create<StudioState>()(
               referenceImages: [current, ...(opts?.extraRefs ?? [])].slice(0, 6),
               aspectRatio: node.data.params.aspectRatio,
               quality: node.data.params.quality,
+              model: resolveApiModel(IMAGE_MODELS, node.data.params.imageModel),
             })
             const content = opts?.composite ? await opts.composite(res.image) : res.image
             const v = newVersion(content, opts?.label)
@@ -1054,6 +1063,7 @@ export const useStudioStore = create<StudioState>()(
                 brief: `${shot.title}\n${shot.description}`,
                 tone: sb.data.params.tone,
                 preset: 'image-prompt',
+                model: resolveApiModel(TEXT_MODELS, sb.data.params.textModel),
               })
               const nid = ids[k]
               // 期间用户可能删了节点/清了画布

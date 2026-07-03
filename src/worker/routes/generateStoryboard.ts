@@ -1,10 +1,13 @@
 import { callMinimaxText } from '../minimax'
+import { callArkText, isArkModel } from '../ark'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 
 type Body = {
   screenplay?: string
   splitter?: string
+  /** 文本模型：缺省 MiniMax；doubao-seed-* 走方舟（ARK_API_KEY） */
+  model?: string
 }
 
 type ShotItem = { id: string; title: string; description: string }
@@ -76,11 +79,18 @@ export default function generateStoryboard(req: Request, env: Env): Promise<Resp
       return jsonOk({ shots })
     }
 
-    if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
     // 长剧本拆 8-10 镜的 JSON 体量大，给足输出预算防截断
-    const raw = await callMinimaxText(SYSTEM_PROMPT, screenplay, env.MINIMAX_API_KEY, {
-      maxTokens: 8192,
-    })
+    let raw: string
+    if (isArkModel(body.model)) {
+      raw = await callArkText(body.model!, SYSTEM_PROMPT, screenplay, env.ARK_API_KEY ?? '', {
+        maxTokens: 8192,
+      })
+    } else {
+      if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
+      raw = await callMinimaxText(SYSTEM_PROMPT, screenplay, env.MINIMAX_API_KEY, {
+        maxTokens: 8192,
+      })
+    }
     const shots = parseModelJson(raw)
     return jsonOk({ shots })
   })

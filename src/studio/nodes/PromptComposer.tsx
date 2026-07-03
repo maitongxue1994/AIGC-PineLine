@@ -17,8 +17,10 @@ import {
 import { useStudioStore } from '../store'
 import {
   estimateCost,
+  IMAGE_MODELS,
   IMAGE_PRESETS,
   presetMeta,
+  TEXT_MODELS,
   TEXT_PRESETS,
 } from '../nodeCatalog'
 import { SHADOWS, TOKENS } from '../designTokens'
@@ -72,7 +74,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
   })
   const refs = JSON.parse(upstreamRefs) as { nodeId: string; src: string }[]
 
-  const [openPop, setOpenPop] = useState<'preset' | 'ratio' | 'batch' | 'tone' | 'length' | 'addref' | null>(null)
+  const [openPop, setOpenPop] = useState<'model' | 'preset' | 'ratio' | 'batch' | 'tone' | 'length' | 'addref' | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const textRef = useRef<HTMLTextAreaElement | null>(null)
@@ -205,10 +207,30 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
 
         {/* 下区：参数条 */}
         <div className="flex items-center gap-1 pt-1">
-          <Chip title={isImage ? '图像模型（固定）' : '文本模型（固定）'}>
-            <Cpu size={16} style={{ color: TOKENS.textMuted }} />
-            {isImage ? 'Gemini' : 'MiniMax'}
-          </Chip>
+          <div className="relative">
+            <Chip
+              title={isImage ? '图像模型' : '文本模型'}
+              active={openPop === 'model'}
+              onClick={() => setOpenPop(openPop === 'model' ? null : 'model')}
+            >
+              <Cpu size={16} style={{ color: TOKENS.textMuted }} />
+              {(isImage
+                ? IMAGE_MODELS.find((m) => m.id === data.params.imageModel)
+                : TEXT_MODELS.find((m) => m.id === data.params.textModel)
+              )?.name ?? (isImage ? 'Gemini 3.1 Flash' : 'MiniMax M2.7')}
+              <ChevronDown size={13} style={{ color: TOKENS.textMuted }} />
+            </Chip>
+            {openPop === 'model' && (
+              <ModelPickerPopover
+                isImage={isImage}
+                current={isImage ? data.params.imageModel : data.params.textModel}
+                onPick={(mid) => {
+                  updateNodeParams(id, isImage ? { imageModel: mid } : { textModel: mid })
+                  setOpenPop(null)
+                }}
+              />
+            )}
+          </div>
           <VDivider />
 
           {/* 预设 */}
@@ -497,5 +519,61 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
         )}
       </div>
     </NodeToolbar>
+  )
+}
+
+/**
+ * 文本/图像模型选择弹层：豆包 Seed 系与 Seedream 走方舟（与 Seedance 共用 ARK_API_KEY），
+ * 密钥未配置时显示 🔑 提示（就绪状态复用 videoReadiness.seedance——同一把钥匙）。
+ */
+function ModelPickerPopover({
+  isImage,
+  current,
+  onPick,
+}: {
+  isImage: boolean
+  current?: string
+  onPick: (id: string) => void
+}) {
+  const readiness = useStudioStore((s) => s.videoReadiness)
+  const loadVideoReadiness = useStudioStore((s) => s.loadVideoReadiness)
+  useEffect(() => {
+    void loadVideoReadiness()
+  }, [loadVideoReadiness])
+
+  const models = isImage ? IMAGE_MODELS : TEXT_MODELS
+  const arkReady = readiness ? readiness.seedance : true
+
+  return (
+    <Popover width={260}>
+      <div className="p-2.5">
+        {models.map((m) => {
+          const isDefault = m.provider !== 'ark'
+          const active = current === m.id || (!current && isDefault && models.indexOf(m) === 0)
+          const needsKey = m.provider === 'ark' && !arkReady
+          return (
+            <button
+              key={m.id}
+              onClick={() => onPick(m.id)}
+              className="flex w-full items-center gap-3 rounded-[12px] p-3 text-left transition hover:bg-white/[0.05]"
+              style={{ background: active ? 'rgba(255,255,255,0.05)' : undefined }}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5 text-[14px] font-semibold" style={{ color: TOKENS.textBody }}>
+                  {m.name}
+                  {needsKey && <span title="未配置 ARK_API_KEY，运行会给出接入指引">🔑</span>}
+                </span>
+                {m.desc && (
+                  <span className="block text-[11px]" style={{ color: TOKENS.textFaint }}>
+                    {m.desc}
+                  </span>
+                )}
+              </span>
+              {active && <Check size={14} style={{ color: TOKENS.textBody }} />}
+            </button>
+          )
+        })}
+      </div>
+    </Popover>
   )
 }

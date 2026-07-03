@@ -1,4 +1,5 @@
 import { callGeminiImage } from '../gemini'
+import { callSeedreamImage, isArkModel } from '../ark'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 
@@ -9,6 +10,8 @@ type Body = {
   referenceImages?: string[]
   aspectRatio?: GeminiAspectRatio
   quality?: GeminiImageSize
+  /** 图像模型：缺省 Gemini；doubao-seedream-* 走方舟（ARK_API_KEY） */
+  model?: string
 }
 
 export default function generateImageGrid(req: Request, env: Env): Promise<Response> {
@@ -21,15 +24,22 @@ export default function generateImageGrid(req: Request, env: Env): Promise<Respo
     if (!prompts.length) return jsonError('prompts 不能为空')
     if (prompts.length > 6) return jsonError('一次最多 6 张')
 
-    if (!env.GEMINI_API_KEY) return jsonError('服务端未配置 GEMINI_API_KEY', 500)
+    const useArk = isArkModel(body.model)
+    if (!useArk && !env.GEMINI_API_KEY) return jsonError('服务端未配置 GEMINI_API_KEY', 500)
 
     const settled = await Promise.allSettled(
       prompts.map((p) =>
-        callGeminiImage(p, env.GEMINI_API_KEY, {
-          referenceImages: body.referenceImages,
-          aspectRatio: body.aspectRatio,
-          quality: body.quality,
-        }),
+        useArk
+          ? callSeedreamImage(body.model!, p, env.ARK_API_KEY ?? '', {
+              referenceImages: body.referenceImages,
+              aspectRatio: body.aspectRatio,
+              quality: body.quality,
+            })
+          : callGeminiImage(p, env.GEMINI_API_KEY, {
+              referenceImages: body.referenceImages,
+              aspectRatio: body.aspectRatio,
+              quality: body.quality,
+            }),
       ),
     )
 
