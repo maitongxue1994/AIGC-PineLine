@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import {
   ArrowUp,
+  Camera,
   Check,
   ChevronDown,
   Cpu,
@@ -10,6 +11,7 @@ import {
   Proportions,
   Sparkles,
   Square,
+  X,
   Zap,
 } from 'lucide-react'
 import { useStudioStore } from '../store'
@@ -408,6 +410,30 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
                 )}
               </div>
             </>
+          )}
+
+          {/* 摄影机预设胶囊（摄影机面板「保存」回填） */}
+          {isImage && params.camera && (
+            <span
+              className="flex max-w-[180px] shrink items-center gap-1.5 rounded-full py-1.5 pl-1.5 pr-2.5"
+              style={{ background: TOKENS.chipBg }}
+              title={params.camera}
+            >
+              <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-white/[0.08]">
+                <Camera size={13} style={{ color: TOKENS.textBody }} />
+              </span>
+              <span className="min-w-0 truncate text-[13px]" style={{ color: TOKENS.textBody }}>
+                {params.camera.replace(/^Shot on /, '').split(' with ')[0]}
+              </span>
+              <button
+                title="移除摄影机预设"
+                onClick={() => updateNodeParams(id, { camera: undefined })}
+                className="shrink-0 transition hover:text-white"
+                style={{ color: TOKENS.textMuted }}
+              >
+                <X size={12} />
+              </button>
+            </span>
           )}
 
           {!isImage && preset === 'storyboard' && (

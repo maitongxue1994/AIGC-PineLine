@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import {
+  Aperture,
   Box,
   Copy,
   Crop,
@@ -142,6 +143,9 @@ export default function NodeToolbarBar({
             </TBtn>
             <TBtn tip="打光" disabled={!hasImage} onClick={() => onOpenPanel?.('light')}>
               <SunMedium size={18} strokeWidth={1.8} />
+            </TBtn>
+            <TBtn tip="摄影机" disabled={!hasImage} onClick={() => onOpenPanel?.('camera')}>
+              <Aperture size={18} strokeWidth={1.8} />
             </TBtn>
           </>
         )}

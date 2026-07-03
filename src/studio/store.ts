@@ -87,6 +87,20 @@ type StudioState = {
   undo: () => void
   redo: () => void
   runNode: (id: string) => Promise<void>
+  /**
+   * 高级图像操作的再生成通道（多角度/打光/摄影机/蒙版重绘）：
+   * 以当前激活版本为参考图 + 操作提示词重新生成，结果追加为新版本（可回退）。
+   * composite 钩子供蒙版重绘做客户端合成保底。
+   */
+  runImageEdit: (
+    id: string,
+    prompt: string,
+    opts?: {
+      label?: string
+      extraRefs?: string[]
+      composite?: (generated: string) => Promise<string>
+    },
+  ) => Promise<void>
   pipelineRunning: boolean
   // 自增信号：画布监听后执行 fitView（模板/建链后自动把新节点带入视野）
   fitViewTick: number
@@ -645,9 +659,11 @@ export const useStudioStore = create<StudioState>()(
               } else {
                 const fallback =
                   preset === 'shot' ? firstShotDescription(upstreamText) : upstreamText || ''
-                const prompt = node.data.prompt.trim() || fallback || ''
-                if (!prompt)
+                const basePrompt = node.data.prompt.trim() || fallback || ''
+                if (!basePrompt)
                   throw new Error('缺少提示词：请在下方输入，或从上游节点连线')
+                // 摄影机预设注入（摄影机面板「保存」回填的镜头光学描述）
+                const prompt = params.camera ? `${basePrompt}. ${params.camera}` : basePrompt
                 const batch = params.batch ?? 1
                 if (batch > 1) {
                   // 批量出图：同 prompt ×N 走 grid 端点，结果为版本层叠
@@ -687,6 +703,49 @@ export const useStudioStore = create<StudioState>()(
                 }
               }
             }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            safeSet(g, (s) => ({
+              nodes: mutateNode(s.nodes, id, { status: 'error', error: msg }),
+            }))
+          }
+        },
+
+        runImageEdit: async (id, prompt, opts) => {
+          const state = get()
+          const node = state.nodes.find((n) => n.id === id)
+          if (!node || node.data.kind !== 'image' || node.data.status === 'running') return
+          const current = activeContent(node.data)
+          if (!current || !isImageContent(current)) return
+
+          const g = generation
+          const cost = estimateCost('image', 'single', node.data.params)
+          set((s) => ({
+            nodes: mutateNode(s.nodes, id, { status: 'running', error: undefined }),
+            credits: Math.max(0, s.credits - cost),
+          }))
+
+          try {
+            const res = await generateImage({
+              prompt,
+              referenceImages: [current, ...(opts?.extraRefs ?? [])].slice(0, 6),
+              aspectRatio: node.data.params.aspectRatio,
+              quality: node.data.params.quality,
+            })
+            const content = opts?.composite ? await opts.composite(res.image) : res.image
+            const v = newVersion(content, opts?.label)
+            safeSet(g, (s) => {
+              const cur = s.nodes.find((n) => n.id === id)
+              const versions = [...(cur?.data.versions ?? []), v]
+              return {
+                nodes: mutateNode(s.nodes, id, {
+                  status: 'done',
+                  versions,
+                  activeVersion: versions.length - 1,
+                }),
+              }
+            })
+            recordHistory(id, 'image', node.data.preset, prompt, [v])
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
             safeSet(g, (s) => ({

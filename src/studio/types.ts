@@ -69,6 +69,8 @@ export type NodeParams = {
   aspectRatio?: AspectRatio
   quality?: ImageQuality
   batch?: BatchCount
+  /** 摄影机预设摘要（摄影机面板「保存」回填，注入生成提示词） */
+  camera?: string
 }
 
 export type PineNodeData = {
