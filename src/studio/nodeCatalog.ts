@@ -8,6 +8,7 @@ import type {
   PinColor,
   PineNode,
   VideoProviderId,
+  VideoResolution,
 } from './types'
 
 /**
@@ -267,17 +268,26 @@ export type VideoModelInfo = {
   audio?: boolean
   /** 支持尾帧参考（首尾帧模式） */
   lastFrame?: boolean
+  /** 支持全能参考（多模态参考生视频）——仅 Seedance 2.0 系列 */
+  omniReference?: boolean
+  /** 支持的清晰度档位（参数弹层据此联动禁用不支持项） */
+  resolutions: VideoResolution[]
+  /** 时长范围（秒），驱动生成时长滑块 */
+  durationMin: number
+  durationMax: number
 }
 
+// resolutions/durationMin/Max 依据 docs/模型API调研-2026-07.md 官方口径：
+// Seedance 2.0 标准版独占 4k；Fast/Mini 无 1080p/4k；全能参考仅 2.0 系列。
 export const VIDEO_MODELS: VideoModelInfo[] = [
-  { id: 'seedance-2.0', name: 'Seedance 2.0', provider: 'seedance', apiModel: 'doubao-seedance-2-0-260128', badge: { text: 'NEW', kind: 'new' }, quality: '4K', durationRange: '4-15S', audio: true, lastFrame: true },
-  { id: 'seedance-2.0-fast', name: 'Seedance 2.0 Fast', provider: 'seedance', apiModel: 'doubao-seedance-2-0-fast-260128', quality: '720P', durationRange: '4-15S', audio: true, lastFrame: true },
-  { id: 'seedance-2.0-mini', name: 'Seedance 2.0 Mini', provider: 'seedance', apiModel: 'doubao-seedance-2-0-mini-260615', quality: '720P', durationRange: '4-15S', audio: true, lastFrame: true },
-  { id: 'hailuo-2.3', name: 'Hailuo 2.3', provider: 'minimax', apiModel: 'MiniMax-Hailuo-2.3', badge: { text: '热门', kind: 'hot' }, quality: '1080P', durationRange: '6-10S' },
-  { id: 'hailuo-02', name: 'Hailuo-02 首尾帧', provider: 'minimax', apiModel: 'MiniMax-Hailuo-02', quality: '1080P', durationRange: '6-10S', lastFrame: true },
-  { id: 'wan-2.7', name: 'Wan 2.7', provider: 'wan', apiModel: 'wan2.7-i2v-2026-04-25', quality: '1080P', durationRange: '2-15S', audio: true, lastFrame: true },
-  { id: 'kling-v2-6', name: 'Kling 2.6', provider: 'kling', apiModel: 'kling-v2-6', quality: '1080P', durationRange: '3-10S', audio: true, lastFrame: true },
-  { id: 'veo-3.1-fast', name: 'VEO 3.1 Fast', provider: 'veo', apiModel: 'veo-3.1-fast-generate-preview', quality: '1080P', durationRange: '4-8S', audio: true, lastFrame: true },
+  { id: 'seedance-2.0', name: 'Seedance 2.0', provider: 'seedance', apiModel: 'doubao-seedance-2-0-260128', badge: { text: 'NEW', kind: 'new' }, quality: '4K', durationRange: '4-15S', audio: true, lastFrame: true, omniReference: true, resolutions: ['480p', '720p', '1080p', '4k'], durationMin: 4, durationMax: 15 },
+  { id: 'seedance-2.0-fast', name: 'Seedance 2.0 Fast', provider: 'seedance', apiModel: 'doubao-seedance-2-0-fast-260128', quality: '720P', durationRange: '4-15S', audio: true, lastFrame: true, omniReference: true, resolutions: ['480p', '720p'], durationMin: 4, durationMax: 15 },
+  { id: 'seedance-2.0-mini', name: 'Seedance 2.0 Mini', provider: 'seedance', apiModel: 'doubao-seedance-2-0-mini-260615', quality: '720P', durationRange: '4-15S', audio: true, lastFrame: true, omniReference: true, resolutions: ['480p', '720p'], durationMin: 4, durationMax: 15 },
+  { id: 'hailuo-2.3', name: 'Hailuo 2.3', provider: 'minimax', apiModel: 'MiniMax-Hailuo-2.3', badge: { text: '热门', kind: 'hot' }, quality: '1080P', durationRange: '6-10S', resolutions: ['480p', '720p', '1080p'], durationMin: 6, durationMax: 10 },
+  { id: 'hailuo-02', name: 'Hailuo-02 首尾帧', provider: 'minimax', apiModel: 'MiniMax-Hailuo-02', quality: '1080P', durationRange: '6-10S', lastFrame: true, resolutions: ['480p', '720p', '1080p'], durationMin: 6, durationMax: 10 },
+  { id: 'wan-2.7', name: 'Wan 2.7', provider: 'wan', apiModel: 'wan2.7-i2v-2026-04-25', quality: '1080P', durationRange: '2-15S', audio: true, lastFrame: true, resolutions: ['480p', '720p', '1080p'], durationMin: 2, durationMax: 15 },
+  { id: 'kling-v2-6', name: 'Kling 2.6', provider: 'kling', apiModel: 'kling-v2-6', quality: '1080P', durationRange: '3-10S', audio: true, lastFrame: true, resolutions: ['720p', '1080p'], durationMin: 3, durationMax: 10 },
+  { id: 'veo-3.1-fast', name: 'VEO 3.1 Fast', provider: 'veo', apiModel: 'veo-3.1-fast-generate-preview', quality: '1080P', durationRange: '4-8S', audio: true, lastFrame: true, resolutions: ['720p', '1080p', '4k'], durationMin: 4, durationMax: 8 },
 ]
 
 /** Seedance 2.0 为主模型（用户指定）；未配 ARK_API_KEY 时选择器与错误信息给接入指引 */
@@ -287,10 +297,11 @@ export const DEFAULT_VIDEO_MODEL = 'seedance-2.0'
 
 const IMAGE_COST: Record<ImageQuality, number> = { '1K': 6, '2K': 9, '4K': 15 }
 const TEXT_COST = 2
-/** 视频估价（README §5/§6 示例：10s→202、5s→100，× 倍数） */
-const VIDEO_COST: Record<number, number> = { 5: 100, 10: 202 }
+/** 视频估价：720p 基准每秒 20 积分（设计稿 5s→100 / 10s→200），分辨率越高越贵 */
+const VIDEO_PER_SEC = 20
+const VIDEO_RES_MULT: Record<VideoResolution, number> = { '480p': 0.5, '720p': 1, '1080p': 2, '4k': 4 }
 
-/** 估算一次运行的积分消耗（设计稿：积分随倍数即时换算） */
+/** 估算一次运行的积分消耗（设计稿：积分随时长/分辨率/倍数即时换算） */
 export function estimateCost(
   kind: NodeKind,
   preset: NodePreset | null,
@@ -299,7 +310,9 @@ export function estimateCost(
   if (kind === 'asset') return 0
   if (kind === 'text') return TEXT_COST
   if (kind === 'video') {
-    return (VIDEO_COST[params.videoDuration ?? 10] ?? 202) * (params.videoMultiplier ?? 1)
+    const dur = Math.max(0, params.videoDuration ?? 5)
+    const resMult = VIDEO_RES_MULT[params.videoResolution ?? '720p'] ?? 1
+    return Math.round(VIDEO_PER_SEC * dur * resMult) * (params.videoMultiplier ?? 1)
   }
   const per = IMAGE_COST[params.quality ?? '1K']
   const gridCount =
@@ -328,7 +341,8 @@ export function buildNode(
       ? {
           videoMode: 'frames',
           videoRatio: 'auto',
-          videoDuration: 10,
+          videoDuration: 5, // Seedance 2.0 官方默认
+          videoResolution: '720p',
           videoMultiplier: 1,
           videoModel: DEFAULT_VIDEO_MODEL,
         }
