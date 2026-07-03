@@ -31,7 +31,8 @@ export async function callMinimaxChat(
         max_tokens: opts.maxTokens ?? 2048,
       }),
     },
-    60_000,
+    // M2.7 为推理模型：电影级长剧本（思考+生成）实测可超 60s，给足 150s
+    150_000,
   )
 
   if (!res.ok) {
