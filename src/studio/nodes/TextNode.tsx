@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Clapperboard, FileText, Loader2, Play } from 'lucide-react'
+import { Clapperboard, FileText, Loader2, Play, X } from 'lucide-react'
 import { useStudioStore } from '../store'
 import { activeContent, type PineNode, type ShotItem } from '../types'
 import { presetMeta } from '../nodeCatalog'
@@ -12,20 +12,42 @@ import PromptComposer from './PromptComposer'
 const CARD_W = 340
 
 /**
- * 分镜两段式派生面板：勾选镜头（默认全选）→ 派生分镜图节点并生成生图提示词
- * （节点保持待运行，用户确认/编辑提示词后再生图）→ 一键全部生成图片。
+ * 分镜派生面板（store 驱动，已派生状态从下游节点实时计算）：
+ * - 未全部派生：可展开勾选未派生镜头 → 派生（带取消）
+ * - 已全部派生：入口直接变「全部生成图片」，不再重复派生（缺提示词的自动补齐）
  */
 function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   const deriveShotImageNodes = useStudioStore((s) => s.deriveShotImageNodes)
-  const runPipeline = useStudioStore((s) => s.runPipeline)
+  const generateAllShotImages = useStudioStore((s) => s.generateAllShotImages)
   const pipelineRunning = useStudioStore((s) => s.pipelineRunning)
 
-  const [open, setOpen] = useState(false)
-  const [checked, setChecked] = useState<Set<number>>(() => new Set(shots.map((_, i) => i)))
-  const [busy, setBusy] = useState(false)
-  const [derivedIds, setDerivedIds] = useState<string[]>([])
+  // 已派生的镜头下标（沿连线找下游分镜图节点的 shotIndex；序列化避免选择器每次新引用）
+  const derivedKey = useStudioStore((s) => {
+    const set = new Set<number>()
+    for (const e of s.edges) {
+      if (e.source !== id) continue
+      const n = s.nodes.find((x) => x.id === e.target)
+      if (n && n.data.kind === 'image' && n.data.preset === 'shot' && n.data.params.shotIndex != null) {
+        set.add(n.data.params.shotIndex)
+      }
+    }
+    return [...set].sort((a, b) => a - b).join(',')
+  })
+  const derived = new Set(derivedKey ? derivedKey.split(',').map(Number) : [])
+  const undived = shots.map((_, i) => i).filter((i) => !derived.has(i))
+  const allDerived = shots.length > 0 && undived.length === 0
 
-  const allOn = checked.size === shots.length
+  const [open, setOpen] = useState(false)
+  // 展开时默认全选未派生镜头
+  const [checked, setChecked] = useState<Set<number>>(() => new Set())
+  const [busy, setBusy] = useState(false)
+
+  const openPanel = () => {
+    setChecked(new Set(undived))
+    setOpen(true)
+  }
+  const toDerive = [...checked].filter((i) => !derived.has(i))
+  const allOn = toDerive.length === undived.length && undived.length > 0
   const toggle = (i: number) =>
     setChecked((prev) => {
       const next = new Set(prev)
@@ -35,11 +57,21 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
     })
 
   const derive = async () => {
-    if (busy || !checked.size) return
+    if (busy || !toDerive.length) return
     setBusy(true)
     try {
-      const ids = await deriveShotImageNodes(id, [...checked].sort((a, b) => a - b))
-      setDerivedIds(ids)
+      await deriveShotImageNodes(id, toDerive.sort((a, b) => a - b))
+      setOpen(false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const generateAll = async () => {
+    if (busy || pipelineRunning) return
+    setBusy(true)
+    try {
+      await generateAllShotImages(id)
     } finally {
       setBusy(false)
     }
@@ -50,24 +82,38 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
 
   return (
     <div className="nodrag border-t border-white/[0.06] p-2.5">
-      {!open ? (
+      {allDerived ? (
+        // 全部镜头都已派生分镜图节点：入口直接生成全部图片（缺提示词的自动补齐）
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => void generateAll()}
+          disabled={busy || pipelineRunning}
+          className={`${btn} w-full`}
+          style={{ background: '#F5F5F7', color: '#0B0B0C' }}
+        >
+          {busy || pipelineRunning ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Play size={12} />
+          )}
+          {busy || pipelineRunning ? '生成中…' : `全部生成图片（${shots.length} 张）`}
+        </button>
+      ) : !open ? (
+        <button
+          onClick={openPanel}
           className={`${btn} w-full`}
           style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
         >
-          <Clapperboard size={13} /> 生成分镜图（全部或单选）
+          <Clapperboard size={13} />
+          {derived.size ? `继续派生分镜图（剩 ${undived.length}）` : '生成分镜图（全部或单选）'}
         </button>
       ) : (
         <div className="space-y-2">
           <div className="flex items-center justify-between px-0.5">
             <span className="text-[11px] font-semibold" style={{ color: TOKENS.textBody }}>
-              选择要生成的镜头（{checked.size}/{shots.length}）
+              选择要派生的镜头（{toDerive.length}/{undived.length}）
             </span>
             <button
-              onClick={() =>
-                setChecked(allOn ? new Set() : new Set(shots.map((_, i) => i)))
-              }
+              onClick={() => setChecked(allOn ? new Set() : new Set(undived))}
               className="text-[11px] transition hover:text-white"
               style={{ color: TOKENS.textMuted }}
             >
@@ -75,49 +121,56 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
             </button>
           </div>
           <div className="nowheel max-h-[140px] space-y-1 overflow-y-auto">
-            {shots.map((s, i) => (
-              <label
-                key={s.id}
-                className="flex cursor-pointer items-center gap-2 rounded-[6px] px-1.5 py-1 transition hover:bg-white/[0.05]"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked.has(i)}
-                  onChange={() => toggle(i)}
-                  className="h-3 w-3 accent-white"
-                />
-                <span className="truncate text-[11px]" style={{ color: TOKENS.textSecondary }}>
-                  #{i + 1} {s.title}
-                </span>
-              </label>
-            ))}
+            {shots.map((s, i) => {
+              const isDerived = derived.has(i)
+              return (
+                <label
+                  key={s.id}
+                  className={`flex items-center gap-2 rounded-[6px] px-1.5 py-1 transition ${
+                    isDerived ? 'cursor-default opacity-45' : 'cursor-pointer hover:bg-white/[0.05]'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={isDerived}
+                    checked={isDerived || checked.has(i)}
+                    onChange={() => toggle(i)}
+                    className="h-3 w-3 accent-white"
+                  />
+                  <span className="truncate text-[11px]" style={{ color: TOKENS.textSecondary }}>
+                    #{i + 1} {s.title}
+                  </span>
+                  {isDerived && (
+                    <span className="ml-auto shrink-0 text-[10px]" style={{ color: TOKENS.textFaint }}>
+                      已派生
+                    </span>
+                  )}
+                </label>
+              )
+            })}
           </div>
           <div className="flex gap-1.5">
             <button
               onClick={() => void derive()}
-              disabled={busy || !checked.size}
+              disabled={busy || !toDerive.length}
               className={`${btn} flex-1`}
               style={{ background: '#F5F5F7', color: '#0B0B0C' }}
             >
               {busy ? <Loader2 size={12} className="animate-spin" /> : <Clapperboard size={12} />}
-              {busy ? '生成提示词中…' : `派生 ${checked.size} 个分镜图`}
+              {busy ? '生成提示词中…' : `派生 ${toDerive.length} 个分镜图`}
             </button>
-            {derivedIds.length > 0 && (
-              <button
-                onClick={() => void runPipeline(derivedIds)}
-                disabled={pipelineRunning}
-                className={`${btn} flex-1`}
-                style={{ background: 'rgba(63,155,245,0.16)', color: '#8FC2F8' }}
-              >
-                <Play size={12} /> 全部生成图片
-              </button>
-            )}
+            <button
+              onClick={() => setOpen(false)}
+              disabled={busy}
+              className={btn}
+              style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
+            >
+              <X size={12} /> 取消
+            </button>
           </div>
-          {derivedIds.length > 0 && (
-            <div className="px-0.5 text-[10px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
-              提示词已回填到各分镜图节点，可先逐个确认/编辑，再单独运行或点上方「全部生成图片」
-            </div>
-          )}
+          <div className="px-0.5 text-[10px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
+            派生后会为每个分镜图节点生成生图提示词（可确认/编辑），再单独运行或用「全部生成图片」
+          </div>
         </div>
       )}
     </div>

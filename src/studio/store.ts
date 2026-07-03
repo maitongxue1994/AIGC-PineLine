@@ -134,6 +134,11 @@ type StudioState = {
    * 返回派生节点 id（供「全部生成图片」批量运行）。
    */
   deriveShotImageNodes: (storyboardId: string, indices: number[]) => Promise<string[]>
+  /**
+   * 一键生成全部分镜图：对已派生的下游分镜图节点，缺提示词的先补生图提示词，
+   * 然后整批运行（全部派生完成后的主入口，替代重复派生）。
+   */
+  generateAllShotImages: (storyboardId: string) => Promise<void>
   exportProject: () => string
   importProject: (raw: string) => void
   resetProject: () => void
@@ -1104,6 +1109,50 @@ export const useStudioStore = create<StudioState>()(
               : '生图提示词生成失败，可在节点输入栏手动填写',
           )
           return ids
+        },
+
+        generateAllShotImages: async (storyboardId) => {
+          const s = get()
+          const sb = s.nodes.find((n) => n.id === storyboardId)
+          const shots = sb?.data.shots ?? []
+          // 沿连线找已派生的下游分镜图节点（带 shotIndex 绑定）
+          const derived = s.edges
+            .filter((e) => e.source === storyboardId)
+            .map((e) => s.nodes.find((n) => n.id === e.target))
+            .filter(
+              (n): n is PineNode =>
+                !!n &&
+                n.data.kind === 'image' &&
+                n.data.preset === 'shot' &&
+                n.data.params.shotIndex != null,
+            )
+          if (!derived.length || !sb) return
+
+          const flash = (msg: string) =>
+            window.dispatchEvent(new CustomEvent('pineline:flash', { detail: msg }))
+
+          // 已有提示词的节点直接生图；缺的先补一次生图提示词（不重复劳动）
+          const missing = derived.filter((n) => !n.data.prompt.trim())
+          if (missing.length) {
+            flash(`正在为 ${missing.length} 个缺提示词的分镜图补生图提示词…`)
+            await Promise.allSettled(
+              missing.map(async (n) => {
+                const shot = shots[n.data.params.shotIndex!]
+                if (!shot) return
+                const res = await generateScript({
+                  brief: `${shot.title}\n${shot.description}`,
+                  tone: sb.data.params.tone,
+                  preset: 'image-prompt',
+                  model: resolveApiModel(TEXT_MODELS, sb.data.params.textModel),
+                })
+                if (get().nodes.some((x) => x.id === n.id)) {
+                  get().setPrompt(n.id, res.script.trim())
+                }
+              }),
+            )
+          }
+          flash(`开始生成 ${derived.length} 张分镜图…`)
+          void get().runPipeline(derived.map((n) => n.id))
         },
 
         exportProject: () => {
