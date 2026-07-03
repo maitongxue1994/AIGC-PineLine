@@ -23,9 +23,9 @@ function requireKey(env: VideoEnv): string {
   return key
 }
 
-/** 前端 480p/720p/1080p → MiniMax 512P/768P/1080P */
-function mapResolution(r?: string): string {
-  if (r === '480p') return '512P'
+/** 前端 480p/720p/1080p → MiniMax 512P/768P/1080P；512P 仅 i2v 支持（线上实测校验） */
+function mapResolution(r: string | undefined, hasFirstFrame: boolean): string {
+  if (r === '480p') return hasFirstFrame ? '512P' : '768P'
   if (r === '1080p') return '1080P'
   return '768P'
 }
@@ -54,7 +54,7 @@ export const minimax: VideoProvider = {
       model,
       prompt: req.prompt.slice(0, 2000),
       duration,
-      resolution: mapResolution(req.resolution),
+      resolution: mapResolution(req.resolution, !!req.firstFrame),
       prompt_optimizer: true,
     }
     if (req.firstFrame) body.first_frame_image = req.firstFrame
