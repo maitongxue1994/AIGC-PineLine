@@ -885,27 +885,51 @@ export const useStudioStore = create<StudioState>()(
               const model =
                 VIDEO_MODELS.find((m) => m.id === (params.videoModel ?? DEFAULT_VIDEO_MODEL)) ??
                 VIDEO_MODELS[0]
+              const videoMode = params.videoMode ?? 'frames'
+              const prompt = node.data.prompt.trim()
+
               // 首尾帧：沿边取上游图片（与 VideoPromptBar 展示一致），⇄ 交换态在 params
               const frames: string[] = []
-              for (const e of state.edges) {
-                if (e.target !== id) continue
-                const src = state.nodes.find((n) => n.id === e.source)
-                const img = src?.data.versions.find((v) => isImageContent(v.content))?.content
-                if (img) frames.push(img)
-                if (frames.length >= 2) break
+              if (videoMode === 'frames') {
+                for (const e of state.edges) {
+                  if (e.target !== id) continue
+                  const src = state.nodes.find((n) => n.id === e.source)
+                  const img = src?.data.versions.find((v) => isImageContent(v.content))?.content
+                  if (img) frames.push(img)
+                  if (frames.length >= 2) break
+                }
+                if (params.framesSwapped) frames.reverse()
               }
-              if (params.framesSwapped) frames.reverse()
               const [firstFrame, lastFrame] = frames
-              const prompt = node.data.prompt.trim()
-              if (!prompt && !firstFrame)
-                throw new Error('请输入提示词，或连线上游图片节点作首帧参考')
-              if (lastFrame && !model.lastFrame)
-                throw new Error(`${model.name} 不支持尾帧参考，请切换支持首尾帧的模型`)
+
+              // 全能参考（多模态参考生视频）：本地上传的图/视频/音频
+              const omni = videoMode === 'omni'
+              const omniRefs = omni ? (params.omniRefs ?? []) : []
+              const omniVideos = omni ? (params.omniVideos ?? []) : []
+              const omniAudios = omni ? (params.omniAudios ?? []) : []
+
+              if (omni) {
+                if (!model.omniReference)
+                  throw new Error(`${model.name} 不支持全能参考，请切换 Seedance 2.0 系列`)
+                // 官方约束：参考音频不能单独使用，必须搭配参考图或参考视频
+                if (omniAudios.length && !omniRefs.length && !omniVideos.length)
+                  throw new Error('全能参考：参考音频需搭配至少 1 张参考图或 1 段参考视频')
+                if (!prompt && !omniRefs.length && !omniVideos.length)
+                  throw new Error('全能参考：请上传参考图/参考视频，或输入提示词')
+              } else {
+                if (!prompt && !firstFrame)
+                  throw new Error('请输入提示词，或连线上游图片节点作首帧参考')
+                if (lastFrame && !model.lastFrame)
+                  throw new Error(`${model.name} 不支持尾帧参考，请切换支持首尾帧的模型`)
+              }
 
               const req = {
                 provider: model.provider,
                 model: model.apiModel,
                 prompt,
+                ...(omniRefs.length ? { omniRefs } : {}),
+                ...(omniVideos.length ? { omniVideos } : {}),
+                ...(omniAudios.length ? { omniAudios } : {}),
                 ...(firstFrame ? { firstFrame } : {}),
                 ...(lastFrame ? { lastFrame } : {}),
                 duration: params.videoDuration ?? 5,
