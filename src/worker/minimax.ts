@@ -28,7 +28,8 @@ export async function callMinimaxChat(
         model: MODEL,
         messages,
         temperature: opts.temperature ?? 0.7,
-        max_tokens: opts.maxTokens ?? 2048,
+        // M2.7 推理模型：思考 token 也占预算，2048 会把长剧本/分镜 JSON 砍尾
+        max_tokens: opts.maxTokens ?? 4096,
       }),
     },
     // M2.7 为推理模型：电影级长剧本（思考+生成）实测可超 60s，给足 150s
@@ -54,6 +55,7 @@ export function callMinimaxText(
   systemPrompt: string,
   userPrompt: string,
   apiKey: string,
+  opts: { temperature?: number; maxTokens?: number } = {},
 ): Promise<string> {
   return callMinimaxChat(
     [
@@ -61,5 +63,6 @@ export function callMinimaxText(
       { role: 'user', content: userPrompt },
     ],
     apiKey,
+    opts,
   )
 }
