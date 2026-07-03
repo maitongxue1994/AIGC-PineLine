@@ -1,22 +1,22 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import {
+  Box,
+  Camera,
   FileText,
   Image as ImageIcon,
   Layers,
+  Megaphone,
   Mountain,
-  User,
+  Music,
   Package,
-  Camera,
+  Type,
+  User,
+  Video,
 } from 'lucide-react'
+import type { NodeKind, NodePreset } from './types'
+import { KIND_ACCENTS } from './nodeCatalog'
 
-export type PaletteChoice =
-  | 'script'
-  | 'image'
-  | 'storyboard'
-  | 'scene'
-  | 'character'
-  | 'prop'
-  | 'shot'
+export type PaletteChoice = { kind: NodeKind; preset: NodePreset }
 
 type Props = {
   x: number
@@ -25,61 +25,98 @@ type Props = {
   onClose: () => void
 }
 
-const ITEMS: {
-  id: PaletteChoice
+type Item = {
+  choice?: PaletteChoice
   title: string
   desc: string
   color: string
   icon: React.ReactNode
-}[] = [
+  disabled?: boolean
+}
+
+type Group = { title: string; items: Item[] }
+
+const GROUPS: Group[] = [
   {
-    id: 'script',
-    title: '剧本 / Script',
-    desc: 'MiniMax-M2.7 生成剧本',
-    color: '#FF6A3D',
-    icon: <FileText size={14} />,
+    title: '文本',
+    items: [
+      {
+        choice: { kind: 'text', preset: 'script' },
+        title: '剧本',
+        desc: '创意简述 → 完整剧本',
+        color: KIND_ACCENTS.text,
+        icon: <FileText size={14} />,
+      },
+      {
+        choice: { kind: 'text', preset: 'storyboard' },
+        title: '分镜',
+        desc: '把剧本拆成镜头序列',
+        color: KIND_ACCENTS.text,
+        icon: <Layers size={14} />,
+      },
+      {
+        choice: { kind: 'text', preset: 'ad-copy' },
+        title: '广告词',
+        desc: '主标语 / 品牌文案',
+        color: KIND_ACCENTS.text,
+        icon: <Megaphone size={14} />,
+      },
+      {
+        choice: { kind: 'text', preset: 'free' },
+        title: '自由文本',
+        desc: '任意文字内容',
+        color: KIND_ACCENTS.text,
+        icon: <Type size={14} />,
+      },
+    ],
   },
   {
-    id: 'storyboard',
-    title: '分镜 / Storyboard',
-    desc: '把剧本拆成镜头序列',
-    color: '#FF6A3D',
-    icon: <Layers size={14} />,
+    title: '图片',
+    items: [
+      {
+        choice: { kind: 'image', preset: 'single' },
+        title: '单图',
+        desc: '快速文生图 / 图生图',
+        color: KIND_ACCENTS.image,
+        icon: <ImageIcon size={14} />,
+      },
+      {
+        choice: { kind: 'image', preset: 'shot' },
+        title: '分镜图',
+        desc: '多参考合成一张',
+        color: KIND_ACCENTS.image,
+        icon: <Camera size={14} />,
+      },
+      {
+        choice: { kind: 'image', preset: 'scene-grid' },
+        title: '场景四宫格',
+        desc: '全景/侧视/特写/俯瞰',
+        color: KIND_ACCENTS.image,
+        icon: <Mountain size={14} />,
+      },
+      {
+        choice: { kind: 'image', preset: 'char-triview' },
+        title: '角色三视图',
+        desc: '前/侧/背',
+        color: KIND_ACCENTS.image,
+        icon: <User size={14} />,
+      },
+      {
+        choice: { kind: 'image', preset: 'prop-triview' },
+        title: '道具三视图',
+        desc: '正面/侧角/俯视',
+        color: KIND_ACCENTS.image,
+        icon: <Package size={14} />,
+      },
+    ],
   },
   {
-    id: 'scene',
-    title: '场景 / Scene',
-    desc: '四宫格视角',
-    color: '#2BE3C2',
-    icon: <Mountain size={14} />,
-  },
-  {
-    id: 'character',
-    title: '角色 / Character',
-    desc: '三视图（前/侧/背）',
-    color: '#F4A64F',
-    icon: <User size={14} />,
-  },
-  {
-    id: 'prop',
-    title: '道具 / Prop',
-    desc: '三视图',
-    color: '#B6FF5F',
-    icon: <Package size={14} />,
-  },
-  {
-    id: 'shot',
-    title: '分镜图 / Shot',
-    desc: '多参考合成一张',
-    color: '#7C5CFF',
-    icon: <Camera size={14} />,
-  },
-  {
-    id: 'image',
-    title: '通用图像 / Image',
-    desc: '快速单图生成',
-    color: '#7C5CFF',
-    icon: <ImageIcon size={14} />,
+    title: '更多',
+    items: [
+      { title: '视频', desc: '规划中', color: '#4A4A52', icon: <Video size={14} />, disabled: true },
+      { title: '音频', desc: '规划中', color: '#4A4A52', icon: <Music size={14} />, disabled: true },
+      { title: '3D 世界', desc: 'Beta · 规划中', color: '#4A4A52', icon: <Box size={14} />, disabled: true },
+    ],
   },
 ]
 
@@ -116,30 +153,34 @@ export default function NodePaletteMenu({ x, y, onPick, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 border-b border-white/[0.06] bg-bg-1/95 px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-ink-2 backdrop-blur">
-          新建节点
+          添加节点
         </div>
-        <div className="py-1">
-          {ITEMS.map((it) => (
-            <button
-              key={it.id}
-              onClick={() => onPick(it.id)}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-white/[0.04]"
-            >
-              <span
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-                style={{ background: `${it.color}22`, color: it.color }}
+        {GROUPS.map((g) => (
+          <div key={g.title} className="py-1">
+            <div className="px-3 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-widest text-ink-3">
+              {g.title}
+            </div>
+            {g.items.map((it) => (
+              <button
+                key={it.title}
+                disabled={it.disabled}
+                onClick={() => it.choice && onPick(it.choice)}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
               >
-                {it.icon}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[12px] font-medium text-ink-0">
-                  {it.title}
+                <span
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+                  style={{ background: `${it.color}22`, color: it.color }}
+                >
+                  {it.icon}
                 </span>
-                <span className="block text-[10px] text-ink-3">{it.desc}</span>
-              </span>
-            </button>
-          ))}
-        </div>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12px] font-medium text-ink-0">{it.title}</span>
+                  <span className="block text-[10px] text-ink-3">{it.desc}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ))}
       </div>
     </>
   )

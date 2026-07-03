@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <title>AI 画布工作空间 · UI 组件规范</title>
+  <style>
+    body { margin: 0; background: #060607; -webkit-font-smoothing: antialiased; }
+    * { box-sizing: border-box; }
+    input::placeholder, textarea::placeholder { color: #5c5c64; }
+  </style>
+</helmet>
+
+<div style="font-family: -apple-system, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #f5f5f7; background: #060607; min-height: 100vh; padding-bottom: 120px;">
+
+  <!-- ============ 封面 ============ -->
+  <header style="padding: 96px 64px 72px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 20px; max-width: 1400px; margin: 0 auto;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="width: 28px; height: 28px; border-radius: 8px; background: conic-gradient(from 210deg, #ff5f6d, #ffc371, #47c2ff, #a78bfa, #ff5f6d);"></div>
+      <span style="font-size: 13px; letter-spacing: 0.22em; color: #8a8a92;">UI SPECIFICATION · V1.0</span>
+    </div>
+    <h1 style="margin: 0; font-size: 44px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.15;">AI 画布工作空间<br>组件与功能 UI 设计规范</h1>
+    <p style="margin: 0; font-size: 16px; line-height: 1.7; color: #98989f; max-width: 640px;">基于节点式生成画布（Node-based Canvas）的完整界面规范：设计令牌、画布节点、浮动工具栏、生成输入栏、功能面板、系统弹窗与画布导航控件。适用于 1440px+ 桌面 Web，暗色主题。</p>
+    <nav style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+      <a href="#s1" style="font-size: 13px; color: #d6d6db; text-decoration: none; padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;">01 设计令牌</a>
+      <a href="#s2" style="font-size: 13px; color: #d6d6db; text-decoration: none; padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;">02 画布与节点</a>
+      <a href="#s3" style="font-size: 13px; color: #d6d6db; text-decoration: none; padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;">03 浮动工具栏</a>
+      <a href="#s4" style="font-size: 13px; color: #d6d6db; text-decoration: none; padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;">04 生成输入栏</a>
+      <a href="#s5" style="font-size: 13px; color: #d6d6db; text-decoration: none; padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;">05 功能面板</a>
+      <a href="#s6" style="font-size: 13px; color: #d6d6db; text-decoration: none; padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;">06 系统弹窗</a>
+      <a href="#s7" style="font-size: 13px; color: #d6d6db; text-decoration: none; padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;">07 导航与画布控件</a>
+    </nav>
+  </header>
+
+  <!-- ============ 01 设计令牌 ============ -->
+  <section id="s1" style="max-width: 1400px; margin: 0 auto; padding: 72px 64px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 12px; letter-spacing: 0.22em; color: #6e6e76;">SECTION 01</span>
+      <h2 style="margin: 0; font-size: 28px; font-weight: 650;">设计令牌 Design Tokens</h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+      <div style="background: #101012; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="height: 64px; border-radius: 10px; background: #0b0b0c; border: 1px solid rgba(255,255,255,0.08); background-image: radial-gradient(rgba(255,255,255,0.09) 1px, transparent 1px); background-size: 20px 20px;"></div>
+        <div style="font-size: 14px; font-weight: 600;">画布底色 Canvas</div>
+        <div style="font-size: 12px; color: #8a8a92; font-family: ui-monospace, monospace;">#0B0B0C · 点阵 20px / α .09</div>
+      </div>
+      <div style="background: #101012; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="height: 64px; border-radius: 10px; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.08);"></div>
+        <div style="font-size: 14px; font-weight: 600;">面板 Surface</div>
+        <div style="font-size: 12px; color: #8a8a92; font-family: ui-monospace, monospace;">#1C1C1E · 描边 α .07</div>
+      </div>
+      <div style="background: #101012; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="height: 64px; border-radius: 10px; background: #29292c; border: 1px solid rgba(255,255,255,0.1);"></div>
+        <div style="font-size: 14px; font-weight: 600;">浮层 / 悬停 Elevated</div>
+        <div style="font-size: 12px; color: #8a8a92; font-family: ui-monospace, monospace;">#29292C · 阴影 0 12 40 / .5</div>
+      </div>
+      <div style="background: #101012; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="height: 64px; border-radius: 10px; background: #2e9bff;"></div>
+        <div style="font-size: 14px; font-weight: 600;">强调蓝 Accent</div>
+        <div style="font-size: 12px; color: #8a8a92; font-family: ui-monospace, monospace;">#2E9BFF · 提醒点 / 选中态 / 模式横幅</div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 16px;">
+      <div style="background: #101012; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 12px; letter-spacing: 0.16em; color: #6e6e76;">文字层级</div>
+        <div style="font-size: 17px; font-weight: 650; color: #f5f5f7;">标题 17 / 650 — #F5F5F7</div>
+        <div style="font-size: 15px; color: #e8e8ec;">正文 15 / 400 — #E8E8EC</div>
+        <div style="font-size: 13px; color: #98989f;">次级 13 / 400 — #98989F</div>
+        <div style="font-size: 12px; color: #6e6e76;">辅助 12 / 400 — #6E6E76</div>
+      </div>
+      <div style="background: #101012; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 12px; letter-spacing: 0.16em; color: #6e6e76;">圆角体系</div>
+        <div style="display: flex; align-items: flex-end; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;"><div style="width: 44px; height: 44px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);"></div><span style="font-size: 11px; color: #8a8a92;">8 缩略图</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;"><div style="width: 44px; height: 44px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.25);"></div><span style="font-size: 11px; color: #8a8a92;">12 节点</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;"><div style="width: 44px; height: 44px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.25);"></div><span style="font-size: 11px; color: #8a8a92;">20 面板</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;"><div style="width: 44px; height: 44px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.25);"></div><span style="font-size: 11px; color: #8a8a92;">Full 按钮</span></div>
+        </div>
+      </div>
+      <div style="background: #101012; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 12px; letter-spacing: 0.16em; color: #6e6e76;">Pin 标记色板</div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: #f0566a;"></div>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: #f5923e;"></div>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: #f2c744;"></div>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: #4bbf6b;"></div>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: #3f9bf5;"></div>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: #9b6df2;"></div>
+        </div>
+        <div style="font-size: 12px; color: #8a8a92;">用于节点分类标记；「无」为默认灰描边圆环。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 02 画布与节点 ============ -->
+  <section id="s2" style="max-width: 1400px; margin: 0 auto; padding: 72px 64px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 12px; letter-spacing: 0.22em; color: #6e6e76;">SECTION 02</span>
+      <h2 style="margin: 0; font-size: 28px; font-weight: 650;">画布与节点 Canvas &amp; Nodes</h2>
+      <p style="margin: 0; font-size: 14px; color: #98989f; max-width: 620px;">节点是画布的基本单元：上方为类型标签，主体为媒体内容，左右为连接端口。生成组（Batch）以层叠卡片表达多张结果。</p>
+    </div>
+
+    <div style="background: #0b0b0c; background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px); background-size: 22px 22px; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 56px 48px; display: flex; gap: 56px; flex-wrap: wrap; align-items: flex-start;">
+
+      <!-- 标准图片节点 -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div style="position: relative; width: 340px;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: #9a9aa2; font-size: 13px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="9" cy="9" r="1.6"></circle><path d="M21 15l-5-5-9 9"></path></svg>
+            Image generation
+          </div>
+          <!-- 层叠 -->
+          <div style="position: absolute; top: 34px; left: 10px; right: -10px; height: 190px; background: #141416; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;"></div>
+          <div style="position: absolute; top: 30px; left: 5px; right: -5px; height: 190px; background: #18181a; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;"></div>
+          <div style="position: relative; height: 191px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.16); overflow: hidden; background: linear-gradient(160deg, #2c3540 0%, #1a2028 45%, #10131a 100%); box-shadow: 0 16px 44px rgba(0,0,0,0.55);">
+            <div style="position: absolute; inset: 0; background: linear-gradient(200deg, rgba(120,150,170,0.35), transparent 55%);"></div>
+            <div style="position: absolute; left: 12px; top: 12px; width: 32px; height: 32px; border-radius: 10px; background: rgba(10,10,12,0.65); display: flex; align-items: center; justify-content: center; color: #fff;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.7 5.9 6.3.6-4.8 4.3 1.4 6.2L12 16.8 6.4 20l1.4-6.2L3 9.5l6.3-.6L12 3z"></path></svg>
+            </div>
+            <div style="position: absolute; right: 12px; top: 12px; display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: rgba(10,10,12,0.65); font-size: 13px; font-weight: 600;">4
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"></path></svg>
+            </div>
+          </div>
+          <!-- 端口 -->
+          <div style="position: absolute; left: -34px; top: 118px; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.7); font-size: 15px;">+</div>
+          <div style="position: absolute; right: -34px; top: 118px; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.7); font-size: 15px;">+</div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; max-width: 340px; line-height: 1.7;"><b style="color: #e8e8ec;">图片生成节点（批次 ×4）</b><br>340×191 (16:9) · 圆角 14 · 描边 α.16；悬停显示收藏（★）与批次切换（4 ⌄）；左右 24px「+」端口拖出连线派生新节点。</div>
+      </div>
+
+      <!-- 视频节点 + 占位节点 -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div style="width: 280px;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: #9a9aa2; font-size: 13px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="13" height="14" rx="3"></rect><path d="M16 10l5-3v10l-5-3"></path></svg>
+            vidu-video
+          </div>
+          <div style="position: relative; height: 157px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.14); overflow: hidden; background: linear-gradient(140deg, #3a3026 0%, #201a14 60%, #0f0c09 100%);">
+            <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+              <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(8,8,10,0.6); border: 1px solid rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg>
+              </div>
+            </div>
+            <div style="position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border-radius: 6px; background: rgba(8,8,10,0.7); font-size: 11px; color: #d6d6db;">00:05</div>
+          </div>
+        </div>
+        <div style="width: 280px;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: #9a9aa2; font-size: 13px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="9" cy="9" r="1.6"></circle><path d="M21 15l-5-5-9 9"></path></svg>
+            Image generation
+          </div>
+          <div style="height: 120px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); background: #1a1a1c; display: flex; align-items: center; justify-content: center; color: #4a4a52;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="9" cy="9" r="1.6"></circle><path d="M21 15l-5-5-9 9"></path><path d="M4 4l16 16"></path></svg>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; max-width: 280px; line-height: 1.7;"><b style="color: #e8e8ec;">视频节点 / 空占位节点</b><br>视频节点中心播放按钮 44px，右下角时长角标；生成中或失败的占位节点使用 #1A1A1C 灰底与禁用图标。</div>
+      </div>
+
+      <!-- 连线 + 选中/Pin 态 -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div style="position: relative; width: 320px; height: 200px;">
+          <svg width="320" height="200" viewBox="0 0 320 200" fill="none" style="position: absolute; inset: 0;">
+            <path d="M84 60 C 150 60, 170 140, 236 140" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"></path>
+          </svg>
+          <div style="position: absolute; left: 0; top: 24px; width: 84px; height: 62px; border-radius: 10px; border: 2px solid #3f9bf5; background: linear-gradient(150deg, #2b3542, #171b22); box-shadow: 0 0 0 4px rgba(63,155,245,0.18);"></div>
+          <div style="position: absolute; left: 10px; top: 96px; font-size: 11px; color: #3f9bf5;">选中态 2px 蓝描边</div>
+          <div style="position: absolute; right: 0; top: 108px; width: 84px; height: 62px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: linear-gradient(150deg, #32302a, #191713);"></div>
+          <div style="position: absolute; right: 62px; top: 96px; width: 18px; height: 18px; border-radius: 50%; background: #f2c744; border: 3px solid #0b0b0c;"></div>
+          <div style="position: absolute; right: 0; top: 178px; font-size: 11px; color: #f2c744;">Pin 标记 18px 圆点</div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; max-width: 320px; line-height: 1.7;"><b style="color: #e8e8ec;">连线与状态</b><br>贝塞尔连线 1.5px / α.35，选中时提亮为白色；选中节点外发光 4px α.18；Pin 圆点吸附节点右上角。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 03 浮动工具栏 ============ -->
+  <section id="s3" style="max-width: 1400px; margin: 0 auto; padding: 72px 64px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 12px; letter-spacing: 0.22em; color: #6e6e76;">SECTION 03</span>
+      <h2 style="margin: 0; font-size: 28px; font-weight: 650;">浮动工具栏 Floating Toolbar</h2>
+      <p style="margin: 0; font-size: 14px; color: #98989f; max-width: 620px;">选中图片节点后悬浮于其上方 12px。三组功能以分隔线区隔：编辑 · 标记 · 归档。图标按钮 44px 圆形，悬停 #29292C，激活态深色内圈；新功能以 6px 蓝点提醒。</p>
+    </div>
+
+    <div style="background: #0b0b0c; background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px); background-size: 22px 22px; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 56px 48px; display: flex; flex-direction: column; gap: 48px; align-items: center;">
+
+      <!-- 主工具栏 -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
+        <div style="display: flex; align-items: center; gap: 2px; background: rgba(26,26,28,0.95); border: 1px solid rgba(255,255,255,0.07); border-radius: 999px; padding: 8px 10px; box-shadow: 0 16px 48px rgba(0,0,0,0.6);">
+          <!-- 裁剪 -->
+          <div title="裁剪" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c; color: #ffffff;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v11a2 2 0 0 0 2 2h11"></path><path d="M3 8h11a2 2 0 0 1 2 2v11"></path></svg>
+          </div>
+          <!-- 多角度(激活) -->
+          <div title="多角度" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ffffff; background: #2e2e31; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3.5l7 4v9l-7 4-7-4v-9l7-4z"></path><path d="M12 12l7-4M12 12l-7-4M12 12v8.5"></path></svg>
+          </div>
+          <!-- 重绘 -->
+          <div title="重绘" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c; color: #ffffff;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l1-3.5L15.5 6a2.1 2.1 0 0 1 3 3L8 19.5 4 20z"></path><path d="M13 7.5l3.5 3.5M19 14l1.5 1.5M14 19l1.5 1.5M20.5 19.5L19 21"></path></svg>
+          </div>
+          <!-- 打光 -->
+          <div title="打光" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c; color: #ffffff;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 14l6-8 3 4-6 8-3-4z"></path><path d="M8 18l-2 3"></path><path d="M17 4l1.2 2M20 8.5l-2 .8M18.5 12.5l-1.5-1"></path></svg>
+          </div>
+          <!-- 更多 -->
+          <div title="浏览全部" style="position: relative; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c; color: #ffffff;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg>
+            <div style="position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: #2e9bff;"></div>
+          </div>
+          <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.12); margin: 0 6px;"></div>
+          <!-- Pin -->
+          <div title="Pin" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c; color: #ffffff;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7"></circle></svg>
+          </div>
+          <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.12); margin: 0 6px;"></div>
+          <!-- 保存到素材库 -->
+          <div title="保存到素材库" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c; color: #ffffff;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path><path d="M12 11v5M9.5 13.5h5"></path></svg>
+          </div>
+          <!-- 下载 -->
+          <div title="下载" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c; color: #ffffff;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v10m0 0l-4-4m4 4l4-4"></path><path d="M5 19h14"></path></svg>
+          </div>
+          <!-- 全屏 -->
+          <div title="全屏查看" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c; color: #ffffff;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"></path></svg>
+          </div>
+        </div>
+        <div style="display: flex; gap: 18px; font-size: 12px; color: #6e6e76; flex-wrap: wrap; justify-content: center;">
+          <span>裁剪</span><span style="color: #d6d6db;">多角度（激活态）</span><span>重绘</span><span>打光</span><span>更多 ●蓝点=新功能</span><span style="color: #4a4a52;">|</span><span>Pin</span><span style="color: #4a4a52;">|</span><span>保存到素材库</span><span>下载</span><span>全屏查看</span>
+        </div>
+      </div>
+
+      <!-- Tooltip / Pin 色板 / 更多菜单 -->
+      <div style="display: flex; gap: 48px; align-items: flex-start; flex-wrap: wrap; justify-content: center;">
+        <!-- tooltip -->
+        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+          <div style="padding: 8px 16px; border-radius: 999px; background: #2a2a2d; border: 1px solid rgba(255,255,255,0.08); font-size: 14px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.5);">保存到素材库</div>
+          <div style="font-size: 12px; color: #6e6e76;">Tooltip：悬停 400ms 出现，上方 8px</div>
+        </div>
+
+        <!-- Pin 色板 -->
+        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 14px; background: rgba(26,26,28,0.95); border: 1px solid rgba(255,255,255,0.07); border-radius: 999px; padding: 12px 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.6);">
+            <span style="font-size: 14px; color: #d6d6db;">无</span>
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: #f0566a; cursor: pointer;" style-hover="transform: scale(1.15);"></div>
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: #f5923e; cursor: pointer;" style-hover="transform: scale(1.15);"></div>
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: #f2c744; cursor: pointer;" style-hover="transform: scale(1.15);"></div>
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: #4bbf6b; cursor: pointer;" style-hover="transform: scale(1.15);"></div>
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: #3f9bf5; cursor: pointer;" style-hover="transform: scale(1.15);"></div>
+            <div style="width: 26px; height: 26px; border-radius: 50%; background: #9b6df2; cursor: pointer;" style-hover="transform: scale(1.15);"></div>
+          </div>
+          <div style="font-size: 12px; color: #6e6e76;">Pin 色板：点击 Pin 后于工具栏下方展开</div>
+        </div>
+
+        <!-- 更多菜单 -->
+        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+          <div style="width: 300px; background: #232326; border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 10px; box-shadow: 0 24px 64px rgba(0,0,0,0.65); display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; font-size: 15px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="M8 12h8M8 8l-2.5 4L8 16"></path></svg>扩图
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; font-size: 15px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><path d="M4 15l7-11 9 6-7 11H8l-4-6z"></path><path d="M8 21h12"></path></svg>擦除
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; font-size: 15px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><path d="M4 20l2-6 8-8 4 4-8 8-6 2z"></path><path d="M20 20H12"></path></svg>标注
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; font-size: 15px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M7 12h2.5v3M7 12v-1.5M13.5 10.5h3M15 10.5v4.5"></path></svg>增强
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; font-size: 15px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><rect x="5" y="5" width="14" height="14" rx="3"></rect><path d="M9 2v3M15 2v3M9 19v3M15 19v3"></path></svg>调整像素
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; font-size: 15px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><path d="M4 20L20 4M7 20L20 7M10 20l10-10"></path></svg>抠图
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; font-size: 15px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="#d6d6db"><circle cx="5" cy="5" r="1.5"></circle><circle cx="12" cy="5" r="1.5"></circle><circle cx="19" cy="5" r="1.5"></circle><circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle><circle cx="5" cy="19" r="1.5"></circle><circle cx="12" cy="19" r="1.5"></circle><circle cx="19" cy="19" r="1.5"></circle></svg>
+              <span style="flex: 1;">快速切分</span>
+              <span style="font-size: 13px; color: #8a8a92;">2×2</span><span style="font-size: 13px; color: #8a8a92;">3×3</span><span style="font-size: 13px; color: #8a8a92;">4×4</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 10px; font-size: 15px; cursor: pointer; position: relative;" style-hover="background: rgba(255,255,255,0.06);">
+              <div style="position: relative;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"></path><path d="M9 12l2 2 4-4"></path></svg>
+                <div style="position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; border-radius: 50%; background: #2e9bff;"></div>
+              </div>Seedance 2.0 合规验证
+            </div>
+          </div>
+          <div style="font-size: 12px; color: #6e6e76;">更多菜单：300px · 行高 44 · 圆角 18</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 04 生成输入栏 ============ -->
+  <section id="s4" style="max-width: 1400px; margin: 0 auto; padding: 72px 64px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 12px; letter-spacing: 0.22em; color: #6e6e76;">SECTION 04</span>
+      <h2 style="margin: 0; font-size: 28px; font-weight: 650;">生成输入栏 Prompt Bar</h2>
+      <p style="margin: 0; font-size: 14px; color: #98989f; max-width: 620px;">吸附于选中节点下方的核心生成入口。上区为参考图与提示词，下区为参数条：模型 · 画质比例 · 风格 · 摄影机 · 语音 · 倍数 · 积分提交。</p>
+    </div>
+
+    <div style="background: #0b0b0c; background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px); background-size: 22px 22px; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 56px 48px; display: flex; flex-direction: column; gap: 48px; align-items: center;">
+
+      <!-- 主输入栏 -->
+      <div style="width: 100%; max-width: 860px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="background: #161618; border: 1px solid rgba(255,255,255,0.08); border-radius: 24px; padding: 20px 20px 16px; box-shadow: 0 24px 64px rgba(0,0,0,0.55); display: flex; flex-direction: column; gap: 18px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 48px; height: 48px; border-radius: 14px; background: #232326; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #2c2c2f;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3l1 2.5L9.5 6.5 7 7.5 6 10 5 7.5 2.5 6.5 5 5.5 6 3z"></path><path d="M14 8l6 6-4.5 1.5L14 20l-1.5-4.5L8 14l4.5-1.5L14 8z"></path></svg>
+            </div>
+            <div style="width: 1px; height: 32px; background: rgba(255,255,255,0.1);"></div>
+            <div style="position: relative; width: 48px; height: 48px; border-radius: 14px; overflow: hidden; border: 1px solid rgba(255,255,255,0.14); background: linear-gradient(150deg, #2b3542, #171b22); cursor: pointer;">
+              <div style="position: absolute; inset: 0; background: linear-gradient(200deg, rgba(120,150,170,0.4), transparent 60%);"></div>
+            </div>
+            <div style="width: 48px; height: 48px; border-radius: 14px; border: 1.5px dashed rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; color: #8a8a92; font-size: 20px; cursor: pointer;" style-hover="border-color: rgba(255,255,255,0.4); color: #d6d6db;">+</div>
+          </div>
+          <div style="font-size: 16px; line-height: 1.6; color: #e8e8ec; min-height: 52px;">空中没有云，能看到空中隐隐约约有一条黄线，就像地球的星环一样，无比真实</div>
+          <div style="display: flex; align-items: center; gap: 4px; padding-top: 4px;">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; cursor: pointer; font-size: 15px; color: #e8e8ec;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 16c3-1 4-4 4-7 2 1 3 3 3 5 2-1 5-1 6 2 1 2 0 4-2 5H7c-2 0-4-2-3-5z"></path></svg>
+              Banana Pro
+            </div>
+            <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12);"></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; cursor: pointer; font-size: 15px; color: #e8e8ec;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="7" width="18" height="11" rx="3"></rect></svg>
+              16:9 · 2K
+            </div>
+            <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12);"></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; cursor: pointer; font-size: 15px; color: #e8e8ec;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="14" height="14" rx="3"></rect><path d="M18 8l3-1.5V18L18 16"></path><path d="M15 2.5l.7 1.8 1.8.7-1.8.7-.7 1.8"></path></svg>
+              风格
+            </div>
+            <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12);"></div>
+            <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: #232326; cursor: pointer; font-size: 15px; color: #e8e8ec;">
+              <div style="width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #4a5568, #111318); border: 1px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #7ab3e0, #1a2634); "></div>
+              </div>
+              Sony Veni...
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            </div>
+            <div style="flex: 1;"></div>
+            <div style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: rgba(255,255,255,0.06);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg>
+            </div>
+            <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12); margin: 0 4px;"></div>
+            <div style="padding: 8px 14px; border-radius: 12px; background: #232326; font-size: 15px; font-weight: 600; cursor: pointer;">4×</div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 14px; border-radius: 999px; background: #232326; margin-left: 6px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><circle cx="9" cy="9" r="5"></circle><circle cx="15" cy="15" r="5"></circle></svg>
+              <span style="font-size: 15px; font-weight: 600;">72</span>
+              <div style="width: 36px; height: 36px; border-radius: 50%; background: #f5f5f7; display: flex; align-items: center; justify-content: center; cursor: pointer;" style-hover="background: #ffffff;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0b0b0c" stroke-width="2.2"><path d="M12 19V5m0 0l-6 6m6-6l6 6"></path></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #6e6e76; text-align: center;">宽 720–860px · 圆角 24 · 参考图 48px；提交按钮 = 积分数 + 36px 白色圆形箭头；生成中箭头替换为方形停止图标。</div>
+      </div>
+
+      <!-- 三个弹出层 -->
+      <div style="display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; justify-content: center;">
+
+        <!-- 模型选择 -->
+        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+          <div style="width: 320px; background: #1e1e21; border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 12px; box-shadow: 0 24px 64px rgba(0,0,0,0.65); display: flex; flex-direction: column; gap: 2px;">
+            <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);">
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.8"><path d="M4 18V10M9 18V6M14 18v-8M19 18V4"></path></svg>即梦5.0 Lite
+              </div>
+              <div style="align-self: flex-start; display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,0.07); font-size: 12px; color: #b8b8bf;">◇ 2K</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.05); cursor: pointer;">
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.8"><path d="M3 17c5-1 8-4 9-9 2 2 3 5 3 7l4-2c0 4-4 7-9 7-3 0-5-1-7-3z"></path></svg>MJ V8.1
+              </div>
+              <div style="align-self: flex-start; display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,0.07); font-size: 12px; color: #b8b8bf;">◇ 2K</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);">
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.8"><circle cx="12" cy="12" r="8"></circle><path d="M12 4c3 2.5 3 13.5 0 16M4 12h16"></path></svg>GPT Image2
+                <span style="padding: 2px 8px; border-radius: 6px; background: #1f8a5b; font-size: 11px; font-weight: 600;">热门</span>
+                <span style="flex: 1;"></span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3f9bf5" stroke-width="1.8"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+              </div>
+              <div style="align-self: flex-start; display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,0.07); font-size: 12px; color: #b8b8bf;">◇ 4K</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);">
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><path d="M4 16c3-1 4-4 4-7 2 1 3 3 3 5 2-1 5-1 6 2 1 2 0 4-2 5H7c-2 0-4-2-3-5z"></path></svg>Nano Banana 2 Lite
+                <span style="padding: 2px 8px; border-radius: 6px; background: #1f8a5b; font-size: 11px; font-weight: 600;">NEW</span>
+              </div>
+              <div style="align-self: flex-start; display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,0.07); font-size: 12px; color: #b8b8bf;">◇ 2K</div>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: #6e6e76; max-width: 300px; text-align: center;">模型选择器：320px 上浮列表；行含图标、名称、状态徽章（热门/NEW）、画质胶囊；会员模型显示蓝色锁。</div>
+        </div>
+
+        <!-- 画质与比例 -->
+        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+          <div style="width: 340px; background: #1e1e21; border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 22px; box-shadow: 0 24px 64px rgba(0,0,0,0.65); display: flex; flex-direction: column; gap: 20px;">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <span style="font-size: 14px; font-weight: 600; color: #d6d6db;">画质</span>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                <div style="padding: 10px 0; text-align: center; border-radius: 999px; border: 1.5px solid #f5f5f7; font-size: 15px; font-weight: 600; cursor: pointer;">1K</div>
+                <div style="padding: 10px 0; text-align: center; border-radius: 999px; background: rgba(255,255,255,0.07); font-size: 15px; color: #b8b8bf; cursor: pointer;">2K</div>
+                <div style="padding: 10px 0; text-align: center; border-radius: 999px; background: rgba(255,255,255,0.07); font-size: 15px; color: #b8b8bf; cursor: pointer;">4K</div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <span style="font-size: 14px; font-weight: 600; color: #d6d6db;">比例</span>
+              <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; background: rgba(255,255,255,0.04); border-radius: 14px; padding: 10px;">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3"></path></svg><span style="font-size: 11px;">自适应</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><div style="width: 14px; height: 14px; border: 1.5px solid currentColor; border-radius: 3px;"></div><span style="font-size: 11px;">1:1</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><div style="width: 9px; height: 15px; border: 1.5px solid currentColor; border-radius: 3px;"></div><span style="font-size: 11px;">9:16</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #f5f5f7; background: rgba(255,255,255,0.1);"><div style="width: 16px; height: 9px; border: 1.5px solid currentColor; border-radius: 3px;"></div><span style="font-size: 11px; font-weight: 600;">16:9</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><div style="width: 11px; height: 14px; border: 1.5px solid currentColor; border-radius: 3px;"></div><span style="font-size: 11px;">3:4</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><div style="width: 14px; height: 11px; border: 1.5px solid currentColor; border-radius: 3px;"></div><span style="font-size: 11px;">4:3</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><div style="width: 15px; height: 10px; border: 1.5px solid currentColor; border-radius: 3px;"></div><span style="font-size: 11px;">3:2</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><div style="width: 10px; height: 15px; border: 1.5px solid currentColor; border-radius: 3px;"></div><span style="font-size: 11px;">2:3</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><div style="width: 14px; height: 12px; border: 1.5px solid currentColor; border-radius: 3px;"></div><span style="font-size: 11px;">5:4</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><div style="width: 12px; height: 14px; border: 1.5px solid currentColor; border-radius: 3px;"></div><span style="font-size: 11px;">4:5</span></div>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 0; border-radius: 10px; cursor: pointer; color: #8a8a92;"><div style="width: 17px; height: 7px; border: 1.5px solid currentColor; border-radius: 2px;"></div><span style="font-size: 11px;">21:9</span></div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <span style="font-size: 14px; font-weight: 600; color: #d6d6db;">联网搜索</span>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div style="padding: 10px 0; text-align: center; border-radius: 999px; background: rgba(255,255,255,0.12); font-size: 14px; font-weight: 600; cursor: pointer;">ON</div>
+                <div style="padding: 10px 0; text-align: center; border-radius: 999px; background: rgba(255,255,255,0.05); font-size: 14px; color: #8a8a92; cursor: pointer;">OFF</div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: #6e6e76; max-width: 320px; text-align: center;">画质 &amp; 比例弹层：分段控件 + 12 宫格比例（图形化预览）；不可用画质置灰。</div>
+        </div>
+
+        <!-- 倍数 -->
+        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+          <div style="width: 96px; background: #1e1e21; border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 8px; box-shadow: 0 24px 64px rgba(0,0,0,0.65); display: flex; flex-direction: column; gap: 4px; align-items: stretch;">
+            <div style="padding: 10px 0; text-align: center; border-radius: 12px; background: rgba(255,255,255,0.1); font-size: 16px; font-weight: 700;">4×</div>
+            <div style="padding: 10px 0; text-align: center; border-radius: 12px; font-size: 16px; color: #8a8a92; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);">2×</div>
+            <div style="padding: 10px 0; text-align: center; border-radius: 12px; font-size: 16px; color: #8a8a92; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);">1×</div>
+          </div>
+          <div style="font-size: 12px; color: #6e6e76; max-width: 220px; text-align: center;">生成倍数：单次出图张数 1/2/4；积分消耗随倍数同步换算并即时更新在提交按钮上。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 05 功能面板 ============ -->
+  <section id="s5" style="max-width: 1400px; margin: 0 auto; padding: 72px 64px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 12px; letter-spacing: 0.22em; color: #6e6e76;">SECTION 05</span>
+      <h2 style="margin: 0; font-size: 28px; font-weight: 650;">功能面板 Feature Panels</h2>
+      <p style="margin: 0; font-size: 14px; color: #98989f; max-width: 620px;">由工具栏唤起、吸附于节点下方的操作面板：多角度、打光、摄影机控制、重绘蒙版。左侧为可视化预览，右侧为参数控件，右下角统一为「积分 + 提交」。</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+
+      <!-- 多角度面板 -->
+      <div style="background: #0b0b0c; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="width: 100%; background: #1b1b1e; border: 1px solid rgba(255,255,255,0.08); border-radius: 22px; padding: 24px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 24px 64px rgba(0,0,0,0.55);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 16px; font-weight: 650;">拖拽方块调整角度</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2" style="cursor: pointer;"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+          </div>
+          <div style="display: flex; gap: 24px;">
+            <div style="width: 190px; flex-shrink: 0; background: #232326; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; position: relative; padding: 24px 0;">
+              <div style="width: 74px; height: 74px; position: relative; transform-style: preserve-3d; transform: rotateX(-22deg) rotateY(-32deg);">
+                <div style="position: absolute; inset: 0; background: #3a3a3e; border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; transform: translateZ(37px); display: flex; align-items: center; justify-content: center; color: #b8b8bf;">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="9" cy="9" r="1.6"></circle><path d="M21 15l-5-5-9 9"></path></svg>
+                </div>
+                <div style="position: absolute; inset: 0; background: #29292c; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; transform: rotateY(90deg) translateZ(37px); display: flex; align-items: center; justify-content: center; color: #5c5c64; font-size: 12px;">L</div>
+                <div style="position: absolute; inset: 0; background: #202023; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; transform: rotateX(-90deg) translateZ(37px); display: flex; align-items: center; justify-content: center; color: #5c5c64; font-size: 12px;">B</div>
+              </div>
+              <div style="position: absolute; left: 14px; bottom: 12px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #8a8a92; cursor: pointer;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10a8 8 0 1 1 2 6"></path><path d="M4 16v-6h6"></path></svg>重置
+              </div>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 18px;">
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <span style="width: 40px; font-size: 14px; color: #d6d6db;">旋转</span>
+                <div style="flex: 1; position: relative; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.15);"><div style="position: absolute; left: 0; width: 33%; height: 100%; border-radius: 2px; background: #f5f5f7;"></div><div style="position: absolute; left: 33%; top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.5);"></div></div>
+                <span style="width: 44px; text-align: right; font-size: 14px; font-weight: 650;">-30°</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <span style="width: 40px; font-size: 14px; color: #d6d6db;">倾斜</span>
+                <div style="flex: 1; position: relative; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.15);"><div style="position: absolute; left: 0; width: 74%; height: 100%; border-radius: 2px; background: #f5f5f7;"></div><div style="position: absolute; left: 74%; top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.5);"></div></div>
+                <span style="width: 44px; text-align: right; font-size: 14px; font-weight: 650;">23°</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <span style="width: 40px; font-size: 14px; color: #d6d6db;">缩放</span>
+                <div style="flex: 1; position: relative; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.15);"><div style="position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.5);"></div></div>
+                <span style="width: 44px; text-align: right; font-size: 14px; font-weight: 650;">0</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 14px; color: #d6d6db;">广角镜头</span>
+                <div style="width: 44px; height: 26px; border-radius: 999px; background: rgba(255,255,255,0.15); position: relative; cursor: pointer;"><div style="position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff;"></div></div>
+              </div>
+              <div style="display: flex; justify-content: flex-end;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 14px; border-radius: 999px; background: #2a2a2d;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><circle cx="9" cy="9" r="5"></circle><circle cx="15" cy="15" r="5"></circle></svg>
+                  <span style="font-size: 14px; font-weight: 600;">10</span>
+                  <div style="width: 32px; height: 32px; border-radius: 50%; background: #f5f5f7; display: flex; align-items: center; justify-content: center; cursor: pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0b0b0c" stroke-width="2.2"><path d="M12 19V5m0 0l-6 6m6-6l6 6"></path></svg></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; line-height: 1.7;"><b style="color: #e8e8ec;">多角度面板</b> — 左侧 3D 立方体可直接拖拽，与右侧「旋转 / 倾斜 / 缩放」滑杆双向联动；数值右对齐等宽显示。</div>
+      </div>
+
+      <!-- 打光面板 -->
+      <div style="background: #0b0b0c; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="width: 100%; background: #1b1b1e; border: 1px solid rgba(255,255,255,0.08); border-radius: 22px; padding: 24px; display: flex; gap: 24px; box-shadow: 0 24px 64px rgba(0,0,0,0.55);">
+          <div style="width: 210px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; align-items: center;">
+            <div style="display: flex; background: rgba(255,255,255,0.06); border-radius: 999px; padding: 3px;">
+              <div style="padding: 6px 16px; border-radius: 999px; background: rgba(255,255,255,0.14); font-size: 13px; font-weight: 600;">透视</div>
+              <div style="padding: 6px 16px; border-radius: 999px; font-size: 13px; color: #8a8a92; cursor: pointer;">正面</div>
+            </div>
+            <div style="width: 190px; height: 190px; border-radius: 50%; background: radial-gradient(circle at 50% 45%, #2e2e33, #18181b 70%); position: relative; border: 1px solid rgba(255,255,255,0.06);">
+              <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) perspective(300px) rotateX(50deg) rotateZ(-18deg); width: 56px; height: 36px; background: linear-gradient(150deg, #3c4653, #1a2028); border: 1px solid rgba(255,255,255,0.25); border-radius: 4px;"></div>
+              <div style="position: absolute; left: 16px; bottom: 52px; width: 16px; height: 16px; border-radius: 50%; background: #111; border: 2px solid #d6d6db; box-shadow: 0 0 12px rgba(255,255,255,0.4);"></div>
+              <div style="position: absolute; right: 30px; top: 40px; width: 10px; height: 10px; border-radius: 50%; background: #f5f5f7; box-shadow: 0 0 10px rgba(255,255,255,0.6);"></div>
+              <div style="position: absolute; left: 28px; bottom: 58px; width: 90px; height: 44px; background: linear-gradient(75deg, rgba(255,255,255,0.22), transparent 70%); clip-path: polygon(0 40%, 100% 0, 100% 100%, 0 60%);"></div>
+              <div style="position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: #b8b8bf;">主光源</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #8a8a92; cursor: pointer; align-self: flex-end;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10a8 8 0 1 1 2 6"></path><path d="M4 16v-6h6"></path></svg>重置
+            </div>
+          </div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 16px; font-weight: 650;">全局</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2" style="cursor: pointer;"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-size: 14px; color: #d6d6db;">亮度</span>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="flex: 1; position: relative; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.12);"><div style="position: absolute; left: 0; width: 50%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #6e6e76, #e8e8ec);"></div><div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.5);"></div></div>
+                <div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 10px; background: rgba(255,255,255,0.07); font-size: 14px; font-weight: 600;">☀ 50 <span style="color: #8a8a92; font-weight: 400;">%</span></div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-size: 14px; color: #d6d6db;">色温</span>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="flex: 1; position: relative; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #e8963c, #f5f0e8 55%, #9db8d6);"><div style="position: absolute; left: 52%; top: 50%; transform: translate(-50%, -50%); width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.5);"></div></div>
+                <div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 10px; background: rgba(255,255,255,0.07); font-size: 14px; font-weight: 600;">🌡 5600 <span style="color: #8a8a92; font-weight: 400;">K</span></div>
+              </div>
+            </div>
+            <div style="height: 1px; background: rgba(255,255,255,0.07);"></div>
+            <span style="font-size: 15px; font-weight: 650;">主光源</span>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+              <div style="padding: 9px 0; text-align: center; border-radius: 10px; background: rgba(255,255,255,0.05); font-size: 14px; color: #8a8a92; cursor: pointer;">左侧</div>
+              <div style="padding: 9px 0; text-align: center; border-radius: 10px; background: rgba(255,255,255,0.05); font-size: 14px; color: #8a8a92; cursor: pointer;">顶部</div>
+              <div style="padding: 9px 0; text-align: center; border-radius: 10px; background: rgba(255,255,255,0.05); font-size: 14px; color: #8a8a92; cursor: pointer;">右侧</div>
+              <div style="padding: 9px 0; text-align: center; border-radius: 10px; background: rgba(255,255,255,0.16); font-size: 14px; font-weight: 600; cursor: pointer;">前方</div>
+              <div style="padding: 9px 0; text-align: center; border-radius: 10px; background: rgba(255,255,255,0.05); font-size: 14px; color: #8a8a92; cursor: pointer;">底部</div>
+              <div style="padding: 9px 0; text-align: center; border-radius: 10px; background: rgba(255,255,255,0.05); font-size: 14px; color: #8a8a92; cursor: pointer;">后方</div>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 14px; color: #d6d6db;">轮廓光 <span style="color: #6e6e76;">ⓘ</span></span>
+              <div style="width: 44px; height: 26px; border-radius: 999px; background: #f5f5f7; position: relative; cursor: pointer;"><div style="position: absolute; right: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: #0b0b0c;"></div></div>
+            </div>
+            <div style="display: flex; justify-content: flex-end;">
+              <div style="display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 14px; border-radius: 999px; background: #2a2a2d;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><circle cx="9" cy="9" r="5"></circle><circle cx="15" cy="15" r="5"></circle></svg>
+                <span style="font-size: 14px; font-weight: 600;">20</span>
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: #f5f5f7; display: flex; align-items: center; justify-content: center; cursor: pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0b0b0c" stroke-width="2.2"><path d="M12 19V5m0 0l-6 6m6-6l6 6"></path></svg></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; line-height: 1.7;"><b style="color: #e8e8ec;">打光面板</b> — 左侧 3D 光球可拖动光源手柄，透视/正面双视图；右侧全局亮度、色温（暖冷渐变轨道）、主光源六向与轮廓光开关。</div>
+      </div>
+
+      <!-- 摄影机控制 -->
+      <div style="background: #0b0b0c; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="width: 100%; background: #1b1b1e; border: 1px solid rgba(255,255,255,0.08); border-radius: 22px; padding: 24px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 24px 64px rgba(0,0,0,0.55);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 16px; font-weight: 650;">摄影机控制</span>
+            <div style="padding: 7px 18px; border-radius: 999px; background: rgba(255,255,255,0.08); font-size: 13px; color: #b8b8bf; cursor: pointer;">保存</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 8px; border-right: 1px solid rgba(255,255,255,0.07);">
+              <div style="font-size: 12px; color: #4a4a52;">RED Komodo</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#8a8a92"><path d="M8 5l8 7-8 7z"></path></svg>
+                <div style="width: 88px; height: 66px; border-radius: 12px; background: radial-gradient(circle, rgba(255,255,255,0.1), transparent 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+                  <div style="width: 46px; height: 30px; border-radius: 5px; background: #3a3a3e; border: 1px solid rgba(255,255,255,0.25); position: relative;"><div style="position: absolute; right: -7px; top: 8px; width: 10px; height: 14px; background: #2c2c2f; border: 1px solid rgba(255,255,255,0.2); border-radius: 2px;"></div></div>
+                  <span style="font-size: 9px; letter-spacing: 0.1em; color: #8a8a92;">DIGITAL</span>
+                </div>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#8a8a92"><path d="M16 5l-8 7 8 7z"></path></svg>
+              </div>
+              <div style="font-size: 13px; font-weight: 600;">Sony Venice</div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 8px; border-right: 1px solid rgba(255,255,255,0.07);">
+              <div style="font-size: 12px; color: #4a4a52;">Cooke S4</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#8a8a92"><path d="M8 5l8 7-8 7z"></path></svg>
+                <div style="width: 88px; height: 66px; border-radius: 12px; background: radial-gradient(circle, rgba(255,255,255,0.1), transparent 70%); display: flex; align-items: center; justify-content: center;">
+                  <div style="width: 44px; height: 34px; border-radius: 6px; background: linear-gradient(90deg, #2c2c2f, #4a4a50 55%, #1e1e21 60%); border: 1px solid rgba(255,255,255,0.2);"></div>
+                </div>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#8a8a92"><path d="M16 5l-8 7 8 7z"></path></svg>
+              </div>
+              <div style="font-size: 13px; font-weight: 600;">Zeiss Ultra Prime</div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 8px; border-right: 1px solid rgba(255,255,255,0.07);">
+              <div style="font-size: 12px; color: #4a4a52;">14mm</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#8a8a92"><path d="M8 5l8 7-8 7z"></path></svg>
+                <div style="width: 88px; height: 66px; border-radius: 12px; background: radial-gradient(circle, rgba(255,255,255,0.1), transparent 70%); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 750;">24mm</div>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#8a8a92"><path d="M16 5l-8 7 8 7z"></path></svg>
+              </div>
+              <div style="font-size: 13px; font-weight: 600;">24mm</div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 8px;">
+              <div style="font-size: 12px; color: #4a4a52;">ƒ/2</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#8a8a92"><path d="M8 5l8 7-8 7z"></path></svg>
+                <div style="width: 88px; height: 66px; border-radius: 12px; background: radial-gradient(circle, rgba(255,255,255,0.1), transparent 70%); display: flex; align-items: center; justify-content: center;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: #2c2c2f; border: 3px solid #4a4a50; display: flex; align-items: center; justify-content: center;"><div style="width: 16px; height: 16px; border-radius: 50%; background: #111; border: 2px solid #6e6e76;"></div></div>
+                </div>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#8a8a92"><path d="M16 5l-8 7 8 7z"></path></svg>
+              </div>
+              <div style="font-size: 13px; font-weight: 600;">ƒ/4</div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; line-height: 1.7;"><b style="color: #e8e8ec;">摄影机控制</b> — 机身 / 镜头 / 焦距 / 光圈四列纵向轮盘；上下为相邻档位（淡出 40%），左右箭头切换；「保存」将组合存为预设并回填至输入栏胶囊。</div>
+      </div>
+
+      <!-- 重绘蒙版 -->
+      <div style="background: #0b0b0c; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 16px; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 6px; background: rgba(26,26,28,0.95); border: 1px solid rgba(255,255,255,0.07); border-radius: 999px; padding: 8px 12px; box-shadow: 0 16px 48px rgba(0,0,0,0.6);">
+            <div style="width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg></div>
+            <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12);"></div>
+            <div style="width: 38px; height: 38px; border-radius: 50%; background: #2e2e31; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; color: #fff;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 19c-4 0-7-3-7-7s3-7 7-7 7 3 7 7c0 2-1 3-2.5 3H14c-1 0-1.5.8-1 1.7.4.8.2 2.3-1 2.3z"></path></svg></div>
+            <div style="width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="6" width="16" height="12" rx="2"></rect></svg></div>
+            <div style="width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;" style-hover="background: #29292c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17L14 4l6 4-6 10H9l-2-1z"></path><path d="M4 20h16"></path></svg></div>
+            <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12);"></div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.8"><path d="M12 4c-3 4-3 12 0 16M12 4c3 4 3 12 0 16"></path></svg>
+            <div style="width: 90px; position: relative; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.15);"><div style="position: absolute; left: 0; width: 45%; height: 100%; border-radius: 2px; background: #f5f5f7;"></div><div style="position: absolute; left: 45%; top: 50%; transform: translate(-50%, -50%); width: 13px; height: 13px; border-radius: 50%; background: #fff;"></div></div>
+            <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.12); margin-left: 4px;"></div>
+            <div style="width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #8a8a92; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 14L4 9l5-5"></path><path d="M4 9h9a7 7 0 0 1 7 7v1"></path></svg></div>
+            <div style="width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #8a8a92; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 14l5-5-5-5"></path><path d="M20 9h-9a7 7 0 0 0-7 7v1"></path></svg></div>
+          </div>
+
+          <div style="position: relative; width: 100%; max-width: 460px; height: 200px; border-radius: 14px; overflow: hidden; border: 1.5px solid rgba(63,155,245,0.5); background: linear-gradient(160deg, #2c3540 0%, #1a2028 45%, #10131a 100%);">
+            <div style="position: absolute; left: 26%; top: 30%; width: 130px; height: 90px; border-radius: 50% 46% 55% 48%; background: rgba(63,155,245,0.42); filter: blur(2px);"></div>
+            <div style="position: absolute; right: 12px; bottom: 12px; padding: 4px 10px; border-radius: 8px; background: rgba(8,8,10,0.7); font-size: 11px; color: #b8b8bf;">蒙版区域 α .42 Accent</div>
+          </div>
+
+          <div style="width: 100%; max-width: 460px; background: #161618; border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="font-size: 15px; color: #5c5c64;">描述你想改变什么...</div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="1.8"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L16 7"></path></svg>
+              <span style="font-size: 13px; color: #8a8a92;">绘制蒙版以重绘</span>
+              <span style="flex: 1;"></span>
+              <span style="padding: 4px 9px; border-radius: 8px; background: rgba(255,255,255,0.07); font-size: 12px; color: #b8b8bf;">1K</span>
+              <span style="padding: 4px 9px; border-radius: 8px; background: rgba(255,255,255,0.07); font-size: 12px; color: #b8b8bf;">×1</span>
+              <span style="padding: 4px 9px; border-radius: 8px; background: rgba(255,255,255,0.07); font-size: 12px; font-weight: 700; color: #f5f5f7;">PRO</span>
+              <div style="display: flex; align-items: center; gap: 8px; padding: 4px 5px 4px 11px; border-radius: 999px; background: #232326;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><circle cx="9" cy="9" r="5"></circle><circle cx="15" cy="15" r="5"></circle></svg>
+                <span style="font-size: 13px; font-weight: 600;">15</span>
+                <div style="width: 28px; height: 28px; border-radius: 50%; background: #f5f5f7; display: flex; align-items: center; justify-content: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0b0b0c" stroke-width="2.2"><path d="M12 19V5m0 0l-6 6m6-6l6 6"></path></svg></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; line-height: 1.7;"><b style="color: #e8e8ec;">重绘（蒙版模式）</b> — 进入后节点获得蓝色描边，顶部悬浮蒙版工具条：关闭 · 画笔/矩形/橡皮 · 笔刷粗细 · 撤销重做；蒙版以强调蓝 α.42 叠加；下方精简输入栏提交。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 06 系统弹窗 ============ -->
+  <section id="s6" style="max-width: 1400px; margin: 0 auto; padding: 72px 64px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 12px; letter-spacing: 0.22em; color: #6e6e76;">SECTION 06</span>
+      <h2 style="margin: 0; font-size: 28px; font-weight: 650;">系统弹窗 Dialogs &amp; Overlays</h2>
+    </div>
+
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start;">
+
+      <!-- 保存到素材库 -->
+      <div style="display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 340px; max-width: 420px;">
+        <div style="background: #1e1e21; border: 1px solid rgba(255,255,255,0.08); border-radius: 26px; padding: 26px; box-shadow: 0 32px 80px rgba(0,0,0,0.7); display: flex; flex-direction: column; gap: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 650;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg>
+              保存到素材库
+            </div>
+            <div style="font-size: 14px; color: #d6d6db; cursor: pointer;">＋ 新建文件夹</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; background: rgba(255,255,255,0.05); border-radius: 999px; padding: 4px;">
+            <div style="padding: 9px 0; text-align: center; border-radius: 999px; background: rgba(255,255,255,0.12); font-size: 14px; font-weight: 600;">个人</div>
+            <div style="padding: 9px 0; text-align: center; border-radius: 999px; font-size: 14px; color: #8a8a92; cursor: pointer;">团队</div>
+          </div>
+          <div style="display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-radius: 12px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="#8a8a92"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg><span style="font-size: 15px;">角色</span></div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-radius: 12px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="#8a8a92"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg><span style="font-size: 15px;">场景</span></div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-radius: 12px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="#8a8a92"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg><span style="font-size: 15px;">道具</span></div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-radius: 12px; background: rgba(255,255,255,0.07); cursor: pointer;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="#8a8a92"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg><span style="font-size: 15px; flex: 1;">Others</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="#8a8a92"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <div style="padding: 10px 22px; border-radius: 12px; background: rgba(255,255,255,0.07); font-size: 14px; font-weight: 600; cursor: pointer;">取消</div>
+            <div style="padding: 10px 22px; border-radius: 12px; background: #f5f5f7; color: #0b0b0c; font-size: 14px; font-weight: 650; cursor: pointer;">保存</div>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; line-height: 1.7;"><b style="color: #e8e8ec;">保存到素材库</b> — 400px 居中模态；个人/团队分段切换；文件夹树可展开，悬停行显示更多操作；选中行高亮 α.07。</div>
+      </div>
+
+      <!-- 选择风格图片 -->
+      <div style="display: flex; flex-direction: column; gap: 14px; flex: 1; min-width: 340px; max-width: 420px;">
+        <div style="background: #1e1e21; border: 1px solid rgba(255,255,255,0.08); border-radius: 26px; padding: 26px; box-shadow: 0 32px 80px rgba(0,0,0,0.7); display: flex; flex-direction: column; gap: 18px;">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 650;">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="4"></rect><circle cx="9" cy="9" r="1.6"></circle><path d="M21 15l-5-5-9 9"></path></svg>
+            选择风格图片
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; background: rgba(255,255,255,0.05); border-radius: 999px; padding: 4px;">
+            <div style="padding: 9px 0; text-align: center; border-radius: 999px; background: rgba(255,255,255,0.12); font-size: 14px; font-weight: 600; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.5);">个人</div>
+            <div style="padding: 9px 0; text-align: center; border-radius: 999px; font-size: 14px; color: #8a8a92; cursor: pointer;">团队</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="1.8"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.5-4.5"></path></svg>
+            <span style="font-size: 14px; color: #5c5c64;">搜索</span>
+          </div>
+          <div style="display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 10px; border-radius: 12px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="#8a8a92"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg><span style="font-size: 15px;">收藏</span></div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 10px; border-radius: 12px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="#8a8a92"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg><span style="font-size: 15px;">角色</span></div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 10px; border-radius: 12px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="#8a8a92"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg><span style="font-size: 15px;">场景</span></div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 11px 10px; border-radius: 12px; cursor: pointer;" style-hover="background: rgba(255,255,255,0.05);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2"><path d="M9 6l6 6-6 6"></path></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="#8a8a92"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg><span style="font-size: 15px;">风格</span></div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <div style="padding: 10px 22px; border-radius: 12px; background: rgba(255,255,255,0.07); font-size: 14px; font-weight: 600; cursor: pointer;">取消</div>
+            <div style="padding: 10px 22px; border-radius: 12px; background: #f5f5f7; color: #0b0b0c; font-size: 14px; font-weight: 650; cursor: pointer;">确认</div>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; line-height: 1.7;"><b style="color: #e8e8ec;">选择风格图片</b> — 结构与素材库一致，增加搜索框；确认后所选图片以缩略图胶囊回填至输入栏「风格」位。</div>
+      </div>
+
+      <!-- 全屏查看 -->
+      <div style="display: flex; flex-direction: column; gap: 14px; flex: 1.4; min-width: 420px;">
+        <div style="background: #0a0a0b; border: 1px solid rgba(255,255,255,0.08); border-radius: 26px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.7); display: flex; height: 420px;">
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 28px; background: #060607;">
+            <div style="width: 100%; max-width: 430px; aspect-ratio: 16/9; border-radius: 8px; background: linear-gradient(160deg, #2c3540 0%, #1a2028 45%, #10131a 100%); position: relative; overflow: hidden;">
+              <div style="position: absolute; inset: 0; background: linear-gradient(200deg, rgba(120,150,170,0.35), transparent 55%);"></div>
+            </div>
+          </div>
+          <div style="width: 250px; flex-shrink: 0; border-left: 1px solid rgba(255,255,255,0.07); padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 14px; font-weight: 650;">提示词</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a8a92" stroke-width="2" style="cursor: pointer;"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            </div>
+            <div style="height: 96px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); padding: 12px; font-size: 13px; color: #6e6e76;">暂无提示词</div>
+            <div style="font-size: 14px; font-weight: 650; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.07);">信息</div>
+            <div style="display: flex; flex-direction: column; gap: 9px; font-size: 13px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px;">
+              <div style="display: flex; justify-content: space-between;"><span style="color: #8a8a92;">质量</span><span>1k</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #8a8a92;">文件大小</span><span>102 KB</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #8a8a92;">日期</span><span>2026/01/27</span></div>
+              <div style="display: flex; justify-content: space-between;"><span style="color: #8a8a92;">创建者</span><span>mys2388212</span></div>
+            </div>
+            <div style="flex: 1;"></div>
+            <div style="padding: 11px 0; text-align: center; border-radius: 12px; background: rgba(255,255,255,0.1); font-size: 14px; font-weight: 650; cursor: pointer;" style-hover="background: rgba(255,255,255,0.16);">下载</div>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #98989f; line-height: 1.7;"><b style="color: #e8e8ec;">全屏查看</b> — 沉浸式浏览：左侧图片适配留黑边，右侧 250px 信息栏（提示词 / 元信息 / 下载）；Esc 或 ✕ 退出，←→ 切换批次。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 07 导航与画布控件 ============ -->
+  <section id="s7" style="max-width: 1400px; margin: 0 auto; padding: 72px 64px; display: flex; flex-direction: column; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 12px; letter-spacing: 0.22em; color: #6e6e76;">SECTION 07</span>
+      <h2 style="margin: 0; font-size: 28px; font-weight: 650;">导航与画布控件 Navigation &amp; Canvas Controls</h2>
+    </div>
+
+    <div style="background: #0b0b0c; background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px); background-size: 22px 22px; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 48px; display: flex; gap: 56px; flex-wrap: wrap; justify-content: center; align-items: flex-start;">
+
+      <!-- 顶栏 -->
+      <div style="display: flex; flex-direction: column; gap: 14px; align-items: center;">
+        <div style="width: 560px; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 34px; height: 34px; border-radius: 10px; background: conic-gradient(from 210deg, #ff5f6d, #ffc371, #47c2ff, #a78bfa, #ff5f6d);"></div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 15px; font-weight: 650;">Sign workflow (copy)</span>
+              <span style="font-size: 12px; color: #6e6e76;">已保存到云端</span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 999px; background: rgba(255,255,255,0.07); font-size: 14px; font-weight: 600;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><circle cx="9" cy="9" r="5"></circle><circle cx="15" cy="15" r="5"></circle></svg>15
+            </div>
+            <div style="display: flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 999px; background: rgba(255,255,255,0.07); font-size: 14px; font-weight: 600;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d6d6db" stroke-width="1.7"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"></path><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z"></path></svg>社区
+            </div>
+            <div style="width: 38px; height: 38px; border-radius: 999px; background: rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center; color: #d6d6db; cursor: pointer;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"></circle><circle cx="17" cy="6" r="2.4"></circle><circle cx="17" cy="18" r="2.4"></circle><path d="M8.2 10.8l6.6-3.6M8.2 13.2l6.6 3.6"></path></svg>
+            </div>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: #6e6e76;">顶栏：左侧项目标识 + 保存状态；右侧积分余额 · 社区 · 分享。</div>
+      </div>
+
+      <!-- 左侧导航栏 -->
+      <div style="display: flex; gap: 20px; align-items: flex-start;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; background: rgba(22,22,24,0.95); border: 1px solid rgba(255,255,255,0.07); border-radius: 999px; padding: 12px 8px; box-shadow: 0 16px 48px rgba(0,0,0,0.6);">
+          <div style="width: 44px; height: 44px; border-radius: 50%; background: #f5f5f7; color: #0b0b0c; display: flex; align-items: center; justify-content: center; cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"></path></svg></div>
+          <div style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #b8b8bf; cursor: pointer;" style-hover="background: #29292c;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.5-4.5"></path></svg></div>
+          <div style="position: relative; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #b8b8bf; cursor: pointer;" style-hover="background: #29292c;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path></svg>
+            <div style="position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #2e9bff;"></div>
+          </div>
+          <div style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #b8b8bf; cursor: pointer;" style-hover="background: #29292c;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect></svg></div>
+          <div style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #b8b8bf; cursor: pointer;" style-hover="background: #29292c;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a9 9 0 0 1 9-9 8 8 0 0 1 9 9z"></path></svg></div>
+          <div style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #b8b8bf; cursor: pointer;" style-hover="background: #29292c;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"></circle><path d="M12 8v4l3 2"></path></svg></div>
+          <div style="width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #8a4a3a, #2a1210); border: 2px solid rgba(255,255,255,0.15); margin-top: 4px;"></div>
+        </div>
+        <div style="font-size: 12px; color: #6e6e76; max-width: 170px; line-height: 1.8; padding-top: 8px;">左侧胶囊导航（自上而下）：<b style="color: #b8b8bf;">新建节点</b> · 搜索 · 素材库（蓝点=有更新）· 节点库 · 对话 · 历史记录 · 账户头像。首项白底强调。</div>
+      </div>
+
+      <!-- 左下控制 + 模式横幅 -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="width: 200px; height: 128px; background: rgba(22,22,24,0.95); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; position: relative; overflow: hidden;">
+            <div style="position: absolute; left: 24%; top: 30%; width: 34%; height: 30%; border: 1px solid rgba(255,255,255,0.45); border-radius: 3px;"></div>
+            <div style="position: absolute; left: 30%; top: 38%; width: 8px; height: 5px; background: rgba(255,255,255,0.35); border-radius: 1px;"></div>
+            <div style="position: absolute; left: 42%; top: 48%; width: 8px; height: 5px; background: rgba(255,255,255,0.35); border-radius: 1px;"></div>
+            <div style="position: absolute; left: 36%; top: 56%; width: 8px; height: 5px; background: rgba(255,255,255,0.25); border-radius: 1px;"></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 4px; background: rgba(22,22,24,0.95); border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; padding: 6px 10px;">
+              <div style="width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; color: #f5f5f7;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"></path><path d="M9 4v14M15 6v14"></path></svg></div>
+              <div style="width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #8a8a92; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></div>
+              <div style="width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #8a8a92; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3"></path><circle cx="12" cy="12" r="2"></circle></svg></div>
+              <div style="width: 70px; position: relative; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.15); margin: 0 6px;"><div style="position: absolute; left: 0; width: 30%; height: 100%; border-radius: 2px; background: #f5f5f7;"></div><div style="position: absolute; left: 30%; top: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px; border-radius: 50%; background: #fff;"></div></div>
+            </div>
+            <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(22,22,24,0.95); border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; color: #b8b8bf; font-size: 17px; font-weight: 600; cursor: pointer;">?</div>
+          </div>
+          <div style="font-size: 12px; color: #6e6e76; max-width: 260px; line-height: 1.8;">左下角：缩略地图 200×128（视口取景框可拖动）；下方为地图/网格切换 · 定位选中 · 缩放滑杆 · 帮助。</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 12px; background: #2e9bff; border-radius: 14px; padding: 12px 16px; width: fit-content; box-shadow: 0 12px 36px rgba(46,155,255,0.35);">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 15px; font-weight: 700; color: #fff;">焦点编辑</span>
+              <span style="font-size: 12px; color: rgba(255,255,255,0.85);">点击其他节点以提取元素</span>
+            </div>
+            <div style="padding: 6px 14px; border-radius: 9px; background: rgba(0,0,0,0.35); font-size: 13px; font-weight: 600; color: #fff; cursor: pointer;">退出</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="padding: 5px 12px; border-radius: 8px; background: #2e9bff; font-size: 13px; font-weight: 600; color: #fff;">从画布选择参考</span>
+            <span style="padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.1); font-size: 11px; color: #b8b8bf; font-family: ui-monospace, monospace;">ESC</span>
+            <span style="font-size: 12px; color: #8a8a92;">退出模式</span>
+          </div>
+          <div style="font-size: 12px; color: #6e6e76; max-width: 280px; line-height: 1.8;">模式横幅：进入「焦点编辑 / 选择参考」等临时模式时顶部居中出现蓝色横幅，画布中心悬浮 ESC 快捷键提示。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+</body>
+</html>

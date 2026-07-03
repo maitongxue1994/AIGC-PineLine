@@ -14,24 +14,16 @@ import {
 import { HelpCircle, LayoutTemplate, Redo2, RotateCcw, Undo2, X } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
-import ScriptNode from './nodes/ScriptNode'
+import { KIND_ACCENTS } from './nodeCatalog'
+import { TOKENS } from './designTokens'
+import TextNode from './nodes/TextNode'
 import ImageNode from './nodes/ImageNode'
-import StoryboardNode from './nodes/StoryboardNode'
-import SceneNode from './nodes/SceneNode'
-import CharacterNode from './nodes/CharacterNode'
-import PropNode from './nodes/PropNode'
-import ShotNode from './nodes/ShotNode'
 import AssetNode from './nodes/AssetNode'
 import NodePaletteMenu, { type PaletteChoice } from './NodePaletteMenu'
 
 const nodeTypes: NodeTypes = {
-  script: ScriptNode,
+  text: TextNode,
   image: ImageNode,
-  storyboard: StoryboardNode,
-  scene: SceneNode,
-  character: CharacterNode,
-  prop: PropNode,
-  shot: ShotNode,
   asset: AssetNode,
 }
 
@@ -44,13 +36,7 @@ function StudioCanvasInner() {
   const onNodesChange = useStudioStore((s) => s.onNodesChange)
   const onEdgesChange = useStudioStore((s) => s.onEdgesChange)
   const onConnect = useStudioStore((s) => s.onConnect)
-  const addScriptNode = useStudioStore((s) => s.addScriptNode)
-  const addImageNode = useStudioStore((s) => s.addImageNode)
-  const addStoryboardNode = useStudioStore((s) => s.addStoryboardNode)
-  const addSceneNode = useStudioStore((s) => s.addSceneNode)
-  const addCharacterNode = useStudioStore((s) => s.addCharacterNode)
-  const addPropNode = useStudioStore((s) => s.addPropNode)
-  const addShotNode = useStudioStore((s) => s.addShotNode)
+  const addNode = useStudioStore((s) => s.addNode)
   const selectNode = useStudioStore((s) => s.selectNode)
   const runNode = useStudioStore((s) => s.runNode)
   const selectedNodeId = useStudioStore((s) => s.selectedNodeId)
@@ -60,11 +46,11 @@ function StudioCanvasInner() {
   const redo = useStudioStore((s) => s.redo)
   const canUndo = useStudioStore((s) => s.past.length > 0)
   const canRedo = useStudioStore((s) => s.future.length > 0)
-  const setGuideOpen = useStudioStore((s) => s.setGuideOpen)
   const resetProject = useStudioStore((s) => s.resetProject)
   const fitViewTick = useStudioStore((s) => s.fitViewTick)
+  const focusRequest = useStudioStore((s) => s.focusRequest)
 
-  const { screenToFlowPosition, fitView } = useReactFlow()
+  const { screenToFlowPosition, fitView, setCenter, getNode } = useReactFlow()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const pendingConnectRef = useRef<{
     fromNodeId: string
@@ -78,14 +64,10 @@ function StudioCanvasInner() {
     null,
   )
   const [notice, setNotice] = useState<string | null>(null)
-  // 首次进入自动展示一次帮助；引导卡打开时让位（新用户的 onboarding 是模板卡，
-  // 两个浮层叠加会让帮助被蒙层压住）。persist 同步水合，mount 时 guideOpen 已就绪。
+  // 首次进入自动展示一次帮助
   const [helpOpen, setHelpOpen] = useState(() => {
     try {
-      return (
-        !localStorage.getItem('pineline-help-seen') &&
-        !useStudioStore.getState().guideOpen
-      )
+      return !localStorage.getItem('pineline-help-seen')
     } catch {
       return false
     }
@@ -105,7 +87,7 @@ function StudioCanvasInner() {
     [],
   )
 
-  // 模板/Composer 铺链后自动把新节点带入视野（等渲染一帧再适配）
+  // 模板/建链后自动把新节点带入视野（等渲染一帧再适配）
   useEffect(() => {
     if (fitViewTick === 0) return
     const raf = requestAnimationFrame(() => {
@@ -113,6 +95,19 @@ function StudioCanvasInner() {
     })
     return () => cancelAnimationFrame(raf)
   }, [fitViewTick, fitView])
+
+  // 面板/搜索点选节点 → 把节点带到视口中心（审计修复：focusNode 不入视口）
+  useEffect(() => {
+    if (!focusRequest) return
+    const node = getNode(focusRequest.id)
+    if (!node) return
+    const w = node.measured?.width ?? 340
+    const h = node.measured?.height ?? 200
+    void setCenter(node.position.x + w / 2, node.position.y + h / 2, {
+      zoom: 1,
+      duration: 400,
+    })
+  }, [focusRequest, getNode, setCenter])
 
   // 帮助实际展示过（自动或手动）才写「已看过」标记
   useEffect(() => {
@@ -131,9 +126,8 @@ function StudioCanvasInner() {
     [selectNode],
   )
 
-  // 键盘快捷键：Cmd/Ctrl+Enter 运行选中节点；Cmd/Ctrl+Z 撤销；Cmd/Ctrl+Shift+Z 重做；
-  // Cmd/Ctrl+D 复制选中节点；Esc 关闭新建菜单
-  // Delete/Backspace 由 ReactFlow 内置（onNodesChange 收到 remove 即可）
+  // 键盘快捷键：⌘/Ctrl+Enter 运行选中；⌘/Ctrl+Z 撤销；⌘/Ctrl+Shift+Z 重做；
+  // ⌘/Ctrl+D 复制；Esc 关闭菜单。Delete/Backspace 由 ReactFlow 内置。
   useEffect(() => {
     const isEditable = (el: EventTarget | null) => {
       if (!(el instanceof HTMLElement)) return false
@@ -149,6 +143,8 @@ function StudioCanvasInner() {
       }
       if (!(e.metaKey || e.ctrlKey)) return
       if (isEditable(e.target)) return
+      // 按住不放的键盘重复不重复触发（审计修复：连发会产生并发付费请求）
+      if (e.repeat) return
 
       const key = e.key.toLowerCase()
       if (e.key === 'Enter') {
@@ -183,6 +179,11 @@ function StudioCanvasInner() {
       const { clientX, clientY } =
         'changedTouches' in event ? event.changedTouches[0] : (event as MouseEvent)
 
+      // 审计修复：只有松手在画布空白处才弹「新建节点」菜单；
+      // 拖到其他节点身上/自身（无效落点）直接放弃，避免误建重叠节点
+      const target = event.target as HTMLElement | null
+      if (!target?.classList?.contains('react-flow__pane')) return
+
       pendingAddPosRef.current = null
       pendingConnectRef.current = {
         fromNodeId: fromNode.id,
@@ -195,14 +196,14 @@ function StudioCanvasInner() {
     [screenToFlowPosition],
   )
 
-  // 新建落点避让右下角 MiniMap：节点若铺在小地图底下会被遮住（M1 测试发现）
+  // 新建落点避让右下角 MiniMap：节点若铺在小地图底下会被遮住
   const MINIMAP_ZONE = { w: 230, h: 180 }
   const avoidMiniMap = useCallback((x: number, y: number) => {
     const rect = wrapperRef.current?.getBoundingClientRect()
     if (!rect) return { x, y }
     const inZone = x > rect.right - MINIMAP_ZONE.w && y > rect.bottom - MINIMAP_ZONE.h
     if (!inZone) return { x, y }
-    // 节点卡片约 320px 宽，整体左移/上移出小地图区域
+    // 节点卡片约 340px 宽，整体左移/上移出小地图区域
     return {
       x: Math.min(x, rect.right - MINIMAP_ZONE.w - 340),
       y: Math.min(y, rect.bottom - MINIMAP_ZONE.h - 80),
@@ -248,11 +249,16 @@ function StudioCanvasInner() {
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
+      // 审计修复：无条件 preventDefault——拖入非图片文件（如 .txt）时
+      // 浏览器默认行为是直接导航打开该文件，内存中的生成图会全部丢失
+      if (e.dataTransfer.types.includes('Files')) e.preventDefault()
       const files = Array.from(e.dataTransfer.files).filter((f) =>
         f.type.startsWith('image/'),
       )
-      if (!files.length) return
-      e.preventDefault()
+      if (!files.length) {
+        if (e.dataTransfer.files.length) flash('仅支持拖入图片文件')
+        return
+      }
 
       if (files.length > MAX_DROP_FILES) {
         flash(`一次最多拖入 ${MAX_DROP_FILES} 张图片，已取前 ${MAX_DROP_FILES} 张`)
@@ -282,30 +288,10 @@ function StudioCanvasInner() {
         const pos = pendingAddPosRef.current
         pendingAddPosRef.current = null
         setMenu(null)
-        if (pos) {
-          const adders: Record<PaletteChoice, (p: { x: number; y: number }) => string> = {
-            script: addScriptNode,
-            storyboard: addStoryboardNode,
-            scene: addSceneNode,
-            character: addCharacterNode,
-            prop: addPropNode,
-            shot: addShotNode,
-            image: addImageNode,
-          }
-          adders[choice](pos)
-        }
+        if (pos) addNode(choice.kind, choice.preset, pos)
         return
       }
-      const adders: Record<PaletteChoice, (pos: { x: number; y: number }) => string> = {
-        script: addScriptNode,
-        storyboard: addStoryboardNode,
-        scene: addSceneNode,
-        character: addCharacterNode,
-        prop: addPropNode,
-        shot: addShotNode,
-        image: addImageNode,
-      }
-      const newId = adders[choice](pending.flowPos)
+      const newId = addNode(choice.kind, choice.preset, pending.flowPos)
 
       if (pending.fromType === 'source') {
         onConnect({
@@ -325,16 +311,7 @@ function StudioCanvasInner() {
       pendingConnectRef.current = null
       setMenu(null)
     },
-    [
-      addScriptNode,
-      addImageNode,
-      addStoryboardNode,
-      addSceneNode,
-      addCharacterNode,
-      addPropNode,
-      addShotNode,
-      onConnect,
-    ],
+    [addNode, onConnect],
   )
 
   return (
@@ -355,6 +332,9 @@ function StudioCanvasInner() {
         onConnect={onConnect}
         onConnectEnd={handleConnectEnd}
         onSelectionChange={handleSelectionChange}
+        defaultEdgeOptions={{
+          style: { stroke: TOKENS.edgeStroke, strokeWidth: TOKENS.edgeWidth },
+        }}
         fitView
         fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
         proOptions={{ hideAttribution: true }}
@@ -386,8 +366,10 @@ function StudioCanvasInner() {
             <HelpCircle size={13} />
           </button>
           <button
-            title="打开模板引导卡"
-            onClick={() => setGuideOpen(true)}
+            title="从模板开始"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('pineline:open-templates'))
+            }}
             className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-bg-2/80 px-2 py-1.5 text-[10px] text-ink-1 backdrop-blur transition hover:bg-bg-2 hover:text-white"
           >
             <LayoutTemplate size={13} />
@@ -430,9 +412,8 @@ function StudioCanvasInner() {
                 </button>
               </div>
               <ol className="ml-4 list-decimal space-y-1 leading-relaxed text-ink-1">
-                <li>底部输入一句创意 → 「创建并运行」直接起一条管线</li>
-                <li>或双击/右键画布空白新建节点，左上角「模板」一键铺链</li>
-                <li>从节点右端口拖线到空白 → 选下一环（分镜/场景…）</li>
+                <li>双击/右键画布空白新建节点，左上角「模板」一键铺链</li>
+                <li>从节点右端口拖线到空白 → 选下一环（分镜/图片…）</li>
                 <li>把图片拖进画布 → 成为下游参考图</li>
                 <li>选中节点 → 上方工具条可运行/复制/下载/删除</li>
               </ol>
@@ -444,12 +425,13 @@ function StudioCanvasInner() {
                 <div>⌘/Ctrl+Z 撤销 · ⌘/Ctrl+Shift+Z 重做</div>
                 <div>Delete 删除 · Esc 关闭菜单</div>
               </div>
+              <div className="mt-2 text-[10px] text-ink-3">积分为本地模拟，仅作演示。</div>
             </div>
           </Panel>
         )}
         <Background
           variant={BackgroundVariant.Dots}
-          gap={20}
+          gap={TOKENS.canvasDotGap}
           size={1}
           color="#222"
         />
@@ -459,19 +441,7 @@ function StudioCanvasInner() {
         />
         <MiniMap
           className="!border !border-white/[0.07] !bg-bg-2/70"
-          nodeColor={(n) => {
-            const colors: Record<string, string> = {
-              script: '#FF6A3D',
-              storyboard: '#FF6A3D',
-              scene: '#7C5CFF',
-              character: '#7C5CFF',
-              prop: '#7C5CFF',
-              shot: '#7C5CFF',
-              image: '#7C5CFF',
-              asset: '#22D3EE',
-            }
-            return colors[n.type ?? ''] ?? '#7C5CFF'
-          }}
+          nodeColor={(n) => KIND_ACCENTS[(n.type ?? 'image') as keyof typeof KIND_ACCENTS] ?? '#7C5CFF'}
           maskColor="rgba(7,7,11,0.6)"
           pannable
           zoomable

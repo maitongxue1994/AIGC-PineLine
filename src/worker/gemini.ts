@@ -16,10 +16,18 @@ type GeminiResponse = {
   error?: { message?: string }
 }
 
+/** Gemini imageConfig 官方枚举（aspectRatio 省略 = 自适应；imageSize 必须大写 K） */
+export type GeminiAspectRatio =
+  | '1:1' | '3:2' | '2:3' | '3:4' | '4:3'
+  | '4:5' | '5:4' | '9:16' | '16:9' | '21:9'
+
+export type GeminiImageSize = '1K' | '2K' | '4K'
+
 export type GeminiImageOptions = {
   referenceImage?: string
   referenceImages?: string[]
-  aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4'
+  aspectRatio?: GeminiAspectRatio
+  quality?: GeminiImageSize
 }
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
@@ -44,11 +52,15 @@ export async function callGeminiImage(
     if (parsed) parts.push({ inlineData: parsed })
   }
 
+  const imageConfig = {
+    ...(opts.aspectRatio ? { aspectRatio: opts.aspectRatio } : {}),
+    ...(opts.quality ? { imageSize: opts.quality } : {}),
+  }
   const body = {
     contents: [{ parts }],
     generationConfig: {
       responseModalities: ['IMAGE'],
-      ...(opts.aspectRatio ? { imageConfig: { aspectRatio: opts.aspectRatio } } : {}),
+      ...(Object.keys(imageConfig).length ? { imageConfig } : {}),
     },
   }
 

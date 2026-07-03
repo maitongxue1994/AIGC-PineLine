@@ -87,7 +87,7 @@ export function UpstreamIndicator({ nodeId }: { nodeId: string }) {
       .map((e) => s.nodes.find((n) => n.id === e.source))
       .filter((n): n is NonNullable<typeof n> => !!n)
     if (!ups.length) return ''
-    const texts = ups.filter((n) => ['script', 'storyboard'].includes(n.data.kind)).length
+    const texts = ups.filter((n) => n.data.kind === 'text').length
     const imgs = ups.length - texts
     const parts = [texts && `文本 ×${texts}`, imgs && `图 ×${imgs}`].filter(Boolean)
     return `${ups[0].id}|上游输入 ×${ups.length}（${parts.join(' · ')}，留空时自动使用）`
@@ -312,14 +312,4 @@ export function NodeActionBar({
   )
 }
 
-// v3 配色收敛为 3 色语义：文本类=橙，图像类=紫，素材=青
-export const ACCENTS = {
-  script: '#FF6A3D',
-  storyboard: '#FF6A3D',
-  image: '#7C5CFF',
-  scene: '#7C5CFF',
-  character: '#7C5CFF',
-  prop: '#7C5CFF',
-  shot: '#7C5CFF',
-  asset: '#22D3EE',
-} as const
+// 配色语义收敛至 nodeCatalog.KIND_ACCENTS（文本=橙 / 图像=紫 / 素材=青）

@@ -1,57 +1,55 @@
+import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { FolderUp } from 'lucide-react'
-import type { PineNode } from '../types'
+import { ImagePlus } from 'lucide-react'
+import { activeContent, type PineNode } from '../types'
+import { KIND_ACCENTS } from '../nodeCatalog'
 import { ImageThumb, NodeActionBar, NodeTitle, StatusBadge } from './shared'
 
-/** 上传素材节点：不调模型，output 即图片本体，作为下游的参考图来源 */
-export default function AssetNode({ id, data, selected }: NodeProps<PineNode>) {
+/**
+ * 上传素材节点：内容即本体（data URL），不调模型，仅作下游参考图。
+ * 只有右侧输出桩。
+ */
+function AssetNodeInner({ id, data, selected }: NodeProps<PineNode>) {
+  const accent = KIND_ACCENTS.asset
+  const output = activeContent(data)
+
   return (
     <div
-      className={`w-[260px] overflow-hidden rounded-xl border bg-[#0E0E14]/95 shadow-card backdrop-blur transition ${
-        selected
-          ? 'border-white/60 shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_0_30px_-10px_#22D3EE]'
-          : 'border-white/10 hover:border-white/25'
+      className={`w-[260px] rounded-xl border bg-[#0E0E14]/95 shadow-card backdrop-blur transition ${
+        selected ? 'border-white/60' : 'border-white/[0.08]'
       }`}
+      style={selected ? { boxShadow: `0 0 0 3px ${accent}33` } : undefined}
     >
       <NodeActionBar
         id={id}
         status={data.status}
-        output={data.output}
-        filename={`${data.title || 'asset'}.png`}
+        output={output}
+        filename={`${data.title}.png`}
         runnable={false}
       />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-bg-0 !bg-[#22D3EE]"
-      />
 
-      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-2">
-        <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#22D3EE]">
-          <FolderUp size={12} className="shrink-0" />
-          <NodeTitle id={id} title={data.title} />
-        </span>
+      <div className="flex items-center gap-2 px-3 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-ink-1">
+        <ImagePlus size={12} style={{ color: accent }} className="shrink-0" />
+        <NodeTitle id={id} title={data.title} />
+        <span className="ml-auto" />
         <StatusBadge status={data.status} />
       </div>
 
       <div className="p-3">
-        {data.output ? (
-          <ImageThumb
-            src={data.output}
-            filename={`${data.title || 'asset'}.png`}
-            aspectClass="aspect-video"
-          />
+        {output ? (
+          <ImageThumb src={output} filename={`${data.title}.png`} aspectClass="aspect-square" />
         ) : (
-          <div className="flex aspect-video items-center justify-center rounded-md border border-dashed border-white/15 text-center text-[10px] leading-relaxed text-ink-3">
+          <div className="flex aspect-square items-center justify-center rounded-md border border-dashed border-white/[0.12] bg-bg-2/60 p-3 text-center text-[10px] leading-relaxed text-ink-3">
             刷新后图片不保留
             <br />
-            请重新拖入，或通过「导出/导入工程」留存
+            请重新拖入，或收藏到素材库长期留存
           </div>
         )}
-        <div className="mt-2 text-[10px] text-ink-3">
-          从右侧端口连到下游节点，作为参考图
-        </div>
       </div>
+
+      <Handle type="source" position={Position.Right} className="!h-3 !w-3 !border-2 !border-white/40 !bg-bg-2" />
     </div>
   )
 }
+
+export default memo(AssetNodeInner)
