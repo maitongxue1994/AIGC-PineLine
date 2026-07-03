@@ -958,10 +958,34 @@ export const useStudioStore = create<StudioState>()(
               (e) => subIds.has(e.source) && subIds.has(e.target),
             )
             const layers = topoLayers(subset, subEdges)
+            let skipped = 0
             for (const layer of layers) {
               if (g !== generation) break
+              // 级联保护：直接上游失败或无产出（已被跳过）的节点不再运行，
+              // 避免上游超时后下游连环报「缺少剧本/缺少提示词」（用户实测反馈）
+              const cur = get()
+              const runnable = layer.filter((nid) => {
+                const ups = subEdges
+                  .filter((e) => e.target === nid)
+                  .map((e) => cur.nodes.find((n) => n.id === e.source))
+                  .filter((u): u is PineNode => !!u)
+                const blocked = ups.some(
+                  (u) =>
+                    u.data.status === 'error' ||
+                    (u.data.status !== 'done' && !activeContent(u.data)),
+                )
+                if (blocked) skipped++
+                return !blocked
+              })
               // 单节点失败由 runNode 自行兜成 error 状态，不阻断整条管线
-              await Promise.allSettled(layer.map((nid) => runNode(nid)))
+              await Promise.allSettled(runnable.map((nid) => runNode(nid)))
+            }
+            if (skipped > 0 && g === generation) {
+              window.dispatchEvent(
+                new CustomEvent('pineline:flash', {
+                  detail: `已跳过 ${skipped} 个下游节点（上游未成功），修复上游后可再次运行`,
+                }),
+              )
             }
           } finally {
             // 代际已切换时新画布的 pipelineRunning 由新一轮运行管理，不越权清除
