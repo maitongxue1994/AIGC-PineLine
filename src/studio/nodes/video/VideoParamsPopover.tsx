@@ -2,7 +2,7 @@ import { Info } from 'lucide-react'
 import { useStudioStore } from '../../store'
 import { TOKENS } from '../../designTokens'
 import { Popover } from '../composerKit'
-import type { PineNodeData, VideoDuration, VideoMode, VideoRatio } from '../../types'
+import type { PineNodeData, VideoDuration, VideoMode, VideoRatio, VideoResolution } from '../../types'
 
 const RATIOS: { value: Exclude<VideoRatio, 'auto'>; w: number; h: number }[] = [
   { value: '16:9', w: 16, h: 9 },
@@ -105,11 +105,23 @@ export default function VideoParamsPopover({ id, data }: { id: string; data: Pin
           <div className={groupTitle} style={{ color: '#D6D6DB' }}>
             清晰度
           </div>
-          <div
-            className="rounded-[14px] py-2.5 text-center text-[14px]"
-            style={{ background: 'rgba(255,255,255,0.06)', color: TOKENS.textBody }}
-          >
-            自适应
+          <div className="flex rounded-[14px] p-1" style={{ background: 'rgba(255,255,255,0.04)' }}>
+            {(['480p', '720p', '1080p'] as VideoResolution[]).map((r) => {
+              const on = (params.videoResolution ?? '720p') === r
+              return (
+                <button
+                  key={r}
+                  onClick={() => updateNodeParams(id, { videoResolution: r })}
+                  className="flex-1 rounded-[11px] py-2 text-[14px] font-semibold transition"
+                  style={{
+                    background: on ? 'rgba(255,255,255,0.12)' : undefined,
+                    color: on ? TOKENS.textTitle : TOKENS.textMuted,
+                  }}
+                >
+                  {r}
+                </button>
+              )
+            })}
           </div>
         </div>
 

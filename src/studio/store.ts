@@ -10,18 +10,24 @@ import {
 } from '@xyflow/react'
 import { buildTemplate, type TemplateId } from './templates'
 import {
+  createVideoTask,
+  fetchVideoFile,
+  fetchVideoReadiness,
   generateImage,
   generateImageGrid,
   generateScript,
   generateStoryboard,
+  queryVideoTask,
 } from './api'
 import {
   buildNode,
+  DEFAULT_VIDEO_MODEL,
   estimateCost,
   gridPrompts,
   GRID_VIEW_LABELS,
   INITIAL_CREDITS,
   presetMeta,
+  VIDEO_MODELS,
 } from './nodeCatalog'
 import { migrateGraph, migrateLegacyEdge } from './migrate'
 import { appendHistory } from './assetdb'
@@ -37,6 +43,7 @@ import {
   type PineNode,
   type PineNodeData,
   type ShotItem,
+  type VideoReadiness,
 } from './types'
 
 type Position = { x: number; y: number }
@@ -122,6 +129,9 @@ type StudioState = {
   importProject: (raw: string) => void
   resetProject: () => void
   resetCredits: () => void
+  /** 各视频供应商密钥就绪状态（模型选择器显示可用/需配置；不持久化） */
+  videoReadiness: VideoReadiness | null
+  loadVideoReadiness: () => Promise<void>
 }
 
 function mutateNode(
@@ -182,6 +192,55 @@ function newVersion(content: string | null, label?: string, error?: string | nul
     ...(label ? { label } : {}),
     ...(error ? { error } : {}),
     createdAt: Date.now(),
+  }
+}
+
+// ---------------- 视频生成轮询（异步任务：创建 → 轮询 → 取件代理） ----------------
+
+const VIDEO_POLL_INTERVAL_MS = 8_000
+const VIDEO_POLL_TIMEOUT_MS = 10 * 60_000
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('视频数据读取失败'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+/** 单条视频任务全流程；失败返回带 error 的空版本（多倍数时部分成功可用） */
+async function runOneVideoTask(
+  provider: string,
+  req: Parameters<typeof createVideoTask>[0],
+): Promise<NodeVersion> {
+  try {
+    const { taskId } = await createVideoTask(req)
+    const deadline = Date.now() + VIDEO_POLL_TIMEOUT_MS
+    let misses = 0
+    for (;;) {
+      await sleep(VIDEO_POLL_INTERVAL_MS)
+      if (Date.now() > deadline) {
+        throw new Error('生成超时（10 分钟）：任务可能仍在进行，可稍后重试或到供应商控制台查看')
+      }
+      let st: Awaited<ReturnType<typeof queryVideoTask>>
+      try {
+        st = await queryVideoTask({ provider, taskId })
+        misses = 0
+      } catch (err) {
+        // 轮询期的瞬时网络故障容忍 3 次
+        if (++misses >= 3) throw err
+        continue
+      }
+      if (st.status === 'done') break
+      if (st.status === 'error') throw new Error(st.error ?? '生成失败')
+    }
+    const blob = await fetchVideoFile({ provider, taskId })
+    return newVersion(await blobToDataUrl(blob))
+  } catch (err) {
+    return newVersion(null, undefined, err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -609,13 +668,6 @@ export const useStudioStore = create<StudioState>()(
 
           // 上传素材节点不调模型，内容即本体
           if (node.data.kind === 'asset') return
-          // 视频生成后端接入规划中：诚实提示，不扣积分、不进 running
-          if (node.data.kind === 'video') {
-            window.dispatchEvent(
-              new CustomEvent('pineline:flash', { detail: '视频生成模型接入规划中，可先上传视频体验剪辑/截帧' }),
-            )
-            return
-          }
 
           const g = generation
           const { kind, preset, params } = node.data
@@ -750,6 +802,56 @@ export const useStudioStore = create<StudioState>()(
                   recordHistory(id, 'image', preset, prompt, oneVersion)
                 }
               }
+            } else if (kind === 'video') {
+              const model =
+                VIDEO_MODELS.find((m) => m.id === (params.videoModel ?? DEFAULT_VIDEO_MODEL)) ??
+                VIDEO_MODELS[0]
+              // 首尾帧：沿边取上游图片（与 VideoPromptBar 展示一致），⇄ 交换态在 params
+              const frames: string[] = []
+              for (const e of state.edges) {
+                if (e.target !== id) continue
+                const src = state.nodes.find((n) => n.id === e.source)
+                const img = src?.data.versions.find((v) => isImageContent(v.content))?.content
+                if (img) frames.push(img)
+                if (frames.length >= 2) break
+              }
+              if (params.framesSwapped) frames.reverse()
+              const [firstFrame, lastFrame] = frames
+              const prompt = node.data.prompt.trim()
+              if (!prompt && !firstFrame)
+                throw new Error('请输入提示词，或连线上游图片节点作首帧参考')
+              if (lastFrame && !model.lastFrame)
+                throw new Error(`${model.name} 不支持尾帧参考，请切换支持首尾帧的模型`)
+
+              const req = {
+                provider: model.provider,
+                model: model.apiModel,
+                prompt,
+                ...(firstFrame ? { firstFrame } : {}),
+                ...(lastFrame ? { lastFrame } : {}),
+                duration: params.videoDuration ?? 5,
+                ratio: params.videoRatio ?? 'auto',
+                resolution: params.videoResolution ?? '720p',
+              }
+              // 倍数条数并行生成，全部落定后统一入版本（部分失败保留成功条目）
+              const count = params.videoMultiplier ?? 1
+              const results = await Promise.all(
+                Array.from({ length: count }, () => runOneVideoTask(model.provider, req)),
+              )
+              const okIndex = results.findIndex((v) => !!v.content)
+              if (okIndex < 0) throw new Error(results[0]?.error ?? '视频生成失败')
+              safeSet(g, (s) => {
+                const cur = s.nodes.find((n) => n.id === id)
+                const versions = [...(cur?.data.versions ?? []), ...results]
+                return {
+                  nodes: mutateNode(s.nodes, id, {
+                    status: 'done',
+                    versions,
+                    activeVersion: versions.length - results.length + okIndex,
+                  }),
+                }
+              })
+              // 视频体积大，不写 IndexedDB 生成历史；长期留存走「保存到素材库」
             }
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
@@ -930,6 +1032,16 @@ export const useStudioStore = create<StudioState>()(
         },
 
         resetCredits: () => set({ credits: INITIAL_CREDITS }),
+
+        videoReadiness: null,
+        loadVideoReadiness: async () => {
+          if (get().videoReadiness) return
+          try {
+            set({ videoReadiness: await fetchVideoReadiness() })
+          } catch {
+            // 本地无 Worker/离线时静默：选择器按「未知」展示，不打扰
+          }
+        },
       }
     },
     {

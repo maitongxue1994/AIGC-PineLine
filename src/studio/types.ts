@@ -46,6 +46,9 @@ export type PinColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple'
 export type VideoMode = 'frames' | 'omni'
 export type VideoRatio = 'auto' | '16:9' | '9:16' | '1:1'
 export type VideoDuration = 5 | 10
+export type VideoResolution = '480p' | '720p' | '1080p'
+/** 视频供应商（与 Worker src/worker/video/types.ts 对齐） */
+export type VideoProviderId = 'seedance' | 'minimax' | 'wan' | 'kling' | 'veo'
 
 export type ShotItem = {
   id: string
@@ -81,8 +84,11 @@ export type NodeParams = {
   videoMode?: VideoMode
   videoRatio?: VideoRatio
   videoDuration?: VideoDuration
+  videoResolution?: VideoResolution
   videoMultiplier?: 1 | 2
   videoModel?: string
+  /** 首尾帧参考的 ⇄ 交换态（进 params 供 runNode 读取，而非组件局部态） */
+  framesSwapped?: boolean
   /** 软剪辑区间（秒）：播放范围 clamp；由剪辑模式确认写入 */
   trim?: { start: number; end: number }
   /** Seedance 合规验证（本地模拟）通过标记 → 节点标签蓝勾 */
@@ -172,6 +178,26 @@ export type ImageGridResponse = {
   images: (string | null)[]
   errors?: (string | null)[]
 }
+
+export type VideoCreateRequest = {
+  provider: VideoProviderId
+  model?: string
+  prompt: string
+  firstFrame?: string
+  lastFrame?: string
+  duration?: number
+  ratio?: string
+  resolution?: string
+}
+
+export type VideoCreateResponse = { taskId: string }
+
+export type VideoStatusResponse = {
+  status: 'queued' | 'running' | 'done' | 'error'
+  error?: string
+}
+
+export type VideoReadiness = Record<VideoProviderId, boolean>
 
 export type ApiError = {
   error: string

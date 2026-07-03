@@ -7,6 +7,7 @@ import type {
   NodePreset,
   PinColor,
   PineNode,
+  VideoProviderId,
 } from './types'
 
 /**
@@ -222,28 +223,36 @@ export const PIN_COLORS: Record<PinColor, string> = {
   purple: '#9B6DF2',
 }
 
-// ---------------- 视频模型示例数据（video-node-tools §7；UI 展示用） ----------------
+// ---------------- 视频模型（真实 provider 映射；调研依据 docs/模型API调研-2026-07.md） ----------------
 
 export type VideoModelInfo = {
   id: string
   name: string
+  /** Worker 端 provider 注册表 id */
+  provider: VideoProviderId
+  /** 各家真实 API Model ID */
+  apiModel: string
   badge?: { text: string; kind: 'new' | 'hot' | 'discount' }
   quality: string
   durationRange: string
   audio?: boolean
-  locked?: boolean
+  /** 支持尾帧参考（首尾帧模式） */
+  lastFrame?: boolean
 }
 
 export const VIDEO_MODELS: VideoModelInfo[] = [
-  { id: 'seedance-1.5-pro', name: 'Seedance 1.5 Pro', quality: '1080P', durationRange: '5-10S', audio: true },
-  { id: 'wan-2.6', name: 'Wan 2.6', quality: '1080P', durationRange: '2-15S', audio: true },
-  { id: 'hailuo-02', name: 'Hailuo-02', quality: '1080P', durationRange: '6-10S' },
-  { id: 'kling-o1', name: 'Kling O1', quality: '1080P', durationRange: '5-10S', locked: true },
-  { id: 'veo-3.1-lite', name: 'VEO3.1-Lite', badge: { text: 'NEW', kind: 'new' }, quality: '1080P', durationRange: '4-8S', locked: true },
-  { id: 'veo-3.1-fast', name: 'VEO3.1-Fast', badge: { text: '6.7折', kind: 'discount' }, quality: '4K', durationRange: '4-8S', audio: true, locked: true },
+  { id: 'seedance-2.0', name: 'Seedance 2.0', provider: 'seedance', apiModel: 'doubao-seedance-2-0-260128', badge: { text: 'NEW', kind: 'new' }, quality: '4K', durationRange: '4-15S', audio: true, lastFrame: true },
+  { id: 'seedance-2.0-fast', name: 'Seedance 2.0 Fast', provider: 'seedance', apiModel: 'doubao-seedance-2-0-fast-260128', quality: '720P', durationRange: '4-15S', audio: true, lastFrame: true },
+  { id: 'seedance-2.0-mini', name: 'Seedance 2.0 Mini', provider: 'seedance', apiModel: 'doubao-seedance-2-0-mini-260615', quality: '720P', durationRange: '4-15S', audio: true, lastFrame: true },
+  { id: 'hailuo-2.3', name: 'Hailuo 2.3', provider: 'minimax', apiModel: 'MiniMax-Hailuo-2.3', badge: { text: '热门', kind: 'hot' }, quality: '1080P', durationRange: '6-10S' },
+  { id: 'hailuo-02', name: 'Hailuo-02 首尾帧', provider: 'minimax', apiModel: 'MiniMax-Hailuo-02', quality: '1080P', durationRange: '6-10S', lastFrame: true },
+  { id: 'wan-2.7', name: 'Wan 2.7', provider: 'wan', apiModel: 'wan2.7-i2v-2026-04-25', quality: '1080P', durationRange: '2-15S', audio: true, lastFrame: true },
+  { id: 'kling-v2-6', name: 'Kling 2.6', provider: 'kling', apiModel: 'kling-v2-6', quality: '1080P', durationRange: '3-10S', audio: true, lastFrame: true },
+  { id: 'veo-3.1-fast', name: 'VEO 3.1 Fast', provider: 'veo', apiModel: 'veo-3.1-fast-generate-preview', quality: '1080P', durationRange: '4-8S', audio: true, lastFrame: true },
 ]
 
-export const DEFAULT_VIDEO_MODEL = 'seedance-1.5-pro'
+/** Seedance 2.0 为主模型（用户指定）；未配 ARK_API_KEY 时选择器与错误信息给接入指引 */
+export const DEFAULT_VIDEO_MODEL = 'seedance-2.0'
 
 // ---------------- 假积分定价（本地模拟，无真实计费） ----------------
 

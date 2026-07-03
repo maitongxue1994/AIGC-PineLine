@@ -1,12 +1,14 @@
-import { useState } from 'react'
-import { Gem, Lock, Volume2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Gem, KeyRound, Volume2 } from 'lucide-react'
 import { VIDEO_MODELS } from '../../nodeCatalog'
+import { useStudioStore } from '../../store'
 import { TOKENS } from '../../designTokens'
 import { Popover } from '../composerKit'
 
 /**
- * 视频模型选择器（video-node-tools §7）：340px，两层行（名称+徽章+锁｜能力胶囊）。
- * 锁定行点击 = 蓝底态 + 解锁提示行（本地无会员体系，仅还原交互）。
+ * 视频模型选择器（video-node-tools §7）：340px，两层行（名称+徽章｜能力胶囊）。
+ * 真实 provider 映射：密钥未配置的行显示 🔑 与接入指引（就绪状态来自
+ * /api/generate/video-status readiness，本地无 Worker 时按未知处理不拦选）。
  */
 export default function VideoModelPicker({
   current,
@@ -15,20 +17,27 @@ export default function VideoModelPicker({
   current: string
   onPick: (id: string) => void
 }) {
-  const [lockHint, setLockHint] = useState<string | null>(null)
+  const readiness = useStudioStore((s) => s.videoReadiness)
+  const loadVideoReadiness = useStudioStore((s) => s.loadVideoReadiness)
+  const [keyHint, setKeyHint] = useState<string | null>(null)
+
+  useEffect(() => {
+    void loadVideoReadiness()
+  }, [loadVideoReadiness])
 
   return (
     <Popover width={340}>
       <div className="p-3">
         {VIDEO_MODELS.map((m) => {
           const active = m.id === current
-          const hinting = lockHint === m.id
+          const needsKey = readiness ? !readiness[m.provider] : false
+          const hinting = keyHint === m.id
           return (
             <div key={m.id}>
               <button
                 onClick={() => {
-                  if (m.locked) {
-                    setLockHint(hinting ? null : m.id)
+                  if (needsKey) {
+                    setKeyHint(hinting ? null : m.id)
                     return
                   }
                   onPick(m.id)
@@ -60,7 +69,7 @@ export default function VideoModelPicker({
                     </span>
                   )}
                   <span className="ml-auto" />
-                  {m.locked && <Lock size={14} style={{ color: '#3F9BF5' }} />}
+                  {needsKey && <KeyRound size={14} style={{ color: '#3F9BF5' }} />}
                 </div>
                 <div className="mt-1.5 flex items-center gap-1.5">
                   <span className="rounded-full px-2.5 py-[3px] text-[12px]" style={{ background: 'rgba(255,255,255,0.07)', color: '#B8B8BF' }}>
@@ -74,11 +83,16 @@ export default function VideoModelPicker({
                       <Volume2 size={11} /> 音频
                     </span>
                   )}
+                  {m.lastFrame && (
+                    <span className="rounded-full px-2.5 py-[3px] text-[12px]" style={{ background: 'rgba(255,255,255,0.07)', color: '#B8B8BF' }}>
+                      首尾帧
+                    </span>
+                  )}
                 </div>
               </button>
               {hinting && (
                 <div className="flex items-center gap-1.5 px-3 py-2 text-[13px]" style={{ color: '#3F9BF5' }}>
-                  <Lock size={12} /> 任意一次付费即可全部解锁（演示环境无会员体系）
+                  <KeyRound size={12} /> 未配置 API Key：见 docs/视频生成接入指南.md
                 </div>
               )}
             </div>

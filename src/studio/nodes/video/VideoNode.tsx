@@ -28,6 +28,21 @@ function fmt(t: number): string {
   return `${t.toFixed(1)}s`
 }
 
+/** 生成中的计时文案：视频异步任务通常 1-5 分钟，给用户明确的进行中反馈 */
+function RunningElapsed() {
+  const [sec, setSec] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setSec((s) => s + 1), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  const label = sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m${sec % 60}s`
+  return (
+    <span className="text-[13px]" style={{ color: TOKENS.textFaint }}>
+      生成中 {label} · 视频生成通常需 1-5 分钟
+    </span>
+  )
+}
+
 /**
  * 视频内容节点（video-node-tools §1）：16:9 播放器卡片。
  * 悬停显示底部播放条；左上静音/收藏；合规蓝勾在外置标签；软剪辑 clamp 到 params.trim。
@@ -260,7 +275,10 @@ function VideoNodeInner({ id, data, selected }: NodeProps<PineNode>) {
           style={{ aspectRatio: '16/9', background: '#1A1A1C' }}
         >
           {running ? (
-            <Loader2 size={22} className="animate-spin" style={{ color: TOKENS.textMuted }} />
+            <>
+              <Loader2 size={22} className="animate-spin" style={{ color: TOKENS.textMuted }} />
+              <RunningElapsed />
+            </>
           ) : data.params.enhance ? (
             <span className="text-[16px]" style={{ color: TOKENS.textMuted }}>
               配置参数生成高清视频

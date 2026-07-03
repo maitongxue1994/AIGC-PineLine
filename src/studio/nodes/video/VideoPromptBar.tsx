@@ -24,7 +24,7 @@ import VideoParamsPopover from './VideoParamsPopover'
  * 视频生成输入栏（video-node-tools §5）：
  * 顶行=焦点编辑/首尾帧参考(⇄交换)/添加参考/＋角色/收起；提示词；
  * 参数行=模型 · 参数聚合胶囊 · 🎤 · 倍数 · 积分+提交。
- * 生成后端接入规划中：提交给出诚实 Toast（runNode 内处理）。
+ * 提交走真实生成链路（runNode video：创建任务→轮询→取件）；⇄ 交换态存 params 供 runNode 读取。
  */
 export default function VideoPromptBar({ id, data }: { id: string; data: PineNodeData }) {
   const setPrompt = useStudioStore((s) => s.setPrompt)
@@ -48,7 +48,6 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
 
   const [openPop, setOpenPop] = useState<'model' | 'params' | null>(null)
   const [collapsed, setCollapsed] = useState(false)
-  const [swapped, setSwapped] = useState(false)
   const textRef = useRef<HTMLTextAreaElement | null>(null)
 
   const { params, status } = data
@@ -59,6 +58,7 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
   const ratioLabel = (params.videoRatio ?? 'auto') === 'auto' ? '自适应' : params.videoRatio
   const durationLabel = `${params.videoDuration ?? 10}s`
 
+  const swapped = params.framesSwapped ?? false
   const orderedFrames = swapped ? [...frames].reverse() : frames
 
   const flash = (msg: string) =>
@@ -105,7 +105,7 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
 
               <button
                 title="交换首/尾帧"
-                onClick={() => setSwapped((v) => !v)}
+                onClick={() => updateNodeParams(id, { framesSwapped: !swapped })}
                 className="shrink-0 transition hover:text-white"
                 style={{ color: TOKENS.textMuted }}
               >
