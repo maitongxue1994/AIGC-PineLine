@@ -17,7 +17,11 @@ export interface VideoCreateReq {
   /** data:image/...;base64, 形式的首/尾帧参考 */
   firstFrame?: string
   lastFrame?: string
-  /** 前端语义时长（5|10 秒），Provider 内部映射到各家档位 */
+  /** 全能参考（多模态参考生视频，仅 Seedance 2.0）：参考图 ≤9 / 参考视频 ≤3 / 参考音频 ≤3 */
+  omniRefs?: string[]
+  omniVideos?: string[]
+  omniAudios?: string[]
+  /** 前端语义时长（秒），Provider 内部映射到各家档位 */
   duration?: number
   /** 16:9 | 9:16 | 1:1 | auto；不支持比例的家跟随首帧 */
   ratio?: string

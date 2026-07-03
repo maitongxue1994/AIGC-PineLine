@@ -44,9 +44,12 @@ export type PinColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple'
 
 /** 视频生成方式（video-node-tools §6） */
 export type VideoMode = 'frames' | 'omni'
-export type VideoRatio = 'auto' | '16:9' | '9:16' | '1:1'
-export type VideoDuration = 5 | 10
-export type VideoResolution = '480p' | '720p' | '1080p'
+/** Seedance 2.0 官方 ratio 枚举（'auto' 映射 API 'adaptive'，仅 2.0/1.5 Pro 支持） */
+export type VideoRatio = 'auto' | '16:9' | '4:3' | '1:1' | '3:4' | '9:16' | '21:9'
+/** Seedance 2.0 时长为 [4,15] 任意整数（默认 5）；旧 5|10 收敛为 number */
+export type VideoDuration = number
+/** '4k' 仅 Seedance 2.0 标准版；'1080p' Fast/Mini 不支持 */
+export type VideoResolution = '480p' | '720p' | '1080p' | '4k'
 /** 视频供应商（与 Worker src/worker/video/types.ts 对齐） */
 export type VideoProviderId = 'seedance' | 'minimax' | 'wan' | 'kling' | 'veo'
 
@@ -100,6 +103,13 @@ export type NodeParams = {
   compliance?: boolean
   /** 视频增强配置 */
   enhance?: { resolution: string; frameRate: string; slowdown: string }
+  // ---- 全能参考（多模态参考生视频，仅 Seedance 2.0 系列）本地上传素材，均 data URL ----
+  /** 参考图（reference_image，最多 9 张） */
+  omniRefs?: string[]
+  /** 参考视频（reference_video，最多 3 段） */
+  omniVideos?: string[]
+  /** 参考音频（reference_audio，最多 3 段） */
+  omniAudios?: string[]
 }
 
 export type PineNodeData = {
@@ -196,6 +206,10 @@ export type VideoCreateRequest = {
   prompt: string
   firstFrame?: string
   lastFrame?: string
+  /** 全能参考（多模态参考）：参考图 ≤9、参考视频 ≤3、参考音频 ≤3（均 data URL） */
+  omniRefs?: string[]
+  omniVideos?: string[]
+  omniAudios?: string[]
   duration?: number
   ratio?: string
   resolution?: string
