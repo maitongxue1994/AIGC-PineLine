@@ -3,6 +3,9 @@ import generateImage from './routes/generateImage'
 import generateStoryboard from './routes/generateStoryboard'
 import generateImageGrid from './routes/generateImageGrid'
 import agentChat from './routes/agentChat'
+import videoCreate from './routes/videoCreate'
+import videoStatus from './routes/videoStatus'
+import videoFile from './routes/videoFile'
 import {
   assertAuth,
   assertBodySize,
@@ -16,6 +19,11 @@ export interface Env extends CoreEnv {
   ASSETS: Fetcher
   MINIMAX_API_KEY: string
   GEMINI_API_KEY: string
+  /** 视频生成可选密钥：缺失时对应 provider 返回接入指引（docs/视频生成接入指南.md） */
+  ARK_API_KEY?: string
+  ARK_BASE_URL?: string
+  DASHSCOPE_API_KEY?: string
+  KLING_API_KEY?: string
 }
 
 const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
@@ -23,6 +31,9 @@ const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
   '/api/generate/image': generateImage,
   '/api/generate/storyboard': generateStoryboard,
   '/api/generate/image-grid': generateImageGrid,
+  '/api/generate/video': videoCreate,
+  '/api/generate/video-status': videoStatus,
+  '/api/generate/video-file': videoFile,
   '/api/agent/chat': agentChat,
 }
 
