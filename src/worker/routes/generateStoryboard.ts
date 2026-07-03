@@ -31,17 +31,36 @@ function manualSplit(text: string, splitter: string): ShotItem[] {
 }
 
 function parseModelJson(raw: string): ShotItem[] {
-  const trimmed = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')
+  // M2.7 推理模型：剥 <think> 段与 markdown 围栏后再找数组
+  const trimmed = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
   const start = trimmed.indexOf('[')
+  if (start < 0) throw new Error('模型未返回 JSON 数组，请重试')
+
+  const attempts: string[] = []
   const end = trimmed.lastIndexOf(']')
-  if (start < 0 || end < 0) throw new Error('模型未返回 JSON 数组')
-  const slice = trimmed.slice(start, end + 1)
-  const parsed = JSON.parse(slice) as Array<Partial<ShotItem>>
-  return parsed.map((x, i) => ({
-    id: x.id?.toString().trim() || `shot-${String(i + 1).padStart(2, '0')}`,
-    title: x.title?.toString().trim() || `分镜 ${i + 1}`,
-    description: x.description?.toString().trim() || '',
-  }))
+  if (end > start) attempts.push(trimmed.slice(start, end + 1))
+  // 输出触顶被截断时抢救：截到最后一个完整对象，手工补闭合
+  const lastObj = trimmed.lastIndexOf('}')
+  if (lastObj > start) attempts.push(`${trimmed.slice(start, lastObj + 1)}]`)
+
+  for (const text of attempts) {
+    try {
+      const parsed = JSON.parse(text) as Array<Partial<ShotItem>>
+      if (!Array.isArray(parsed) || !parsed.length) continue
+      return parsed.map((x, i) => ({
+        id: x.id?.toString().trim() || `shot-${String(i + 1).padStart(2, '0')}`,
+        title: x.title?.toString().trim() || `分镜 ${i + 1}`,
+        description: x.description?.toString().trim() || '',
+      }))
+    } catch {
+      /* 尝试下一种切法 */
+    }
+  }
+  throw new Error('分镜 JSON 解析失败，请重试')
 }
 
 export default function generateStoryboard(req: Request, env: Env): Promise<Response> {
@@ -58,7 +77,10 @@ export default function generateStoryboard(req: Request, env: Env): Promise<Resp
     }
 
     if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
-    const raw = await callMinimaxText(SYSTEM_PROMPT, screenplay, env.MINIMAX_API_KEY)
+    // 长剧本拆 8-10 镜的 JSON 体量大，给足输出预算防截断
+    const raw = await callMinimaxText(SYSTEM_PROMPT, screenplay, env.MINIMAX_API_KEY, {
+      maxTokens: 8192,
+    })
     const shots = parseModelJson(raw)
     return jsonOk({ shots })
   })
