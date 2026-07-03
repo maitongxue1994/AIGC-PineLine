@@ -12,6 +12,12 @@ import Pricing from './pages/Pricing'
 const Studio = lazy(() => import('./pages/Studio'))
 const Projects = lazy(() => import('./pages/Projects'))
 
+// Agentation 注释工具栏：dev 恒开；线上仅当 URL 带 ?agentation=1 时开（隐藏开关，避免普通用户看到）
+const AGENTATION_ENABLED =
+  import.meta.env.DEV ||
+  (typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('agentation'))
+
 function StudioFallback() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-bg-0 text-ink-3">
@@ -55,7 +61,7 @@ export default function App() {
         </Routes>
       </AnimatePresence>
       {!isStudio && <Footer />}
-      {import.meta.env.DEV && <Agentation endpoint="http://localhost:4747" />}
+      {AGENTATION_ENABLED && <Agentation endpoint="http://localhost:4747" />}
     </div>
   )
 }
