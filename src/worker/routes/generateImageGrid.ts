@@ -2,10 +2,13 @@ import { callGeminiImage } from '../gemini'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 
+import type { GeminiAspectRatio, GeminiImageSize } from '../gemini'
+
 type Body = {
   prompts?: string[]
   referenceImages?: string[]
-  aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4'
+  aspectRatio?: GeminiAspectRatio
+  quality?: GeminiImageSize
 }
 
 export default function generateImageGrid(req: Request, env: Env): Promise<Response> {
@@ -25,6 +28,7 @@ export default function generateImageGrid(req: Request, env: Env): Promise<Respo
         callGeminiImage(p, env.GEMINI_API_KEY, {
           referenceImages: body.referenceImages,
           aspectRatio: body.aspectRatio,
+          quality: body.quality,
         }),
       ),
     )

@@ -6,6 +6,8 @@ type Body = {
   brief?: string
   tone?: 'cinematic' | 'commercial' | 'drama' | 'documentary'
   length?: 'short' | 'medium' | 'long'
+  /** 文本预设：script=剧本（默认）/ ad-copy=广告词 / free=自由文本 */
+  preset?: 'script' | 'ad-copy' | 'free'
 }
 
 const TONE_LABEL: Record<NonNullable<Body['tone']>, string> = {
@@ -21,9 +23,28 @@ const LENGTH_SCENES: Record<NonNullable<Body['length']>, number> = {
   long: 5,
 }
 
-function buildSystemPrompt(tone: NonNullable<Body['tone']>, length: NonNullable<Body['length']>) {
-  const scenes = LENGTH_SCENES[length]
+function buildSystemPrompt(
+  preset: NonNullable<Body['preset']>,
+  tone: NonNullable<Body['tone']>,
+  length: NonNullable<Body['length']>,
+) {
   const toneDesc = TONE_LABEL[tone]
+  if (preset === 'ad-copy') {
+    return [
+      '你是一位资深广告文案。请基于用户提供的产品/卖点信息，产出可直接投放的广告词与品牌文案。',
+      `风格：${toneDesc}。`,
+      '输出结构：1) 主标语（≤15字，1-3 条备选）2) 副文案（一段）3) 社媒短文案（1-2 条，带话题标签）。',
+      '只输出文案本身，不要寒暄、不要解释、不要 markdown 标题。',
+    ].join('\n')
+  }
+  if (preset === 'free') {
+    return [
+      '你是一位专业中文写作助手。请按用户要求直接产出文字内容。',
+      `篇幅：${length === 'short' ? '简短' : length === 'long' ? '详尽' : '适中'}。`,
+      '只输出正文，不要寒暄、不要解释、不要 markdown 标题。',
+    ].join('\n')
+  }
+  const scenes = LENGTH_SCENES[length]
   return [
     '你是一位专业影视编剧。请把用户的创意简述改写为完整的剧本（screenplay），交给后续分镜师进一步拆分。',
     `风格：${toneDesc}。请写 ${scenes} 个场次。`,
@@ -45,8 +66,9 @@ export default function generateScript(req: Request, env: Env): Promise<Response
 
     const tone = body.tone ?? 'cinematic'
     const length = body.length ?? 'short'
+    const preset = body.preset ?? 'script'
     const script = await callMinimaxText(
-      buildSystemPrompt(tone, length),
+      buildSystemPrompt(preset, tone, length),
       brief,
       env.MINIMAX_API_KEY,
     )

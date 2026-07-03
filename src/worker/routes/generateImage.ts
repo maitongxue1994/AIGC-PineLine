@@ -2,11 +2,14 @@ import { callGeminiImage } from '../gemini'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 
+import type { GeminiAspectRatio, GeminiImageSize } from '../gemini'
+
 type Body = {
   prompt?: string
   referenceImage?: string
   referenceImages?: string[]
-  aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4'
+  aspectRatio?: GeminiAspectRatio
+  quality?: GeminiImageSize
 }
 
 export default function generateImage(req: Request, env: Env): Promise<Response> {
@@ -20,6 +23,7 @@ export default function generateImage(req: Request, env: Env): Promise<Response>
       referenceImage: body.referenceImage,
       referenceImages: body.referenceImages,
       aspectRatio: body.aspectRatio,
+      quality: body.quality,
     })
     return jsonOk({ image })
   })
