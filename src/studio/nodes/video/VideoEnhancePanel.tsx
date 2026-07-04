@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import { ArrowUp, ChevronDown, X, Zap } from 'lucide-react'
 import { useStudioStore } from '../../store'
 import { SHADOWS, TOKENS } from '../../designTokens'
+import { useDismissable } from '../../hooks/useDismissable'
 import type { PineNodeData } from '../../types'
 
 const RES = ['1080p', '2K', '4K']
@@ -36,8 +37,10 @@ function Dropdown({
   onChange: (v: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  useDismissable(open, () => setOpen(false), () => [rootRef.current])
   return (
-    <div className="relative w-[200px] shrink-0">
+    <div ref={rootRef} className="relative w-[200px] shrink-0">
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between rounded-[12px] border border-white/[0.08] px-3.5 py-2.5 text-[14px] transition hover:border-white/25"

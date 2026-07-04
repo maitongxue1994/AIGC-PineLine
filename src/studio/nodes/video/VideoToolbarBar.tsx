@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { NodeToolbar, Position, useReactFlow } from '@xyflow/react'
 import {
   ArrowLeftRight,
@@ -21,6 +21,7 @@ import { SHADOWS, TOKENS } from '../../designTokens'
 import { downloadDataUrl } from '../shared'
 import { TBtn, ToolbarDivider } from '../NodeToolbarBar'
 import SaveToLibraryDialog from '../../dialogs/SaveToLibraryDialog'
+import { useDismissable } from '../../hooks/useDismissable'
 import type { PinColor, PineNodeData } from '../../types'
 
 function flash(msg: string) {
@@ -97,6 +98,8 @@ export default function VideoToolbarBar({
   const { getNode } = useReactFlow()
 
   const [menu, setMenu] = useState<'frame' | 'more' | 'pin' | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  useDismissable(menu !== null, () => setMenu(null), () => [rootRef.current])
   const [saveOpen, setSaveOpen] = useState(false)
   const pin = data.pin ?? null
 
@@ -146,6 +149,7 @@ export default function VideoToolbarBar({
   return (
     // 下拉一律绝对定位向下展开：容器向上生长会把菜单顶出视口（与 NodeToolbarBar 同修）
     <NodeToolbar position={Position.Top} offset={12} className="relative">
+      <div ref={rootRef} className="contents">
       <div
         className="flex items-center gap-0.5 rounded-full border border-white/[0.07] px-2.5 py-2"
         style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
@@ -307,6 +311,8 @@ export default function VideoToolbarBar({
           ))}
         </div>
       )}
+
+      </div>
 
       {saveOpen && output && (
         <SaveToLibraryDialog

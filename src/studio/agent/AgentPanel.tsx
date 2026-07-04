@@ -18,6 +18,7 @@ import { useStudioStore } from '../store'
 import { activeContent, isImageContent } from '../types'
 import { describeOp } from './types'
 import { SHADOWS, TOKENS } from '../designTokens'
+import { useDismissable } from '../hooks/useDismissable'
 
 /** 右下角 AI 助手入口（⌘J）：图标 + 文案，让功能可被发现 */
 export function AgentLauncher() {
@@ -113,6 +114,10 @@ export default function AgentPanel() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [modeOpen, setModeOpen] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const historyRef = useRef<HTMLDivElement | null>(null)
+  const modeRef = useRef<HTMLDivElement | null>(null)
+  useDismissable(historyOpen, () => setHistoryOpen(false), () => [historyRef.current])
+  useDismissable(modeOpen, () => setModeOpen(false), () => [modeRef.current])
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
   const messages = session?.messages ?? []
@@ -156,7 +161,7 @@ export default function AgentPanel() {
         >
           <Plus size={16} />
         </button>
-        <div className="relative">
+        <div ref={historyRef} className="relative">
           <button
             title="历史对话"
             onClick={() => setHistoryOpen((v) => !v)}
@@ -343,7 +348,7 @@ export default function AgentPanel() {
           style={{ color: TOKENS.textBody }}
         />
         <div className="mt-2 flex items-center gap-2">
-          <div className="relative">
+          <div ref={modeRef} className="relative">
             <button
               onClick={() => setModeOpen((v) => !v)}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] transition hover:bg-white/[0.1]"

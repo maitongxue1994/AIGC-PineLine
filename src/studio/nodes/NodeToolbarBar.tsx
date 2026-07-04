@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import {
   Aperture,
@@ -26,6 +26,7 @@ import { useStudioStore } from '../store'
 import { PIN_COLORS } from '../nodeCatalog'
 import { SHADOWS, TOKENS } from '../designTokens'
 import { downloadDataUrl } from './shared'
+import { useDismissable } from '../hooks/useDismissable'
 import type { NodeKind, PinColor } from '../types'
 
 export type OpsPanelKind = 'angle' | 'inpaint' | 'light' | 'camera'
@@ -110,6 +111,8 @@ export default function NodeToolbarBar({
   const deleteNode = useStudioStore((s) => s.deleteNode)
   const [pinOpen, setPinOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  useDismissable(pinOpen || moreOpen, () => { setPinOpen(false); setMoreOpen(false) }, () => [rootRef.current])
 
   const isImage = kind === 'image'
   const canDownload = !!output
@@ -128,6 +131,7 @@ export default function NodeToolbarBar({
   return (
     // 工具栏容器锚定节点上方；菜单/色板绝对定位向下展开（容器向上生长会冲出视口顶——用户实测反馈）
     <NodeToolbar position={Position.Top} offset={12} className="relative">
+      <div ref={rootRef} className="contents">
       <div
         className="flex items-center gap-0.5 rounded-full border border-white/[0.07] px-2.5 py-2"
         style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
@@ -250,6 +254,7 @@ export default function NodeToolbarBar({
           )}
         </div>
       )}
+      </div>
 
     </NodeToolbar>
   )

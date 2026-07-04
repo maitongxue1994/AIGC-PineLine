@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { Handle, Position, useReactFlow } from '@xyflow/react'
 import { ChevronDown, Plus, Star, X } from 'lucide-react'
 import { useStudioStore } from '../store'
@@ -6,6 +6,7 @@ import { PIN_COLORS } from '../nodeCatalog'
 import { SHADOWS, TOKENS } from '../designTokens'
 import { NodeTitle } from './shared'
 import QuickAddMenu, { type QuickAddChoice } from './QuickAddMenu'
+import { useDismissable } from '../hooks/useDismissable'
 import type { PineNodeData } from '../types'
 
 /**
@@ -54,6 +55,8 @@ export default function NodeShell({
 
   const [quickAdd, setQuickAdd] = useState<{ x: number; y: number; side: 'source' | 'target' } | null>(null)
   const [stripOpen, setStripOpen] = useState(false)
+  const cardRef = useRef<HTMLDivElement | null>(null)
+  useDismissable(stripOpen, () => setStripOpen(false), () => [cardRef.current])
 
   const versions = data.versions
   const stacked = versions.length > 1
@@ -111,7 +114,7 @@ export default function NodeShell({
       </div>
 
       {/* 版本层叠背卡（两层，右下阶梯偏移） */}
-      <div className="relative">
+      <div ref={cardRef} className="relative">
         {/* 连接端口：贴卡片左右边缘的常驻小圆点（edge 端点与节点闭合），可拖出连线 */}
         {hasTarget && (
           <Handle

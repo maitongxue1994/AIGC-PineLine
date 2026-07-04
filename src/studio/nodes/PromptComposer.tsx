@@ -166,7 +166,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
                 <Plus size={20} />
               </button>
               {openPop === 'addref' && (
-                <Popover width={170}>
+                <Popover width={170} onClose={() => setOpenPop(null)}>
                   <div className="p-2">
                     <button
                       onClick={() => { setOpenPop(null); fileRef.current?.click() }}
@@ -224,6 +224,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
               <ModelPickerPopover
                 isImage={isImage}
                 current={isImage ? data.params.imageModel : data.params.textModel}
+                onClose={() => setOpenPop(null)}
                 onPick={(mid) => {
                   updateNodeParams(id, isImage ? { imageModel: mid } : { textModel: mid })
                   setOpenPop(null)
@@ -240,7 +241,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
               <ChevronDown size={13} style={{ color: TOKENS.textMuted }} />
             </Chip>
             {openPop === 'preset' && (
-              <Popover width={240}>
+              <Popover width={240} onClose={() => setOpenPop(null)}>
                 <div className="p-2.5">
                   {presets.map((p) => (
                     <button
@@ -272,7 +273,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
                 {params.aspectRatio ?? '自适应'} · {params.quality ?? '1K'}
               </Chip>
               {openPop === 'ratio' && (
-                <Popover width={340}>
+                <Popover width={340} onClose={() => setOpenPop(null)}>
                   <div className="flex flex-col gap-5 p-[22px]">
                     <div>
                       <div className="mb-2.5 text-[14px] font-semibold" style={{ color: TOKENS.textBody }}>
@@ -346,7 +347,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
                     <ChevronDown size={13} style={{ color: TOKENS.textMuted }} />
                   </Chip>
                   {openPop === 'tone' && (
-                    <Popover width={160}>
+                    <Popover width={160} onClose={() => setOpenPop(null)}>
                       <div className="p-2">
                         {Object.entries(toneLabel).map(([v, label]) => (
                           <button
@@ -372,7 +373,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
                   <ChevronDown size={13} style={{ color: TOKENS.textMuted }} />
                 </Chip>
                 {openPop === 'length' && (
-                  <Popover width={110}>
+                  <Popover width={110} onClose={() => setOpenPop(null)}>
                     <div className="p-2">
                       {Object.entries(lengthLabel).map(([v, label]) => (
                         <button
@@ -458,7 +459,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
                   <span className="font-semibold">{params.batch ?? 1}×</span>
                 </Chip>
                 {openPop === 'batch' && (
-                  <Popover width={96}>
+                  <Popover width={96} onClose={() => setOpenPop(null)}>
                     <div className="flex flex-col gap-1 p-2">
                       {[4, 2, 1].map((b) => (
                         <button
@@ -530,10 +531,12 @@ function ModelPickerPopover({
   isImage,
   current,
   onPick,
+  onClose,
 }: {
   isImage: boolean
   current?: string
   onPick: (id: string) => void
+  onClose?: () => void
 }) {
   const readiness = useStudioStore((s) => s.videoReadiness)
   const loadVideoReadiness = useStudioStore((s) => s.loadVideoReadiness)
@@ -545,7 +548,7 @@ function ModelPickerPopover({
   const arkReady = readiness ? readiness.seedance : true
 
   return (
-    <Popover width={260}>
+    <Popover width={260} onClose={onClose}>
       <div className="p-2.5">
         {models.map((m) => {
           const isDefault = m.provider !== 'ark'

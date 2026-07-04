@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Box, FileText, Image as ImageIcon, SlidersHorizontal, Video } from 'lucide-react'
 import { SHADOWS, TOKENS } from '../designTokens'
+import { useDismissable } from '../hooks/useDismissable'
 import type { NodeKind, NodePreset } from '../types'
 
 export type QuickAddChoice = { kind: NodeKind; preset: NodePreset | null }
@@ -26,6 +27,7 @@ export default function QuickAddMenu({
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: x, top: y })
+  useDismissable(true, onClose, () => [ref.current])
 
   useLayoutEffect(() => {
     const el = ref.current

@@ -22,7 +22,15 @@ const ALL_RESOLUTIONS: VideoResolution[] = ['480p', '720p', '1080p', '4k']
  * Seedance 2.0 官方对齐：全能参考仅 2.0 系列；比例 7 值；清晰度 480p~4k 按模型禁用；时长 [min,max] 滑块。
  * 参数变化即时换算积分（由 PromptBar 的 estimateCost 显示）。
  */
-export default function VideoParamsPopover({ id, data }: { id: string; data: PineNodeData }) {
+export default function VideoParamsPopover({
+  id,
+  data,
+  onClose,
+}: {
+  id: string
+  data: PineNodeData
+  onClose?: () => void
+}) {
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
   const { params } = data
   const mode: VideoMode = params.videoMode ?? 'frames'
@@ -41,7 +49,7 @@ export default function VideoParamsPopover({ id, data }: { id: string; data: Pin
   const audioOn = params.videoAudio ?? true
 
   return (
-    <Popover width={320}>
+    <Popover width={320} onClose={onClose}>
       <div className="flex flex-col gap-[18px] p-[22px]">
         {/* 生成方式 */}
         <div>

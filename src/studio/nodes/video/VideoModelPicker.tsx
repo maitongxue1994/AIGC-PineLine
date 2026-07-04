@@ -13,9 +13,11 @@ import { Popover } from '../composerKit'
 export default function VideoModelPicker({
   current,
   onPick,
+  onClose,
 }: {
   current: string
   onPick: (id: string) => void
+  onClose?: () => void
 }) {
   const readiness = useStudioStore((s) => s.videoReadiness)
   const loadVideoReadiness = useStudioStore((s) => s.loadVideoReadiness)
@@ -26,7 +28,7 @@ export default function VideoModelPicker({
   }, [loadVideoReadiness])
 
   return (
-    <Popover width={340}>
+    <Popover width={340} onClose={onClose}>
       <div className="p-3">
         {VIDEO_MODELS.map((m) => {
           const active = m.id === current

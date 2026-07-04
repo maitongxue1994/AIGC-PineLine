@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Download, MoreHorizontal, RotateCcw, Share2, Sparkles, Upload, Zap } from 'lucide-react'
 import { useStudioStore } from './store'
 import { TOKENS } from './designTokens'
+import { useDismissable } from './hooks/useDismissable'
 
 /**
  * 悬浮透明顶栏（设计稿 §07）：
@@ -172,8 +173,10 @@ function MoreMenu() {
   const item =
     'flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-left text-[14px] transition hover:bg-white/[0.06]'
 
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  useDismissable(open, () => setOpen(false), () => [menuRef.current])
   return (
-    <div className="relative">
+    <div ref={menuRef} className="relative">
       <button
         title="更多"
         onClick={() => setOpen((v) => !v)}

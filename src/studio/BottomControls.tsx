@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { useReactFlow, useViewport } from '@xyflow/react'
 import { HelpCircle, Magnet, Map, Scan, X } from 'lucide-react'
 import { useUIStore } from './uiStore'
+import { useDismissable } from './hooks/useDismissable'
 import { SHADOWS, TOKENS } from './designTokens'
 
 /** 画布缩放范围：必须与 StudioCanvas 的 <ReactFlow minZoom/maxZoom> 一致，
@@ -56,6 +57,8 @@ export default function BottomControls() {
   const setHelpOpen = useUIStore((s) => s.setHelpOpen)
   const { fitView, zoomTo } = useReactFlow()
   const { zoom } = useViewport()
+  const helpRef = useRef<HTMLDivElement | null>(null)
+  useDismissable(helpOpen, () => setHelpOpen(false), () => [helpRef.current])
 
   // 滑杆用对数刻度：小缩放段更细腻
   const sliderVal = Math.log(zoom / MIN_ZOOM) / Math.log(MAX_ZOOM / MIN_ZOOM)
@@ -98,7 +101,7 @@ export default function BottomControls() {
         </div>
       </div>
 
-      <div className="pointer-events-auto relative">
+      <div ref={helpRef} className="pointer-events-auto relative">
         <button
           title="帮助"
           onClick={() => setHelpOpen(!helpOpen)}

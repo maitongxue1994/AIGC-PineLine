@@ -407,6 +407,7 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
             </Chip>
             {openPop === 'model' && (
               <VideoModelPicker
+                onClose={() => setOpenPop(null)}
                 current={params.videoModel ?? model.id}
                 onPick={(mid) => {
                   // 切模型时修正不被新模型支持的分辨率/时长/生成方式，避免发出非法参数
@@ -444,7 +445,9 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
             >
               {modeLabel} · {ratioLabel} · {resLabel} · {durationLabel}
             </button>
-            {openPop === 'params' && <VideoParamsPopover id={id} data={data} />}
+            {openPop === 'params' && (
+              <VideoParamsPopover id={id} data={data} onClose={() => setOpenPop(null)} />
+            )}
           </div>
 
           <span className="flex-1" />
