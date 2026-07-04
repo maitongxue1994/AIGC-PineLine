@@ -1,9 +1,90 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { SHADOWS, TOKENS } from '../designTokens'
 import { useDismissable } from '../hooks/useDismissable'
 
 /** 生成输入栏共用件（图片 PromptComposer 与视频 VideoPromptBar 共用） */
+
+/**
+ * 半受控输入核心：DOM 不绑定 value（非受控 defaultValue），聚焦编辑期间 DOM 是唯一事实源。
+ *
+ * 背景：节点提示词的 value 走「zustand → ReactFlow nodes prop → RF 内部 store（layout-effect
+ * 同步）→ data prop 回流」的异步链，受控写法下每次击键都会带着陈旧值先渲染一次，React 把
+ * DOM value 强制回滚旧文本再写新文本——程序化赋值会杀掉 IME 合成会话（macOS Option 长按 /
+ * 语音听写乱串），整串重写还会把光标甩到末尾。
+ *
+ * 方案：外部 value 变化只在「元素未聚焦且 DOM 值确实不同」时用 ref 直写 DOM（生成结果回填、
+ * 切换版本仍然生效）；聚焦期间任何陈旧渲染都不再触碰 DOM → IME 合成不被打断、光标永不跳。
+ * onBlur 时兜底同步一次（覆盖「聚焦期间外部写入」的罕见分歧）。
+ */
+function useDomValueSync<T extends HTMLInputElement | HTMLTextAreaElement>(value: string) {
+  const ref = useRef<T | null>(null)
+  const latest = useRef(value)
+  useEffect(() => {
+    latest.current = value
+    const el = ref.current
+    if (el && document.activeElement !== el && el.value !== value) el.value = value
+  }, [value])
+  return { ref, latest }
+}
+
+type SyncFieldProps<E extends HTMLElement> = {
+  value: string
+  onValueChange: (v: string) => void
+} & Omit<React.TextareaHTMLAttributes<E> & React.InputHTMLAttributes<E>, 'value' | 'defaultValue' | 'onChange'>
+
+/** 半受控 textarea（IME/光标安全，见 useDomValueSync） */
+export const SyncTextarea = forwardRef<HTMLTextAreaElement, SyncFieldProps<HTMLTextAreaElement>>(
+  function SyncTextarea({ value, onValueChange, onBlur, ...rest }, forwarded) {
+    const { ref, latest } = useDomValueSync<HTMLTextAreaElement>(value)
+    // ref 是稳定的 useRef 对象（出自自定义 hook，lint 识别不到稳定性），handle 仍只建一次
+    useImperativeHandle(forwarded, () => ref.current!, [ref])
+    return (
+      <textarea
+        {...rest}
+        ref={ref}
+        defaultValue={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        onBlur={(e) => {
+          const el = e.currentTarget
+          if (el.value !== latest.current) el.value = latest.current
+          onBlur?.(e)
+        }}
+      />
+    )
+  },
+)
+
+/** 半受控 input（IME/光标安全，见 useDomValueSync） */
+export const SyncInput = forwardRef<HTMLInputElement, SyncFieldProps<HTMLInputElement>>(
+  function SyncInput({ value, onValueChange, onBlur, ...rest }, forwarded) {
+    const { ref, latest } = useDomValueSync<HTMLInputElement>(value)
+    // 同上：ref 稳定，handle 只建一次
+    useImperativeHandle(forwarded, () => ref.current!, [ref])
+    return (
+      <input
+        {...rest}
+        ref={ref}
+        defaultValue={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        onBlur={(e) => {
+          const el = e.currentTarget
+          if (el.value !== latest.current) el.value = latest.current
+          onBlur?.(e)
+        }}
+      />
+    )
+  },
+)
 
 /** 参数 chip（设计稿 §04：padding 8/12、radius 12、15px 文字、hover 白 6%） */
 export function Chip({

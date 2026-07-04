@@ -20,7 +20,7 @@ import {
 import { useStudioStore } from '../../store'
 import { estimateCost, VIDEO_MODELS, VIDEO_PROMPT_MAX_CHARS } from '../../nodeCatalog'
 import { SHADOWS, TOKENS } from '../../designTokens'
-import { Chip, VDivider } from '../composerKit'
+import { Chip, SyncTextarea, VDivider } from '../composerKit'
 import { isImageContent, type NodeParams, type PineNodeData } from '../../types'
 import VideoModelPicker from './VideoModelPicker'
 import VideoParamsPopover from './VideoParamsPopover'
@@ -366,9 +366,9 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
               </button>
             </div>
 
-            {/* 提示词（可展开大编辑器；硬上限 2000，Seedance 官方建议中文 ≤500 字） */}
+            {/* 提示词（半受控 SyncTextarea，IME/光标安全；可展开大编辑器；硬上限 2000，Seedance 官方建议中文 ≤500 字） */}
             <div className="group/prompt relative">
-              <textarea
+              <SyncTextarea
                 ref={textRef}
                 value={data.prompt}
                 placeholder={
@@ -377,23 +377,26 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
                     : '描述镜头运动与画面变化，或连线上游图片作首尾帧参考'
                 }
                 maxLength={VIDEO_PROMPT_MAX_CHARS}
-                onChange={(e) => setPrompt(id, e.target.value)}
+                onValueChange={(v) => setPrompt(id, v)}
                 onMouseDown={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
-                className="nowheel min-h-[48px] w-full resize-none bg-transparent pr-8 text-[15px] leading-[1.7] outline-none"
+                className={`nowheel min-h-[48px] w-full resize-none bg-transparent pr-12 text-[15px] leading-[1.7] outline-none ${
+                  data.prompt.length >= 500 ? 'pb-6' : ''
+                }`}
                 style={{ color: TOKENS.textBody }}
               />
+              {/* right-4 让出滚动条带，半透明胶囊压在文字上仍可辨识 */}
               <button
                 title="展开编辑器"
                 onClick={() => setEditorOpen(true)}
-                className="absolute right-0 top-0 rounded-[8px] p-1.5 opacity-0 transition hover:bg-white/[0.08] group-hover/prompt:opacity-100"
+                className="absolute right-4 top-1 rounded-[8px] bg-black/50 p-1.5 opacity-0 backdrop-blur-sm transition hover:bg-white/[0.14] group-hover/prompt:opacity-100"
                 style={{ color: TOKENS.textMuted }}
               >
                 <Maximize2 size={14} />
               </button>
               {data.prompt.length >= 500 && (
                 <span
-                  className="absolute bottom-0 right-0 text-[11px] tabular-nums"
+                  className="absolute bottom-1 right-4 rounded-[6px] bg-black/50 px-1.5 py-0.5 text-[11px] tabular-nums backdrop-blur-sm"
                   title="Seedance 官方建议：中文提示词 ≤500 字，过长易被模型忽略细节"
                   style={{ color: '#E8A33D' }}
                 >

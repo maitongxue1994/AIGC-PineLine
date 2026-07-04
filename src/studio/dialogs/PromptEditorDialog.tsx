@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { SHADOWS, TOKENS } from '../designTokens'
+import { SyncTextarea } from '../nodes/composerKit'
 
 /**
  * 提示词展开编辑器（body Portal 模态，z-[80]）：
@@ -67,12 +68,13 @@ export default function PromptEditorDialog({
           </button>
         </div>
 
-        <textarea
+        {/* 半受控（SyncTextarea）：value 经 store→RF→data 异步回流，受控写法会整串重写把光标甩到末尾 */}
+        <SyncTextarea
           ref={focusRef}
           value={value}
           placeholder={placeholder}
           maxLength={maxLength}
-          onChange={(e) => onChange(e.target.value)}
+          onValueChange={onChange}
           className="min-h-[320px] flex-1 resize-none bg-transparent px-5 py-4 text-[15px] leading-[1.8] outline-none"
           style={{ color: TOKENS.textBody }}
         />

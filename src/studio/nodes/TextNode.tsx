@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Clapperboard, FileText, Loader2, Play, X } from 'lucide-react'
+import { Clapperboard, FileText, Loader2, Maximize2, Play, X } from 'lucide-react'
 import { useStudioStore } from '../store'
 import { activeContent, type PineNode, type ShotItem } from '../types'
 import { presetMeta } from '../nodeCatalog'
@@ -8,6 +8,8 @@ import { TOKENS } from '../designTokens'
 import NodeShell from './NodeShell'
 import NodeToolbarBar from './NodeToolbarBar'
 import PromptComposer from './PromptComposer'
+import PromptEditorDialog from '../dialogs/PromptEditorDialog'
+import { SyncTextarea } from './composerKit'
 
 const CARD_W = 340
 
@@ -183,6 +185,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
  */
 function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
   const updateActiveContent = useStudioStore((s) => s.updateActiveContent)
+  const [editorOpen, setEditorOpen] = useState(false)
 
   const meta = presetMeta(data.preset)
   const output = activeContent(data)
@@ -235,14 +238,38 @@ function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
             <ShotDerivePanel key={shots.length} id={id} shots={shots} />
           </>
         ) : output != null ? (
-          <textarea
-            value={output}
-            onChange={(e) => updateActiveContent(id, e.target.value)}
-            onMouseDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            className="nodrag nowheel block h-[240px] w-full resize-none bg-transparent p-4 text-[13px] leading-relaxed outline-none"
-            style={{ color: TOKENS.textBody }}
-          />
+          <div className="group/body relative">
+            {/* 半受控（SyncTextarea）：正文同样走 store→RF→data 异步回流链，受控写法会杀 IME/甩光标 */}
+            <SyncTextarea
+              value={output}
+              onValueChange={(v) => updateActiveContent(id, v)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              className="nodrag nowheel block h-[240px] w-full resize-none bg-transparent p-4 pr-9 text-[13px] leading-relaxed outline-none"
+              style={{ color: TOKENS.textBody }}
+            />
+            <button
+              title="展开编辑器"
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditorOpen(true)
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="nodrag absolute right-4 top-1.5 rounded-[8px] bg-black/50 p-1.5 opacity-0 backdrop-blur-sm transition hover:bg-white/[0.14] group-hover/body:opacity-100"
+              style={{ color: TOKENS.textMuted }}
+            >
+              <Maximize2 size={13} />
+            </button>
+            {editorOpen && (
+              <PromptEditorDialog
+                title={`${data.title} · 正文`}
+                value={output}
+                maxLength={20000}
+                onChange={(v) => updateActiveContent(id, v)}
+                onClose={() => setEditorOpen(false)}
+              />
+            )}
+          </div>
         ) : (
           <div
             className="flex h-[120px] items-center justify-center px-6 text-center text-[12px] leading-relaxed"

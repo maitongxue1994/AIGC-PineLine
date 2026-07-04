@@ -25,7 +25,7 @@ import {
   TEXT_PRESETS,
 } from '../nodeCatalog'
 import { SHADOWS, TOKENS } from '../designTokens'
-import { Chip, Popover, VDivider } from './composerKit'
+import { Chip, Popover, SyncInput, SyncTextarea, VDivider } from './composerKit'
 import AssetPickerDialog from '../dialogs/AssetPickerDialog'
 import PromptEditorDialog from '../dialogs/PromptEditorDialog'
 import {
@@ -99,10 +99,11 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
   const canBatch = preset === 'single' || preset === 'shot'
   const presets = isImage ? IMAGE_PRESETS : TEXT_PRESETS
 
-  const node = useStudioStore((s) => s.nodes.find((n) => n.id === id))
-
   // 参考图落为素材节点（放在本节点左侧）并自动连线
+  // 注意：不要在此订阅 s.nodes.find(...)——每次击键都会返回新引用触发陈旧渲染
+  // （IME 乱码根因之一），节点位置在回调里现取即可。
   const attachRef = (dataUrl: string) => {
+    const node = useStudioStore.getState().nodes.find((n) => n.id === id)
     if (!node) return
     const assetId = addAssetNode(dataUrl, {
       x: node.position.x - 320,
@@ -193,33 +194,42 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAddRef} />
         </div>
 
-        {/* 中区：提示词（可展开大编辑器；按 preset 限字数，剧本/分镜不限） */}
+        {/* 中区：提示词（半受控 SyncTextarea，IME/光标安全；可展开大编辑器；按 preset 限字数，剧本/分镜不限） */}
         <div className="group/prompt relative">
-          <textarea
+          <SyncTextarea
             ref={textRef}
             value={data.prompt}
             placeholder={meta?.promptPlaceholder ?? '描述任何你想要生成的内容'}
             maxLength={meta?.maxChars}
-            onChange={(e) => setPrompt(id, e.target.value)}
+            onValueChange={(v) => setPrompt(id, v)}
             onMouseDown={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
               e.stopPropagation()
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !running) runNode(id)
+              if (
+                (e.metaKey || e.ctrlKey) &&
+                e.key === 'Enter' &&
+                !e.nativeEvent.isComposing &&
+                !running
+              )
+                runNode(id)
             }}
-            className="nowheel min-h-[52px] w-full resize-none bg-transparent pr-8 text-[16px] leading-relaxed outline-none"
+            className={`nowheel min-h-[52px] w-full resize-none bg-transparent pr-12 text-[16px] leading-relaxed outline-none ${
+              meta?.maxChars && data.prompt.length >= meta.maxChars * 0.8 ? 'pb-6' : ''
+            }`}
             style={{ color: TOKENS.textBody }}
           />
+          {/* right-4 让出滚动条带，半透明胶囊压在文字上仍可辨识 */}
           <button
             title="展开编辑器"
             onClick={() => setEditorOpen(true)}
-            className="absolute right-0 top-0 rounded-[8px] p-1.5 opacity-0 transition hover:bg-white/[0.08] group-hover/prompt:opacity-100"
+            className="absolute right-4 top-1 rounded-[8px] bg-black/50 p-1.5 opacity-0 backdrop-blur-sm transition hover:bg-white/[0.14] group-hover/prompt:opacity-100"
             style={{ color: TOKENS.textMuted }}
           >
             <Maximize2 size={14} />
           </button>
           {meta?.maxChars && data.prompt.length >= meta.maxChars * 0.8 && (
             <span
-              className="absolute bottom-0 right-0 text-[11px] tabular-nums"
+              className="pointer-events-none absolute bottom-1 right-4 rounded-[6px] bg-black/50 px-1.5 py-0.5 text-[11px] tabular-nums backdrop-blur-sm"
               style={{ color: '#E8A33D' }}
             >
               {data.prompt.length} / {meta.maxChars}
@@ -449,10 +459,10 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
                 {(params.splitMode ?? 'auto') === 'auto' ? '自动拆分' : '分隔符'}
               </Chip>
               {params.splitMode === 'manual' && (
-                <input
+                <SyncInput
                   value={params.splitter ?? ''}
                   placeholder="分隔符"
-                  onChange={(e) => updateNodeParams(id, { splitter: e.target.value })}
+                  onValueChange={(v) => updateNodeParams(id, { splitter: v })}
                   onMouseDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                   className="w-20 rounded-[12px] bg-white/[0.07] px-2.5 py-2 text-[13px] outline-none"
