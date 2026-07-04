@@ -4,8 +4,10 @@ import { HelpCircle, Magnet, Map, Scan, X } from 'lucide-react'
 import { useUIStore } from './uiStore'
 import { SHADOWS, TOKENS } from './designTokens'
 
-const MIN_ZOOM = 0.1
-const MAX_ZOOM = 2
+/** 画布缩放范围：必须与 StudioCanvas 的 <ReactFlow minZoom/maxZoom> 一致，
+ * 否则 zoomTo 被库 clamp、滑块回弹（曾导致滑块拖不到 50% 以下） */
+export const MIN_ZOOM = 0.1
+export const MAX_ZOOM = 2
 
 /** 控制条按钮：34px 圆钮 + 上方即时黑胶囊 tooltip（原生 title 延迟长且被小地图遮挡） */
 function CtrlBtn({

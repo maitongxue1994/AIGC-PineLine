@@ -20,6 +20,7 @@ import AssetNode from './nodes/AssetNode'
 import VideoNode from './nodes/video/VideoNode'
 import NodePaletteMenu, { type PaletteChoice } from './NodePaletteMenu'
 import CanvasContextMenu from './CanvasContextMenu'
+import { MIN_ZOOM, MAX_ZOOM } from './BottomControls'
 
 const nodeTypes: NodeTypes = {
   text: TextNode,
@@ -402,6 +403,9 @@ export default function StudioCanvas() {
         }}
         fitView
         fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+        // 与 BottomControls 滑块常量对齐（库默认 minZoom 0.5 会让滑块左半段回弹）
+        minZoom={MIN_ZOOM}
+        maxZoom={MAX_ZOOM}
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
         zoomOnDoubleClick={false}
