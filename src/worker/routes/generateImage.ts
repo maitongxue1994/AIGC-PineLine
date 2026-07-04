@@ -22,21 +22,21 @@ export default function generateImage(req: Request, env: Env): Promise<Response>
     if (!prompt) return jsonError('prompt 不能为空')
 
     if (isArkModel(body.model)) {
-      const image = await callSeedreamImage(body.model!, prompt, env.ARK_API_KEY ?? '', {
+      const { image, requestId } = await callSeedreamImage(body.model!, prompt, env.ARK_API_KEY ?? '', {
         referenceImages: body.referenceImages ?? (body.referenceImage ? [body.referenceImage] : []),
         aspectRatio: body.aspectRatio,
         quality: body.quality,
       })
-      return jsonOk({ image })
+      return jsonOk({ image, ...(requestId ? { requestId } : {}) })
     }
 
     if (!env.GEMINI_API_KEY) return jsonError('服务端未配置 GEMINI_API_KEY', 500)
-    const image = await callGeminiImage(prompt, env.GEMINI_API_KEY, {
+    const { image, requestId } = await callGeminiImage(prompt, env.GEMINI_API_KEY, {
       referenceImage: body.referenceImage,
       referenceImages: body.referenceImages,
       aspectRatio: body.aspectRatio,
       quality: body.quality,
     })
-    return jsonOk({ image })
-  })
+    return jsonOk({ image, ...(requestId ? { requestId } : {}) })
+  }, '/api/generate/image')
 }

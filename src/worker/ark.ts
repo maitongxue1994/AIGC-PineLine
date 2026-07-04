@@ -1,4 +1,4 @@
-import { PineHttpError, fetchWithTimeout } from './utils'
+import { PineHttpError, fetchWithRetry, fetchWithTimeout, pushGenLog, upstreamRequestId } from './utils'
 
 /**
  * 火山方舟通用通道（与 Seedance 视频共用 ARK_API_KEY）：
@@ -30,19 +30,25 @@ export function isArkModel(model?: string): boolean {
 
 // ---------------- 豆包 Seed 语言模型 ----------------
 
+export type ArkChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
+
 type ArkChatResponse = {
-  choices?: Array<{ message?: { content?: string } }>
+  choices?: Array<{ message?: { content?: string; reasoning_content?: string } }>
   error?: { message?: string }
 }
 
-export async function callArkText(
+/**
+ * 多轮对话通道（Agent 编排等）：接收完整 messages[]，OpenAI 兼容 chat/completions。
+ * 额外带出 Seed 推理模型的思考过程（与 callMinimaxChatFull 同形）。
+ */
+export async function callArkChat(
   model: string,
-  systemPrompt: string,
-  userPrompt: string,
+  messages: ArkChatMessage[],
   apiKey: string,
   opts: { temperature?: number; maxTokens?: number; baseUrl?: string } = {},
-): Promise<string> {
+): Promise<{ content: string; reasoning?: string }> {
   const key = requireArkKey(apiKey)
+  const started = Date.now()
   const res = await fetchWithTimeout(
     `${arkBase(opts.baseUrl)}/api/v3/chat/completions`,
     {
@@ -50,10 +56,7 @@ export async function callArkText(
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
+        messages,
         temperature: opts.temperature ?? 0.7,
         max_tokens: opts.maxTokens ?? 4096,
       }),
@@ -61,12 +64,51 @@ export async function callArkText(
     // Seed 2.0 亦为推理系模型，长文预算与 MiniMax 对齐
     150_000,
   )
+  const requestId = upstreamRequestId(res)
+  const fail: (message: string) => never = (message) => {
+    pushGenLog({
+      ts: started,
+      path: 'upstream:ark-text',
+      ok: false,
+      status: res.status,
+      ms: Date.now() - started,
+      error: message.slice(0, 300),
+      ...(requestId ? { requestId } : {}),
+      model,
+      note: (messages[messages.length - 1]?.content ?? '').slice(0, 80),
+    })
+    throw new Error(requestId ? `${message}（request-id: ${requestId}）` : message)
+  }
   const json = (await res.json().catch(() => null)) as ArkChatResponse | null
   if (!res.ok) {
-    throw new Error(`豆包 HTTP ${res.status}: ${json?.error?.message ?? ''}`.trim())
+    fail(`豆包 HTTP ${res.status}: ${json?.error?.message ?? ''}`.trim())
   }
-  const content = json?.choices?.[0]?.message?.content
-  if (!content) throw new Error('豆包未返回内容')
+  const message = json?.choices?.[0]?.message
+  const content = message?.content
+  if (!content) fail('豆包未返回内容')
+  return {
+    content,
+    ...(message?.reasoning_content ? { reasoning: message.reasoning_content } : {}),
+  }
+}
+
+/** system+user 两段的薄封装（剧本/分镜等单轮文本生成沿用） */
+export async function callArkText(
+  model: string,
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  opts: { temperature?: number; maxTokens?: number; baseUrl?: string } = {},
+): Promise<string> {
+  const { content } = await callArkChat(
+    model,
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    apiKey,
+    opts,
+  )
   return content
 }
 
@@ -102,6 +144,8 @@ type ArkImageResponse = {
   error?: { message?: string }
 }
 
+export type SeedreamImageResult = { image: string; requestId?: string }
+
 export async function callSeedreamImage(
   model: string,
   prompt: string,
@@ -112,7 +156,7 @@ export async function callSeedreamImage(
     quality?: string
     baseUrl?: string
   } = {},
-): Promise<string> {
+): Promise<SeedreamImageResult> {
   const key = requireArkKey(apiKey)
   const body: Record<string, unknown> = {
     model,
@@ -125,32 +169,49 @@ export async function callSeedreamImage(
   const refs = (opts.referenceImages ?? []).filter(Boolean).slice(0, 14)
   if (refs.length) body.image = refs.length === 1 ? refs[0] : refs
 
-  const res = await fetchWithTimeout(
+  const started = Date.now()
+  const res = await fetchWithRetry(
     `${arkBase(opts.baseUrl)}/api/v3/images/generations`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify(body),
     },
-    120_000,
+    // 同步生图偶发慢（尤其 4K/多参考图），120s 仍见超时 → 提到 180s
+    180_000,
   )
+  const requestId = upstreamRequestId(res)
+  const fail: (status: number, message: string) => never = (status, message) => {
+    pushGenLog({
+      ts: started,
+      path: 'upstream:seedream',
+      ok: false,
+      status,
+      ms: Date.now() - started,
+      error: message.slice(0, 300),
+      ...(requestId ? { requestId } : {}),
+      model,
+      note: prompt.slice(0, 80),
+    })
+    throw new Error(requestId ? `${message}（request-id: ${requestId}）` : message)
+  }
   const json = (await res.json().catch(() => null)) as ArkImageResponse | null
   if (!res.ok) {
-    throw new Error(`Seedream HTTP ${res.status}: ${json?.error?.message ?? ''}`.trim())
+    fail(res.status, `Seedream HTTP ${res.status}: ${json?.error?.message ?? ''}`.trim())
   }
   const item = json?.data?.[0]
-  if (item?.b64_json) return `data:image/jpeg;base64,${item.b64_json}`
+  if (item?.b64_json) return { image: `data:image/jpeg;base64,${item.b64_json}`, requestId }
   // 兜底：个别档位仅回 URL 时由 Worker 取回转 base64（URL 有时效，不下发前端）
   if (item?.url) {
     const img = await fetchWithTimeout(item.url, {}, 60_000)
-    if (!img.ok) throw new Error(`Seedream 图片下载失败（HTTP ${img.status}）`)
+    if (!img.ok) fail(img.status, `Seedream 图片下载失败（HTTP ${img.status}）`)
     const buf = new Uint8Array(await img.arrayBuffer())
     let bin = ''
     const CHUNK = 0x8000
     for (let i = 0; i < buf.length; i += CHUNK) {
       bin += String.fromCharCode(...buf.subarray(i, i + CHUNK))
     }
-    return `data:image/jpeg;base64,${btoa(bin)}`
+    return { image: `data:image/jpeg;base64,${btoa(bin)}`, requestId }
   }
-  throw new Error('Seedream 未返回图片')
+  fail(res.status, 'Seedream 未返回图片')
 }

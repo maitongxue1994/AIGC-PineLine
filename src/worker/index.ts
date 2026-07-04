@@ -7,6 +7,7 @@ import videoCreate from './routes/videoCreate'
 import videoStatus from './routes/videoStatus'
 import videoFile from './routes/videoFile'
 import videoTasks from './routes/videoTasks'
+import debugLogs from './routes/debugLogs'
 import {
   assertAuth,
   assertBodySize,
@@ -37,6 +38,8 @@ const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
   '/api/generate/video-file': videoFile,
   '/api/generate/video-tasks': videoTasks,
   '/api/agent/chat': agentChat,
+  // 生成日志自查（内存环形缓冲，best-effort；持久日志在 Cloudflare Workers Logs）
+  '/api/debug/logs': debugLogs,
 }
 
 function isApiPath(p: string): boolean {

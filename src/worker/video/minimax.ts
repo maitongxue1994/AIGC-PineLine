@@ -1,4 +1,4 @@
-import { PineHttpError, fetchWithTimeout } from '../utils'
+import { PineHttpError, fetchWithRetry, pushGenLog } from '../utils'
 import type { VideoCreateReq, VideoEnv, VideoProvider, VideoTaskStatus } from './types'
 
 /**
@@ -64,31 +64,59 @@ export const minimax: VideoProvider = {
     if (req.firstFrame) body.first_frame_image = req.firstFrame
     if (req.lastFrame) body.last_frame_image = req.lastFrame
 
-    const res = await fetchWithTimeout(`${BASE}/v1/video_generation`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify(body),
-    })
+    const started = Date.now()
+    const res = await fetchWithRetry(
+      `${BASE}/v1/video_generation`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify(body),
+      },
+      60_000,
+    )
     const data = (await res.json().catch(() => null)) as
       | { task_id?: string; base_resp?: BaseResp }
       | null
     if (!res.ok || !data?.task_id || (data.base_resp?.status_code ?? 0) !== 0) {
-      throw new PineHttpError(502, `MiniMax 创建任务失败：${errText(data?.base_resp)}`)
+      const msg = `MiniMax 创建任务失败：${errText(data?.base_resp)}`
+      pushGenLog({
+        ts: started,
+        path: 'upstream:minimax-video-create',
+        ok: false,
+        status: res.status,
+        ms: Date.now() - started,
+        error: msg.slice(0, 300),
+        model,
+        note: req.prompt.slice(0, 80),
+      })
+      throw new PineHttpError(502, msg)
     }
     return { taskId: data.task_id }
   },
 
   async query(taskId: string, env: VideoEnv): Promise<VideoTaskStatus> {
     const key = requireKey(env)
-    const res = await fetchWithTimeout(
+    const started = Date.now()
+    const res = await fetchWithRetry(
       `${BASE}/v1/query/video_generation?task_id=${encodeURIComponent(taskId)}`,
       { headers: { Authorization: `Bearer ${key}` } },
+      60_000,
     )
     const data = (await res.json().catch(() => null)) as
       | { status?: string; file_id?: string; base_resp?: BaseResp }
       | null
     if (!res.ok || !data?.status) {
-      throw new PineHttpError(502, `MiniMax 查询任务失败：${errText(data?.base_resp)}`)
+      const msg = `MiniMax 查询任务失败：${errText(data?.base_resp)}`
+      pushGenLog({
+        ts: started,
+        path: 'upstream:minimax-video-query',
+        ok: false,
+        status: res.status,
+        ms: Date.now() - started,
+        error: msg.slice(0, 300),
+        note: `taskId=${taskId}`,
+      })
+      throw new PineHttpError(502, msg)
     }
     switch (data.status) {
       case 'Preparing':
@@ -99,21 +127,44 @@ export const minimax: VideoProvider = {
       case 'Success': {
         if (!data.file_id) return { status: 'error', error: 'MiniMax 任务成功但缺少 file_id' }
         // 现查现取 download_url（1h 时效），交给 video-file 代理即时下载
-        const fres = await fetchWithTimeout(
+        const fres = await fetchWithRetry(
           `${BASE}/v1/files/retrieve?file_id=${encodeURIComponent(data.file_id)}`,
           { headers: { Authorization: `Bearer ${key}` } },
+          60_000,
         )
         const fdata = (await fres.json().catch(() => null)) as
           | { file?: { download_url?: string }; base_resp?: BaseResp }
           | null
         const url = fdata?.file?.download_url
         if (!fres.ok || !url) {
-          return { status: 'error', error: `MiniMax 取件失败：${errText(fdata?.base_resp)}` }
+          const msg = `MiniMax 取件失败：${errText(fdata?.base_resp)}`
+          pushGenLog({
+            ts: started,
+            path: 'upstream:minimax-video-retrieve',
+            ok: false,
+            status: fres.status,
+            ms: Date.now() - started,
+            error: msg.slice(0, 300),
+            note: `taskId=${taskId} fileId=${data.file_id}`,
+          })
+          return { status: 'error', error: msg }
         }
         return { status: 'done', videoUrl: url }
       }
-      case 'Fail':
-        return { status: 'error', error: errText(data.base_resp) || '生成失败' }
+      case 'Fail': {
+        const error = errText(data.base_resp) || '生成失败'
+        // 任务终态失败经 200 响应下发，路由层日志看不到 → 在此留痕
+        pushGenLog({
+          ts: started,
+          path: 'upstream:minimax-video-task',
+          ok: false,
+          status: res.status,
+          ms: Date.now() - started,
+          error: error.slice(0, 300),
+          note: `taskId=${taskId}`,
+        })
+        return { status: 'error', error }
+      }
       default:
         return { status: 'running' }
     }

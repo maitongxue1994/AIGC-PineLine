@@ -44,7 +44,7 @@ export default function generateImageGrid(req: Request, env: Env): Promise<Respo
     )
 
     const images: (string | null)[] = settled.map((r) =>
-      r.status === 'fulfilled' ? r.value : null,
+      r.status === 'fulfilled' ? r.value.image : null,
     )
     const errors: (string | null)[] = settled.map((r) =>
       r.status === 'rejected'
@@ -53,11 +53,15 @@ export default function generateImageGrid(req: Request, env: Env): Promise<Respo
           : String(r.reason)
         : null,
     )
+    // 上游请求凭据（逐张对应），供前端展示/记录，事后可查上游生成记录
+    const requestIds: (string | null)[] = settled.map((r) =>
+      r.status === 'fulfilled' ? (r.value.requestId ?? null) : null,
+    )
 
     if (images.every((x) => x === null)) {
       return jsonError(`全部生成失败：${errors.find(Boolean) ?? '未知错误'}`, 502)
     }
 
-    return jsonOk({ images, errors })
-  })
+    return jsonOk({ images, errors, requestIds })
+  }, '/api/generate/image-grid')
 }
