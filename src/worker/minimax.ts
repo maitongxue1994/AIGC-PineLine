@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from './utils'
+import { fetchWithTimeout, pushGenLog, upstreamRequestId } from './utils'
 
 const MINIMAX_ENDPOINT = 'https://api.minimaxi.com/v1/text/chatcompletion_v2'
 const MODEL = 'MiniMax-M2.7'
@@ -25,6 +25,7 @@ export async function callMinimaxChatFull(
   apiKey: string,
   opts: { temperature?: number; maxTokens?: number } = {},
 ): Promise<{ content: string; reasoning?: string }> {
+  const started = Date.now()
   const res = await fetchWithTimeout(
     MINIMAX_ENDPOINT,
     {
@@ -45,19 +46,35 @@ export async function callMinimaxChatFull(
     150_000,
   )
 
+  const requestId = upstreamRequestId(res)
+  const fail: (message: string) => never = (message) => {
+    pushGenLog({
+      ts: started,
+      path: 'upstream:minimax-text',
+      ok: false,
+      status: res.status,
+      ms: Date.now() - started,
+      error: message.slice(0, 300),
+      ...(requestId ? { requestId } : {}),
+      model: MODEL,
+      note: (messages[messages.length - 1]?.content ?? '').slice(0, 80),
+    })
+    throw new Error(message)
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`MiniMax HTTP ${res.status}: ${text.slice(0, 300)}`)
+    fail(`MiniMax HTTP ${res.status}: ${text.slice(0, 300)}`)
   }
 
   const json = (await res.json()) as MiniMaxResponse
   if (json.base_resp && json.base_resp.status_code && json.base_resp.status_code !== 0) {
-    throw new Error(`MiniMax ${json.base_resp.status_code}: ${json.base_resp.status_msg ?? ''}`)
+    fail(`MiniMax ${json.base_resp.status_code}: ${json.base_resp.status_msg ?? ''}`)
   }
 
   const message = json.choices?.[0]?.message
   const content = message?.content
-  if (!content) throw new Error('MiniMax 未返回内容')
+  if (!content) fail('MiniMax 未返回内容')
   return {
     content,
     ...(message?.reasoning_content ? { reasoning: message.reasoning_content } : {}),

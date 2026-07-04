@@ -93,5 +93,5 @@ export default function generateStoryboard(req: Request, env: Env): Promise<Resp
     }
     const shots = parseModelJson(raw)
     return jsonOk({ shots })
-  })
+  }, '/api/generate/storyboard')
 }

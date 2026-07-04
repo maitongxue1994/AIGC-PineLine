@@ -23,5 +23,5 @@ export default function videoStatus(req: Request, env: Env): Promise<Response> {
     const status = await provider.query(body.taskId, env)
     // 临时 URL 不下发前端，避免误用过期链接
     return jsonOk({ status: status.status, error: status.error })
-  })
+  }, '/api/generate/video-status')
 }

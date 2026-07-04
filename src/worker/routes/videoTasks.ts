@@ -47,5 +47,5 @@ export default function videoTasks(req: Request, env: Env): Promise<Response> {
         error: t.error?.message ?? null,
       })),
     })
-  })
+  }, '/api/generate/video-tasks')
 }

@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from './utils'
+import { fetchWithRetry, pushGenLog, upstreamRequestId } from './utils'
 
 // 稳定版（preview 版官方已于 2026-06-25 弃用关停，见 docs/模型API调研-2026-07.md 图片模型节）
 const MODEL = 'gemini-3.1-flash-image'
@@ -37,11 +37,13 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
   return { mimeType: m[1], data: m[2] }
 }
 
+export type GeminiImageResult = { image: string; requestId?: string }
+
 export async function callGeminiImage(
   prompt: string,
   apiKey: string,
   opts: GeminiImageOptions = {},
-): Promise<string> {
+): Promise<GeminiImageResult> {
   const parts: Part[] = [{ text: prompt }]
 
   const refs: string[] = []
@@ -65,27 +67,50 @@ export async function callGeminiImage(
     },
   }
 
-  const res = await fetchWithTimeout(`${ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const started = Date.now()
+  const res = await fetchWithRetry(
+    `${ENDPOINT}?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    // 生图高峰实测可超默认 25s，与 Seedream 同为长预算档
+    120_000,
+  )
+  const requestId = upstreamRequestId(res)
+
+  // 显式函数类型注解：TS 对 never 返回调用做可达性收窄的前提（同断言函数规则）
+  const fail: (status: number, message: string) => never = (status, message) => {
+    pushGenLog({
+      ts: started,
+      path: 'upstream:gemini',
+      ok: false,
+      status,
+      ms: Date.now() - started,
+      error: message.slice(0, 300),
+      ...(requestId ? { requestId } : {}),
+      model: MODEL,
+      note: prompt.slice(0, 80),
+    })
+    throw new Error(requestId ? `${message}（request-id: ${requestId}）` : message)
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`Gemini HTTP ${res.status}: ${text.slice(0, 300)}`)
+    fail(res.status, `Gemini HTTP ${res.status}: ${text.slice(0, 300)}`)
   }
 
   const json = (await res.json()) as GeminiResponse
-  if (json.error?.message) throw new Error(`Gemini: ${json.error.message}`)
+  if (json.error?.message) fail(res.status, `Gemini: ${json.error.message}`)
   if (json.promptFeedback?.blockReason) {
-    throw new Error(`Gemini 拒绝生成: ${json.promptFeedback.blockReason}`)
+    fail(res.status, `Gemini 拒绝生成: ${json.promptFeedback.blockReason}`)
   }
 
   const partsOut = json.candidates?.[0]?.content?.parts ?? []
   const imgPart = partsOut.find((p) => p.inlineData?.data)
-  if (!imgPart?.inlineData?.data) throw new Error('Gemini 未返回图片数据')
+  if (!imgPart?.inlineData?.data) fail(res.status, 'Gemini 未返回图片数据')
 
   const mime = imgPart.inlineData.mimeType ?? 'image/png'
-  return `data:${mime};base64,${imgPart.inlineData.data}`
+  return { image: `data:${mime};base64,${imgPart.inlineData.data}`, requestId }
 }

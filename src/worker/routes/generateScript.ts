@@ -88,5 +88,5 @@ export default function generateScript(req: Request, env: Env): Promise<Response
     if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
     const script = await callMinimaxText(system, brief, env.MINIMAX_API_KEY)
     return jsonOk({ script })
-  })
+  }, '/api/generate/script')
 }

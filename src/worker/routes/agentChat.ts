@@ -132,5 +132,5 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
       // M2.7 推理模型的思考过程，前端折叠展示
       ...(reasoning ? { thinking: reasoning.slice(0, 4000) } : {}),
     })
-  })
+  }, '/api/agent/chat')
 }

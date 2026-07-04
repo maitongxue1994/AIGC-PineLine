@@ -26,5 +26,5 @@ export default function videoCreate(req: Request, env: Env): Promise<Response> {
     const provider = getVideoProvider(body.provider)
     const { taskId } = await provider.create({ ...body, prompt }, env)
     return jsonOk({ taskId })
-  })
+  }, '/api/generate/video')
 }

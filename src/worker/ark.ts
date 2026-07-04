@@ -1,4 +1,4 @@
-import { PineHttpError, fetchWithTimeout } from './utils'
+import { PineHttpError, fetchWithRetry, fetchWithTimeout, pushGenLog, upstreamRequestId } from './utils'
 
 /**
  * 火山方舟通用通道（与 Seedance 视频共用 ARK_API_KEY）：
@@ -43,6 +43,7 @@ export async function callArkText(
   opts: { temperature?: number; maxTokens?: number; baseUrl?: string } = {},
 ): Promise<string> {
   const key = requireArkKey(apiKey)
+  const started = Date.now()
   const res = await fetchWithTimeout(
     `${arkBase(opts.baseUrl)}/api/v3/chat/completions`,
     {
@@ -61,12 +62,27 @@ export async function callArkText(
     // Seed 2.0 亦为推理系模型，长文预算与 MiniMax 对齐
     150_000,
   )
+  const requestId = upstreamRequestId(res)
+  const fail: (message: string) => never = (message) => {
+    pushGenLog({
+      ts: started,
+      path: 'upstream:ark-text',
+      ok: false,
+      status: res.status,
+      ms: Date.now() - started,
+      error: message.slice(0, 300),
+      ...(requestId ? { requestId } : {}),
+      model,
+      note: userPrompt.slice(0, 80),
+    })
+    throw new Error(requestId ? `${message}（request-id: ${requestId}）` : message)
+  }
   const json = (await res.json().catch(() => null)) as ArkChatResponse | null
   if (!res.ok) {
-    throw new Error(`豆包 HTTP ${res.status}: ${json?.error?.message ?? ''}`.trim())
+    fail(`豆包 HTTP ${res.status}: ${json?.error?.message ?? ''}`.trim())
   }
   const content = json?.choices?.[0]?.message?.content
-  if (!content) throw new Error('豆包未返回内容')
+  if (!content) fail('豆包未返回内容')
   return content
 }
 
@@ -102,6 +118,8 @@ type ArkImageResponse = {
   error?: { message?: string }
 }
 
+export type SeedreamImageResult = { image: string; requestId?: string }
+
 export async function callSeedreamImage(
   model: string,
   prompt: string,
@@ -112,7 +130,7 @@ export async function callSeedreamImage(
     quality?: string
     baseUrl?: string
   } = {},
-): Promise<string> {
+): Promise<SeedreamImageResult> {
   const key = requireArkKey(apiKey)
   const body: Record<string, unknown> = {
     model,
@@ -125,32 +143,49 @@ export async function callSeedreamImage(
   const refs = (opts.referenceImages ?? []).filter(Boolean).slice(0, 14)
   if (refs.length) body.image = refs.length === 1 ? refs[0] : refs
 
-  const res = await fetchWithTimeout(
+  const started = Date.now()
+  const res = await fetchWithRetry(
     `${arkBase(opts.baseUrl)}/api/v3/images/generations`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify(body),
     },
-    120_000,
+    // 同步生图偶发慢（尤其 4K/多参考图），120s 仍见超时 → 提到 180s
+    180_000,
   )
+  const requestId = upstreamRequestId(res)
+  const fail: (status: number, message: string) => never = (status, message) => {
+    pushGenLog({
+      ts: started,
+      path: 'upstream:seedream',
+      ok: false,
+      status,
+      ms: Date.now() - started,
+      error: message.slice(0, 300),
+      ...(requestId ? { requestId } : {}),
+      model,
+      note: prompt.slice(0, 80),
+    })
+    throw new Error(requestId ? `${message}（request-id: ${requestId}）` : message)
+  }
   const json = (await res.json().catch(() => null)) as ArkImageResponse | null
   if (!res.ok) {
-    throw new Error(`Seedream HTTP ${res.status}: ${json?.error?.message ?? ''}`.trim())
+    fail(res.status, `Seedream HTTP ${res.status}: ${json?.error?.message ?? ''}`.trim())
   }
   const item = json?.data?.[0]
-  if (item?.b64_json) return `data:image/jpeg;base64,${item.b64_json}`
+  if (item?.b64_json) return { image: `data:image/jpeg;base64,${item.b64_json}`, requestId }
   // 兜底：个别档位仅回 URL 时由 Worker 取回转 base64（URL 有时效，不下发前端）
   if (item?.url) {
     const img = await fetchWithTimeout(item.url, {}, 60_000)
-    if (!img.ok) throw new Error(`Seedream 图片下载失败（HTTP ${img.status}）`)
+    if (!img.ok) fail(img.status, `Seedream 图片下载失败（HTTP ${img.status}）`)
     const buf = new Uint8Array(await img.arrayBuffer())
     let bin = ''
     const CHUNK = 0x8000
     for (let i = 0; i < buf.length; i += CHUNK) {
       bin += String.fromCharCode(...buf.subarray(i, i + CHUNK))
     }
-    return `data:image/jpeg;base64,${btoa(bin)}`
+    return { image: `data:image/jpeg;base64,${btoa(bin)}`, requestId }
   }
-  throw new Error('Seedream 未返回图片')
+  fail(res.status, 'Seedream 未返回图片')
 }

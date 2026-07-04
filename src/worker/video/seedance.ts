@@ -1,4 +1,4 @@
-import { PineHttpError, fetchWithTimeout } from '../utils'
+import { PineHttpError, fetchWithRetry, fetchWithTimeout, pushGenLog, upstreamRequestId } from '../utils'
 import type { VideoCreateReq, VideoEnv, VideoProvider, VideoTaskStatus } from './types'
 import { buildSeedanceBody } from './seedanceBody'
 
@@ -58,18 +58,28 @@ export async function listSeedanceTasks(
     page_size: String(Math.min(100, Math.max(1, opts.pageSize ?? 50))),
   })
   if (opts.status) params.set('filter.status', opts.status)
+  const started = Date.now()
   const res = await fetchWithTimeout(
     `${base}/api/v3/contents/generations/tasks?${params.toString()}`,
     { headers: { Authorization: `Bearer ${key}` } },
+    60_000,
   )
   const data = (await res.json().catch(() => null)) as
     | { items?: SeedanceTaskItem[]; total?: number; error?: { message?: string } }
     | null
   if (!res.ok || !Array.isArray(data?.items)) {
-    throw new PineHttpError(
-      502,
-      `Seedance 任务列表查询失败（HTTP ${res.status}）：${data?.error?.message ?? '未知错误'}`,
-    )
+    const msg = `Seedance 任务列表查询失败（HTTP ${res.status}）：${data?.error?.message ?? '未知错误'}`
+    const requestId = upstreamRequestId(res)
+    pushGenLog({
+      ts: started,
+      path: 'upstream:seedance-list',
+      ok: false,
+      status: res.status,
+      ms: Date.now() - started,
+      error: msg.slice(0, 300),
+      ...(requestId ? { requestId } : {}),
+    })
+    throw new PineHttpError(502, msg)
   }
   return { items: data.items, total: data.total ?? data.items.length }
 }
@@ -80,28 +90,45 @@ export const seedance: VideoProvider = {
 
     const body = buildSeedanceBody(req)
 
-    const res = await fetchWithTimeout(`${base}/api/v3/contents/generations/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify(body),
-    })
+    const started = Date.now()
+    const res = await fetchWithRetry(
+      `${base}/api/v3/contents/generations/tasks`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify(body),
+      },
+      60_000,
+    )
     const data = (await res.json().catch(() => null)) as
       | { id?: string; error?: { message?: string } }
       | null
     if (!res.ok || !data?.id) {
-      throw new PineHttpError(
-        502,
-        `Seedance 创建任务失败（HTTP ${res.status}）：${data?.error?.message ?? '未知错误'}`,
-      )
+      const msg = `Seedance 创建任务失败（HTTP ${res.status}）：${data?.error?.message ?? '未知错误'}`
+      const requestId = upstreamRequestId(res)
+      pushGenLog({
+        ts: started,
+        path: 'upstream:seedance-create',
+        ok: false,
+        status: res.status,
+        ms: Date.now() - started,
+        error: msg.slice(0, 300),
+        ...(requestId ? { requestId } : {}),
+        ...(req.model ? { model: req.model } : {}),
+        note: req.prompt.slice(0, 80),
+      })
+      throw new PineHttpError(502, msg)
     }
     return { taskId: data.id }
   },
 
   async query(taskId: string, env: VideoEnv): Promise<VideoTaskStatus> {
     const { key, base } = requireKey(env)
-    const res = await fetchWithTimeout(
+    const started = Date.now()
+    const res = await fetchWithRetry(
       `${base}/api/v3/contents/generations/tasks/${encodeURIComponent(taskId)}`,
       { headers: { Authorization: `Bearer ${key}` } },
+      60_000,
     )
     const data = (await res.json().catch(() => null)) as
       | {
@@ -111,6 +138,17 @@ export const seedance: VideoProvider = {
         }
       | null
     if (!res.ok || !data?.status) {
+      const requestId = upstreamRequestId(res)
+      pushGenLog({
+        ts: started,
+        path: 'upstream:seedance-query',
+        ok: false,
+        status: res.status,
+        ms: Date.now() - started,
+        error: `Seedance 查询任务失败（HTTP ${res.status}）：${data?.error?.message ?? '未知错误'}`.slice(0, 300),
+        ...(requestId ? { requestId } : {}),
+        note: `taskId=${taskId}`,
+      })
       throw new PineHttpError(502, `Seedance 查询任务失败（HTTP ${res.status}）`)
     }
     switch (data.status) {
@@ -121,8 +159,20 @@ export const seedance: VideoProvider = {
       case 'succeeded':
         return { status: 'done', videoUrl: data.content?.video_url }
       case 'failed':
-      case 'expired':
-        return { status: 'error', error: data.error?.message ?? `任务${data.status === 'expired' ? '超时过期' : '失败'}` }
+      case 'expired': {
+        const error = data.error?.message ?? `任务${data.status === 'expired' ? '超时过期' : '失败'}`
+        // 任务终态失败经 200 响应下发，路由层日志看不到 → 在此留痕
+        pushGenLog({
+          ts: started,
+          path: 'upstream:seedance-task',
+          ok: false,
+          status: res.status,
+          ms: Date.now() - started,
+          error: error.slice(0, 300),
+          note: `taskId=${taskId}`,
+        })
+        return { status: 'error', error }
+      }
       default:
         return { status: 'running' }
     }
