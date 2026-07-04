@@ -31,6 +31,27 @@ export type HistoryEntry = {
 
 export type LibraryFolder = { id: string; name: string }
 
+/**
+ * 生成请求日志（v3 新增 genlog 库）：与 history 不同，**失败也记录**——
+ * 提示词/模型/耗时/错误/供应商 request-id 全留痕，超时后可凭 requestId
+ * 去供应商控制台对账找回生成记录。
+ */
+export type GenLogEntry = {
+  id: string
+  createdAt: number
+  /** API 路径，如 /api/generate/image */
+  path: string
+  ok: boolean
+  /** 请求耗时 ms */
+  ms: number
+  /** 提示词摘要（前 200 字符） */
+  prompt?: string
+  model?: string
+  error?: string
+  /** 供应商侧 request-id（方舟 x-request-id 等），对账找回用 */
+  requestId?: string
+}
+
 /** 项目档案：画布图（剥离 data: 媒体）+ 缩略图 + 元数据（v2 新增 projects 库） */
 export type ProjectRecord = {
   id: string
@@ -43,8 +64,10 @@ export type ProjectRecord = {
 }
 
 const DB_NAME = 'pineline-studio'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const HISTORY_LIMIT = 200
+/** 生成请求日志上限（纯文本小记录，多留一些便于排查） */
+const GENLOG_LIMIT = 500
 /** 视频体积大（单条可达数十 MB），历史单独收紧 LRU 上限 */
 const VIDEO_HISTORY_LIMIT = 20
 const FOLDERS_KEY = 'pineline-library-v1'
@@ -63,6 +86,7 @@ let persistent = true
 const memAssets = new Map<string, LibraryAsset>()
 const memHistory: HistoryEntry[] = []
 const memProjects = new Map<string, ProjectRecord>()
+const memGenLog: GenLogEntry[] = []
 
 export function isPersistent(): boolean {
   return persistent
@@ -87,6 +111,10 @@ function openDb(): Promise<IDBDatabase | null> {
           const s = db.createObjectStore('projects', { keyPath: 'id' })
           s.createIndex('updatedAt', 'updatedAt')
         }
+        if (!db.objectStoreNames.contains('genlog')) {
+          const s = db.createObjectStore('genlog', { keyPath: 'id' })
+          s.createIndex('createdAt', 'createdAt')
+        }
       }
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => {
@@ -102,7 +130,7 @@ function openDb(): Promise<IDBDatabase | null> {
 }
 
 function tx<T>(
-  store: 'assets' | 'history' | 'projects',
+  store: 'assets' | 'history' | 'projects' | 'genlog',
   mode: IDBTransactionMode,
   fn: (s: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T | null> {
@@ -242,4 +270,46 @@ export async function appendHistory(
   } catch {
     /* 历史非关键路径，失败静默 */
   }
+}
+
+// ---------------- 生成请求日志（成功+失败都记，上限 500） ----------------
+
+export async function listGenLog(): Promise<GenLogEntry[]> {
+  const rows = await tx<GenLogEntry[]>('genlog', 'readonly', (s) => s.getAll())
+  if (rows) return rows.sort((a, b) => b.createdAt - a.createdAt)
+  return [...memGenLog].sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function appendGenLog(
+  entry: Omit<GenLogEntry, 'id' | 'createdAt'>,
+): Promise<void> {
+  const row: GenLogEntry = {
+    ...entry,
+    id: `g-${crypto.randomUUID()}`,
+    createdAt: Date.now(),
+  }
+  const db = await openDb()
+  if (!db) {
+    memGenLog.push(row)
+    memGenLog.sort((a, b) => b.createdAt - a.createdAt)
+    memGenLog.length = Math.min(memGenLog.length, GENLOG_LIMIT)
+    return
+  }
+  try {
+    const t = db.transaction('genlog', 'readwrite')
+    const store = t.objectStore('genlog')
+    store.put(row)
+    const all = store.getAll()
+    all.onsuccess = () => {
+      const list = (all.result as GenLogEntry[]).sort((a, b) => b.createdAt - a.createdAt)
+      for (const stale of list.slice(GENLOG_LIMIT)) store.delete(stale.id)
+    }
+  } catch {
+    /* 日志非关键路径，失败静默 */
+  }
+}
+
+export async function clearGenLog(): Promise<void> {
+  await tx('genlog', 'readwrite', (s) => s.clear())
+  memGenLog.length = 0
 }
