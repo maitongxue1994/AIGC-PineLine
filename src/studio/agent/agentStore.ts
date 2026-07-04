@@ -18,6 +18,8 @@ type AgentState = {
   newSession: () => void
   switchSession: (id: string) => void
   send: (text: string) => Promise<void>
+  /** 中止本次发送（发送按钮在 sending 期变为停止按钮） */
+  stop: () => void
   confirmOps: (messageId: string) => Promise<void>
   dismissOps: (messageId: string) => void
 }
@@ -27,6 +29,9 @@ function msg(role: 'user' | 'assistant', content: string): AgentMessage {
 }
 
 const MAX_SESSIONS = 20
+
+/** 当前在飞请求的中止器（模块级，不持久化） */
+let sendAbort: AbortController | null = null
 
 export const useAgentStore = create<AgentState>()(
   persist<AgentState>(
@@ -76,19 +81,24 @@ export const useAgentStore = create<AgentState>()(
             messages: [...s.messages, userMsg],
           }))
           set({ sending: true })
+          sendAbort = new AbortController()
           try {
             const history = [...activeSession()!.messages]
               .slice(-12)
               .map((m) => ({ role: m.role, content: m.content }))
-            const res = await agentChat({
-              messages: history,
-              canvas: canvasSnapshot(),
-              selection: useStudioStore.getState().selectedNodeId
-                ? [useStudioStore.getState().selectedNodeId as string]
-                : [],
-            })
+            const res = await agentChat(
+              {
+                messages: history,
+                canvas: canvasSnapshot(),
+                selection: useStudioStore.getState().selectedNodeId
+                  ? [useStudioStore.getState().selectedNodeId as string]
+                  : [],
+              },
+              sendAbort.signal,
+            )
             const reply: AgentMessage = {
               ...msg('assistant', res.reply),
+              ...(res.thinking ? { thinking: res.thinking } : {}),
               ...(res.ops.length
                 ? {
                     ops: res.ops,
@@ -104,14 +114,28 @@ export const useAgentStore = create<AgentState>()(
               await get().confirmOps(reply.id)
             }
           } catch (err) {
-            const emsg = err instanceof Error ? err.message : String(err)
+            const aborted =
+              sendAbort?.signal.aborted || (err instanceof DOMException && err.name === 'AbortError')
             patchSession(session.id, (s) => ({
               ...s,
-              messages: [...s.messages, msg('assistant', `请求失败：${emsg}`)],
+              messages: [
+                ...s.messages,
+                msg(
+                  'assistant',
+                  aborted
+                    ? '已停止本次请求。'
+                    : `请求失败：${err instanceof Error ? err.message : String(err)}`,
+                ),
+              ],
             }))
           } finally {
+            sendAbort = null
             set({ sending: false })
           }
+        },
+
+        stop: () => {
+          sendAbort?.abort()
         },
 
         confirmOps: async (messageId) => {

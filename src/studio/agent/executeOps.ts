@@ -26,9 +26,15 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
         case 'add_node': {
           const pos = op.position ?? { x: autoX, y: baseY }
           autoX += 480
-          const id = s.addNode(op.kind, (op.preset as NodePreset) ?? (op.kind === 'text' ? 'free' : 'single'), pos, {
+          // video 节点无 preset；text/image 缺省回落 free/single
+          const preset =
+            op.kind === 'video'
+              ? null
+              : ((op.preset as NodePreset) ?? (op.kind === 'text' ? 'free' : 'single'))
+          const id = s.addNode(op.kind, preset, pos, {
             ...(op.title ? { title: op.title } : {}),
             ...(op.prompt ? { prompt: op.prompt } : {}),
+            ...(op.params ? { params: op.params as Partial<NodeParams> as NodeParams } : {}),
           })
           refMap.set(op.ref, id)
           ok++

@@ -4,10 +4,12 @@ export type AgentOp =
   | {
       op: 'add_node'
       ref: string
-      kind: 'text' | 'image'
+      kind: 'text' | 'image' | 'video'
       preset?: string
       title?: string
       prompt?: string
+      /** 初始参数（服务端白名单过滤：shotIndex/videoDuration 等） */
+      params?: Record<string, unknown>
       position?: { x: number; y: number }
     }
   | { op: 'set_prompt'; id: string; prompt: string }
@@ -40,6 +42,8 @@ export type AgentChatRequest = {
 export type AgentChatResponse = {
   reply: string
   ops: AgentOp[]
+  /** MiniMax M2.7 推理模型的思考过程（可选，面板折叠展示） */
+  thinking?: string
 }
 
 export type AgentMessage = {
@@ -53,6 +57,8 @@ export type AgentMessage = {
   result?: string
   /** ops 生成时归属的项目 id（跨项目防护：切换项目后拒绝执行旧 ops） */
   projectId?: string | null
+  /** 推理模型的思考过程（折叠展示） */
+  thinking?: string
   createdAt: number
 }
 
@@ -66,8 +72,12 @@ export type AgentSession = {
 /** 操作的人话描述（预览卡/执行摘要共用） */
 export function describeOp(op: AgentOp): string {
   switch (op.op) {
-    case 'add_node':
-      return `新建${op.kind === 'text' ? '文本' : '图片'}节点「${op.title ?? op.ref}」${op.preset ? `（${op.preset}）` : ''}`
+    case 'add_node': {
+      const kindLabel = op.kind === 'text' ? '文本' : op.kind === 'video' ? '视频' : '图片'
+      const shotIdx = op.params?.shotIndex
+      const extra = op.preset ? `（${op.preset}${typeof shotIdx === 'number' ? ` · 镜头${shotIdx + 1}` : ''}）` : ''
+      return `新建${kindLabel}节点「${op.title ?? op.ref}」${extra}`
+    }
     case 'set_prompt':
       return `修改提示词：${op.prompt.slice(0, 40)}${op.prompt.length > 40 ? '…' : ''}`
     case 'set_params':

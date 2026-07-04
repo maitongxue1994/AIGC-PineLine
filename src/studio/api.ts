@@ -17,7 +17,11 @@ import type { AgentChatRequest, AgentChatResponse } from './agent/types'
 
 const AUTH_TOKEN = (import.meta.env.VITE_PINELINE_API_KEY as string | undefined)?.trim()
 
-async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
+async function postJson<TReq, TRes>(
+  path: string,
+  body: TReq,
+  signal?: AbortSignal,
+): Promise<TRes> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (AUTH_TOKEN) headers['X-Pineline-Auth'] = AUTH_TOKEN
 
@@ -25,6 +29,7 @@ async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   })
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as ApiError
@@ -59,8 +64,8 @@ export function generateImageGrid(
   )
 }
 
-export function agentChat(req: AgentChatRequest): Promise<AgentChatResponse> {
-  return postJson<AgentChatRequest, AgentChatResponse>('/api/agent/chat', req)
+export function agentChat(req: AgentChatRequest, signal?: AbortSignal): Promise<AgentChatResponse> {
+  return postJson<AgentChatRequest, AgentChatResponse>('/api/agent/chat', req, signal)
 }
 
 // ---------------- 视频生成（异步任务：创建 → 轮询 → 取件代理） ----------------

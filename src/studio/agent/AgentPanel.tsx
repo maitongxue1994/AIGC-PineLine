@@ -8,6 +8,8 @@ import {
   Play,
   Plus,
   Send,
+  Sparkles,
+  Square,
   X,
   Zap,
 } from 'lucide-react'
@@ -17,23 +19,70 @@ import { activeContent, isImageContent } from '../types'
 import { describeOp } from './types'
 import { SHADOWS, TOKENS } from '../designTokens'
 
-/** 右下角 Agent 彩色圆球入口（⌘J） */
+/** 右下角 AI 助手入口（⌘J）：图标 + 文案，让功能可被发现 */
 export function AgentLauncher() {
   const toggle = useAgentStore((s) => s.toggle)
   const open = useAgentStore((s) => s.open)
   if (open) return null
   return (
     <button
-      title="打开 Agent (⌘J)"
+      title="AI 助手：对话搭建生成管线 (⌘J)"
       onClick={toggle}
-      className="absolute bottom-5 right-5 z-30 h-12 w-12 rounded-full transition hover:scale-105"
+      className="absolute bottom-5 right-5 z-30 flex h-12 items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-white transition hover:scale-105"
       style={{ background: TOKENS.brandGradient, boxShadow: SHADOWS.toolbar }}
-    />
+    >
+      <Sparkles size={17} />
+      AI 助手
+    </button>
+  )
+}
+
+/** sending 期的分阶段 loading 文案（M2.7 推理模型响应较慢，给出进行中的具体感） */
+const SENDING_STAGES = ['正在理解需求…', '正在规划节点与连线…', '正在组装画布操作…']
+
+function SendingIndicator() {
+  const [stage, setStage] = useState(0)
+  useEffect(() => {
+    const t = setInterval(
+      () => setStage((s) => Math.min(s + 1, SENDING_STAGES.length - 1)),
+      6000,
+    )
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <div className="flex items-center gap-2 text-[13px]" style={{ color: TOKENS.textMuted }}>
+      <Loader2 size={14} className="animate-spin" /> {SENDING_STAGES[stage]}
+    </div>
+  )
+}
+
+/** 推理模型思考过程折叠块 */
+function ThinkingBlock({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="mb-1 max-w-[92%]">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 text-[12px] transition hover:text-white"
+        style={{ color: TOKENS.textFaint }}
+      >
+        <ChevronDown size={12} className={`transition-transform ${expanded ? '' : '-rotate-90'}`} />
+        思考过程
+      </button>
+      {expanded && (
+        <div
+          className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-[10px] border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-[12px] leading-relaxed"
+          style={{ color: TOKENS.textFaint }}
+        >
+          {text}
+        </div>
+      )}
+    </div>
   )
 }
 
 const SUGGESTIONS = [
-  { title: '搭一条短片管线', prompt: '帮我搭一条完整管线：一个雨夜屋顶等待的少年的短片——剧本、分镜、分镜图，并直接运行' },
+  { title: '搭一条完整短片管线', prompt: '帮我搭一条完整管线：一个雨夜屋顶等待的少年的短片——剧本、分镜、3 个分镜图、3 个视频节点，并直接运行' },
   { title: '为产品图做广告词', prompt: '新建一个广告词节点，为一款磨砂玻璃香水写主标语和社媒文案' },
 ]
 
@@ -52,6 +101,7 @@ export default function AgentPanel() {
   const newSession = useAgentStore((s) => s.newSession)
   const switchSession = useAgentStore((s) => s.switchSession)
   const send = useAgentStore((s) => s.send)
+  const stop = useAgentStore((s) => s.stop)
   const confirmOps = useAgentStore((s) => s.confirmOps)
   const dismissOps = useAgentStore((s) => s.dismissOps)
 
@@ -186,6 +236,7 @@ export default function AgentPanel() {
           <div className="space-y-3">
             {messages.map((m) => (
               <div key={m.id}>
+                {m.role === 'assistant' && m.thinking && <ThinkingBlock text={m.thinking} />}
                 <div
                   className={`max-w-[92%] whitespace-pre-wrap rounded-[14px] px-3.5 py-2.5 text-[14px] leading-relaxed ${
                     m.role === 'user' ? 'ml-auto' : ''
@@ -247,11 +298,7 @@ export default function AgentPanel() {
                 )}
               </div>
             ))}
-            {sending && (
-              <div className="flex items-center gap-2 text-[13px]" style={{ color: TOKENS.textMuted }}>
-                <Loader2 size={14} className="animate-spin" /> 思考中…
-              </div>
-            )}
+            {sending && <SendingIndicator />}
           </div>
         )}
       </div>
@@ -341,15 +388,26 @@ export default function AgentPanel() {
             MiniMax
           </span>
           <span className="flex-1" />
-          <button
-            disabled={!draft.trim() || sending}
-            onClick={handleSend}
-            title="发送 (Enter)"
-            className="flex h-9 w-9 items-center justify-center rounded-full transition enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ background: '#F5F5F7' }}
-          >
-            <Send size={14} stroke="#0B0B0C" />
-          </button>
+          {sending ? (
+            <button
+              onClick={stop}
+              title="停止本次请求"
+              className="flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-white"
+              style={{ background: '#F5F5F7' }}
+            >
+              <Square size={12} fill="#0B0B0C" stroke="#0B0B0C" />
+            </button>
+          ) : (
+            <button
+              disabled={!draft.trim()}
+              onClick={handleSend}
+              title="发送 (Enter)"
+              className="flex h-9 w-9 items-center justify-center rounded-full transition enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ background: '#F5F5F7' }}
+            >
+              <Send size={14} stroke="#0B0B0C" />
+            </button>
+          )}
         </div>
       </div>
     </div>
