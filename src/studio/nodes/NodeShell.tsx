@@ -24,6 +24,7 @@ export default function NodeShell({
   hasTarget = true,
   hasSource = true,
   onSaveToLibrary,
+  errorAction,
   toolbar,
   composer,
   children,
@@ -38,6 +39,8 @@ export default function NodeShell({
   hasTarget?: boolean
   hasSource?: boolean
   onSaveToLibrary?: () => void
+  /** 错误条上的动作按钮（如视频超时后的「继续查询」） */
+  errorAction?: { label: string; onClick: () => void }
   toolbar?: ReactNode
   composer?: ReactNode
   children: ReactNode
@@ -102,7 +105,7 @@ export default function NodeShell({
         {running && (
           <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px]" style={{ color: TOKENS.accent }}>
             <span className="h-1.5 w-1.5 animate-pulseDot rounded-full" style={{ background: TOKENS.accent }} />
-            生成中
+            {data.progressNote ?? '生成中'}
           </span>
         )}
       </div>
@@ -209,6 +212,14 @@ export default function NodeShell({
       {data.error && (
         <div className="mt-2 flex items-start gap-2 rounded-[10px] border border-red-400/30 bg-red-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-red-300">
           <span className="min-w-0 flex-1 break-all">{data.error}</span>
+          {errorAction && (
+            <button
+              onClick={(e) => { e.stopPropagation(); errorAction.onClick() }}
+              className="nodrag shrink-0 rounded-md border border-red-300/40 px-2 py-0.5 text-[11px] font-semibold text-red-200 transition hover:bg-red-500/25"
+            >
+              {errorAction.label}
+            </button>
+          )}
           <button
             title="清除错误"
             onClick={(e) => { e.stopPropagation(); clearNodeError(id) }}

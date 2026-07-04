@@ -69,6 +69,11 @@ export type NodeVersion = {
   label?: string
   error?: string | null
   createdAt: number
+  /**
+   * 视频异步任务引用：轮询超时（任务仍在供应商侧运行，官方保留 7 天）时留存，
+   * 供「继续查询」续查取件，避免重新下单重复扣积分。
+   */
+  taskRef?: { provider: string; taskId: string }
 }
 
 /** 扁平可选参数包：preset 决定实际使用哪些字段 */
@@ -129,6 +134,8 @@ export type PineNodeData = {
   shots?: ShotItem[]
   status: NodeStatus
   error?: string
+  /** running 期的进度提示（如「生成中 · 已等待 3 分钟」），完成/失败时清除 */
+  progressNote?: string
   /** Pin 标记颜色（无 = 未标记） */
   pin?: PinColor
 }

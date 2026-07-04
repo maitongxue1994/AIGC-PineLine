@@ -108,6 +108,8 @@ type StudioState = {
   undo: () => void
   redo: () => void
   runNode: (id: string) => Promise<void>
+  /** 视频任务超时后的续查：用版本上的 taskRef 重进轮询取件，不重新下单 */
+  resumeVideoTask: (id: string) => Promise<void>
   /**
    * 高级图像操作的再生成通道（多角度/打光/摄影机/蒙版重绘）：
    * 以当前激活版本为参考图 + 操作提示词重新生成，结果追加为新版本（可回退）。
@@ -237,7 +239,7 @@ function sanitizeForArchive(node: PineNode): PineNode {
     dragging: false,
     data:
       node.data.status === 'running'
-        ? { ...node.data, status: 'idle' as const, error: undefined }
+        ? { ...node.data, status: 'idle' as const, error: undefined, progressNote: undefined }
         : node.data,
   }
 }
@@ -270,7 +272,13 @@ async function makeThumb(dataUrl: string): Promise<string | null> {
 // ---------------- 视频生成轮询（异步任务：创建 → 轮询 → 取件代理） ----------------
 
 const VIDEO_POLL_INTERVAL_MS = 8_000
-const VIDEO_POLL_TIMEOUT_MS = 10 * 60_000
+
+/** 轮询超时按档位自适应：1080p/4k 或 >10s 的重活给 20 分钟，其余 10 分钟 */
+function videoPollTimeoutMs(req: { resolution?: string; duration?: number }): number {
+  const heavy =
+    req.resolution === '1080p' || req.resolution === '4k' || (req.duration ?? 5) > 10
+  return (heavy ? 20 : 10) * 60_000
+}
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -283,19 +291,36 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
-/** 单条视频任务全流程；失败返回带 error 的空版本（多倍数时部分成功可用） */
-async function runOneVideoTask(
+/**
+ * 轮询任务直至完成/失败/超时。
+ * 超时不丢任务：方舟侧任务默认 48h 过期、任务 ID 保留 7 天，返回带 taskRef 的
+ * error 版本，供「继续查询」续查取件（不重新下单、不重复扣积分）。
+ * 供应商明确判失败的任务不带 taskRef（续查无意义）。
+ */
+async function pollVideoTask(
   provider: string,
-  req: Parameters<typeof createVideoTask>[0],
+  taskId: string,
+  timeoutMs: number,
+  onTick?: (elapsedMs: number) => void,
 ): Promise<NodeVersion> {
+  const startedAt = Date.now()
+  const taskRef = { provider, taskId }
   try {
-    const { taskId } = await createVideoTask(req)
-    const deadline = Date.now() + VIDEO_POLL_TIMEOUT_MS
     let misses = 0
     for (;;) {
       await sleep(VIDEO_POLL_INTERVAL_MS)
-      if (Date.now() > deadline) {
-        throw new Error('生成超时（10 分钟）：任务可能仍在进行，可稍后重试或到供应商控制台查看')
+      const elapsed = Date.now() - startedAt
+      onTick?.(elapsed)
+      if (elapsed > timeoutMs) {
+        const mins = Math.round(timeoutMs / 60_000)
+        return {
+          ...newVersion(
+            null,
+            undefined,
+            `已等待 ${mins} 分钟仍未完成：任务仍在供应商侧运行，可点「继续查询」接着取件`,
+          ),
+          taskRef,
+        }
       }
       let st: Awaited<ReturnType<typeof queryVideoTask>>
       try {
@@ -307,11 +332,33 @@ async function runOneVideoTask(
         continue
       }
       if (st.status === 'done') break
-      if (st.status === 'error') throw new Error(st.error ?? '生成失败')
+      if (st.status === 'error') {
+        // 任务确实失败：不留 taskRef（续查只会得到同样的失败）
+        return newVersion(null, undefined, st.error ?? '生成失败')
+      }
     }
     const blob = await fetchVideoFile({ provider, taskId })
     return newVersion(await blobToDataUrl(blob))
   } catch (err) {
+    // 查询/取件通道异常：任务本身可能还活着，留 taskRef 允许续查
+    return {
+      ...newVersion(null, undefined, err instanceof Error ? err.message : String(err)),
+      taskRef,
+    }
+  }
+}
+
+/** 单条视频任务全流程；失败返回带 error 的空版本（多倍数时部分成功可用） */
+async function runOneVideoTask(
+  provider: string,
+  req: Parameters<typeof createVideoTask>[0],
+  onTick?: (elapsedMs: number) => void,
+): Promise<NodeVersion> {
+  try {
+    const { taskId } = await createVideoTask(req)
+    return await pollVideoTask(provider, taskId, videoPollTimeoutMs(req), onTick)
+  } catch (err) {
+    // 创建任务即失败：无任务可续查
     return newVersion(null, undefined, err instanceof Error ? err.message : String(err))
   }
 }
@@ -327,7 +374,7 @@ function stripHeavyOutputs(node: PineNode): PineNode {
   const hasHeavy = data.versions.some((v) => !!v.content && v.content.startsWith('data:'))
   if (!hasHeavy) {
     return data.status === 'running'
-      ? { ...node, data: { ...data, status: 'idle' } }
+      ? { ...node, data: { ...data, status: 'idle', progressNote: undefined } }
       : node
   }
   return {
@@ -338,6 +385,7 @@ function stripHeavyOutputs(node: PineNode): PineNode {
       activeVersion: 0,
       status: 'idle',
       error: undefined,
+      progressNote: undefined,
     },
   }
 }
@@ -937,13 +985,37 @@ export const useStudioStore = create<StudioState>()(
                 resolution: params.videoResolution ?? '720p',
                 generateAudio: params.videoAudio ?? true,
               }
+              // 轮询期把等待时长透出到节点（每分钟更新一次，用户可感知任务仍在跑）
+              const onTick = (elapsedMs: number) => {
+                const mins = Math.floor(elapsedMs / 60_000)
+                const note = mins >= 1 ? `生成中 · 已等待 ${mins} 分钟` : undefined
+                safeSet(g, (s) => {
+                  const cur = s.nodes.find((n) => n.id === id)
+                  if (!cur || cur.data.progressNote === note) return {}
+                  return { nodes: mutateNode(s.nodes, id, { progressNote: note }) }
+                })
+              }
               // 倍数条数并行生成，全部落定后统一入版本（部分失败保留成功条目）
               const count = params.videoMultiplier ?? 1
               const results = await Promise.all(
-                Array.from({ length: count }, () => runOneVideoTask(model.provider, req)),
+                Array.from({ length: count }, () => runOneVideoTask(model.provider, req, onTick)),
               )
               const okIndex = results.findIndex((v) => !!v.content)
-              if (okIndex < 0) throw new Error(results[0]?.error ?? '视频生成失败')
+              if (okIndex < 0) {
+                // 全部失败：超时任务的 taskRef 版本仍要入版本列表，供「继续查询」
+                safeSet(g, (s) => {
+                  const cur = s.nodes.find((n) => n.id === id)
+                  const withRef = results.filter((v) => v.taskRef)
+                  if (!cur || !withRef.length) return {}
+                  return {
+                    nodes: mutateNode(s.nodes, id, {
+                      versions: [...cur.data.versions, ...withRef],
+                      progressNote: undefined,
+                    }),
+                  }
+                })
+                throw new Error(results[0]?.error ?? '视频生成失败')
+              }
               safeSet(g, (s) => {
                 const cur = s.nodes.find((n) => n.id === id)
                 const versions = [...(cur?.data.versions ?? []), ...results]
@@ -952,6 +1024,7 @@ export const useStudioStore = create<StudioState>()(
                     status: 'done',
                     versions,
                     activeVersion: versions.length - results.length + okIndex,
+                    progressNote: undefined,
                   }),
                 }
               })
@@ -960,9 +1033,60 @@ export const useStudioStore = create<StudioState>()(
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
             safeSet(g, (s) => ({
-              nodes: mutateNode(s.nodes, id, { status: 'error', error: msg }),
+              nodes: mutateNode(s.nodes, id, { status: 'error', error: msg, progressNote: undefined }),
             }))
           }
+        },
+
+        resumeVideoTask: async (id) => {
+          const state = get()
+          const node = state.nodes.find((n) => n.id === id)
+          if (!node || node.data.kind !== 'video' || node.data.status === 'running') return
+          // 找可续查版本：优先激活版本，否则最后一个带 taskRef 的失败版本
+          const versions = node.data.versions
+          const resumable = (i: number) => !!versions[i] && !versions[i].content && !!versions[i].taskRef
+          let idx = resumable(node.data.activeVersion) ? node.data.activeVersion : -1
+          if (idx < 0) {
+            for (let i = versions.length - 1; i >= 0; i--) {
+              if (resumable(i)) { idx = i; break }
+            }
+          }
+          if (idx < 0) return
+          const ref = versions[idx].taskRef!
+          const g = generation
+          set((s) => ({
+            nodes: mutateNode(s.nodes, id, {
+              status: 'running',
+              error: undefined,
+              progressNote: '继续查询中…',
+            }),
+          }))
+          const onTick = (elapsedMs: number) => {
+            const mins = Math.floor(elapsedMs / 60_000)
+            const note = mins >= 1 ? `继续查询中 · 已等待 ${mins} 分钟` : '继续查询中…'
+            safeSet(g, (s) => {
+              const cur = s.nodes.find((n) => n.id === id)
+              if (!cur || cur.data.progressNote === note) return {}
+              return { nodes: mutateNode(s.nodes, id, { progressNote: note }) }
+            })
+          }
+          const result = await pollVideoTask(ref.provider, ref.taskId, 10 * 60_000, onTick)
+          safeSet(g, (s) => {
+            const cur = s.nodes.find((n) => n.id === id)
+            if (!cur) return {}
+            const nextVersions = [...cur.data.versions]
+            // 原位替换续查版本：成功填充内容，失败刷新错误信息（保留 taskRef 可再续查）
+            nextVersions[idx] = result
+            return {
+              nodes: mutateNode(s.nodes, id, {
+                status: result.content ? 'done' : 'error',
+                error: result.content ? undefined : (result.error ?? '生成失败'),
+                versions: nextVersions,
+                activeVersion: result.content ? idx : cur.data.activeVersion,
+                progressNote: undefined,
+              }),
+            }
+          })
         },
 
         runImageEdit: async (id, prompt, opts) => {

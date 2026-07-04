@@ -49,6 +49,7 @@ function RunningElapsed() {
  */
 function VideoNodeInner({ id, data, selected }: NodeProps<PineNode>) {
   const addVideoNodeContent = useStudioStore((s) => s.updateActiveContent)
+  const resumeVideoTask = useStudioStore((s) => s.resumeVideoTask)
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
@@ -148,6 +149,12 @@ function VideoNodeInner({ id, data, selected }: NodeProps<PineNode>) {
             <BadgeCheck size={15} fill={TOKENS.accent} stroke="#fff" strokeWidth={1.6} />
           </span>
         ) : undefined
+      }
+      errorAction={
+        // 超时/查询中断的任务带 taskRef：提供「继续查询」续查取件（不重新下单）
+        !running && data.versions.some((v) => !v.content && v.taskRef)
+          ? { label: '继续查询', onClick: () => void resumeVideoTask(id) }
+          : undefined
       }
       toolbar={
         mode === 'idle' ? (
