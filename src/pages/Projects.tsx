@@ -67,17 +67,26 @@ export default function Projects() {
   const openProject = async (id: string) => {
     if (busy) return
     setBusy(true)
-    const ok = await loadProject(id)
-    setBusy(false)
-    if (ok) navigate('/studio')
+    try {
+      // loadProject 内部已兜底返回 false，这里再兜一层：任何异常都不能让
+      // busy 卡在 true（否则项目页所有点击被拦，表现为「项目打不开」）
+      const ok = await loadProject(id)
+      if (ok) navigate('/studio')
+      else window.alert('项目载入失败：档案可能已损坏，请查看控制台日志')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const handleCreate = async () => {
     if (busy) return
     setBusy(true)
-    await createProject()
-    setBusy(false)
-    navigate('/studio')
+    try {
+      await createProject()
+      navigate('/studio')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const handleDelete = async (p: ProjectRecord) => {

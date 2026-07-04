@@ -51,6 +51,23 @@ import {
 
 type Position = { x: number; y: number }
 
+/**
+ * localStorage 写入容错：zustand persist 的 setItem 无 try/catch，配额超限
+ * （QuotaExceededError）会让异常穿透进**每一个** store action——表现为整套
+ * UI 流程卡死（如项目页 busy 永久 true）。降级为仅内存 + console 告警。
+ */
+const guardedLocalStorage = {
+  getItem: (k: string) => localStorage.getItem(k),
+  setItem: (k: string, v: string) => {
+    try {
+      localStorage.setItem(k, v)
+    } catch (err) {
+      console.error('[pineline] localStorage 写入失败（疑似超配额），本次状态仅保留在内存', err)
+    }
+  },
+  removeItem: (k: string) => localStorage.removeItem(k),
+}
+
 // 撤销/重做的结构快照：节点数组是不可变更新的，快照只是引用拷贝，内存开销很小
 type GraphSnapshot = { nodes: PineNode[]; edges: PineEdge[] }
 
@@ -246,6 +263,49 @@ function sanitizeForArchive(node: PineNode): PineNode {
   }
 }
 
+/**
+ * 档案图恢复前的整形：档案可能存有旧 schema/损坏节点（data.versions 缺失等），
+ * 直接 set 进画布会在渲染期抛 TypeError → 整页白屏且刷新复现（档案每次挂载重放）。
+ * 与 importProject 同套校验：过滤坏节点 → 补齐必备字段 → migrateGraph → 掐悬空边。
+ */
+function sanitizeArchiveGraph(
+  rawNodes: unknown[],
+  rawEdges: unknown[],
+): { nodes: PineNode[]; edges: PineEdge[] } {
+  const sane = (rawNodes as PineNode[])
+    .filter(
+      (n) =>
+        n &&
+        typeof n.id === 'string' &&
+        n.position &&
+        Number.isFinite(n.position.x) &&
+        Number.isFinite(n.position.y) &&
+        n.data &&
+        typeof n.data.kind === 'string',
+    )
+    .map((n) => ({
+      ...n,
+      selected: false,
+      dragging: false,
+      data: {
+        ...n.data,
+        versions: Array.isArray(n.data.versions) ? n.data.versions : [],
+        activeVersion:
+          typeof n.data.activeVersion === 'number' ? n.data.activeVersion : 0,
+        ...(n.data.status === 'running'
+          ? { status: 'idle' as const, progressNote: undefined }
+          : {}),
+      },
+    }))
+  const edges = (Array.isArray(rawEdges) ? (rawEdges as PineEdge[]) : [])
+    .filter((e) => e && typeof e.source === 'string' && typeof e.target === 'string')
+    .map(migrateLegacyEdge)
+  const migrated = migrateGraph(sane, edges)
+  const ids = new Set(migrated.nodes.map((n) => n.id))
+  migrated.edges = migrated.edges.filter((e) => ids.has(e.source) && ids.has(e.target))
+  return migrated
+}
+
 /** 恢复档案期间挂起自动快照，防止把 localStorage 剥离版（无图）写回档案 */
 let restoringProject = false
 
@@ -372,17 +432,37 @@ async function runOneVideoTask(
  */
 function stripHeavyOutputs(node: PineNode): PineNode {
   const data = node.data
+  // params 里的媒体（全能参考素材等 data: URL，合计可达 64MB）同样不落盘——
+  // 否则每次 persist 都 QuotaExceeded，异常穿透所有 store action
+  const params = data.params
+  const paramsHeavy =
+    !!params &&
+    (params.omniRefs?.length || params.omniVideos?.length || params.omniAudios?.length)
+  const strippedParams = paramsHeavy
+    ? { ...params, omniRefs: undefined, omniVideos: undefined, omniAudios: undefined }
+    : params
   // 图片/视频等 data: 媒体一律不落盘（视频体积更大）
   const hasHeavy = data.versions.some((v) => !!v.content && v.content.startsWith('data:'))
   if (!hasHeavy) {
-    return data.status === 'running'
-      ? { ...node, data: { ...data, status: 'idle', progressNote: undefined } }
-      : node
+    if (data.status === 'running' || paramsHeavy) {
+      return {
+        ...node,
+        data: {
+          ...data,
+          params: strippedParams,
+          ...(data.status === 'running'
+            ? { status: 'idle' as const, progressNote: undefined }
+            : {}),
+        },
+      }
+    }
+    return node
   }
   return {
     ...node,
     data: {
       ...data,
+      params: strippedParams,
       versions: [],
       activeVersion: 0,
       status: 'idle',
@@ -393,6 +473,38 @@ function stripHeavyOutputs(node: PineNode): PineNode {
 }
 
 const HISTORY_LIMIT = 50
+
+/** 单节点保留的视频版本上限：base64 视频单条可达数十 MB，无限追加会耗尽内存与
+ * 档案配额（连续生成/取件后整页 OOM 白屏的根源之一）。 */
+const MAX_VIDEO_VERSIONS = 4
+
+/**
+ * 视频版本裁剪：超限时从最旧的「带 data: 媒体」版本开始丢弃（成功产出已入
+ * 生成历史，可从历史面板找回）；仅含 taskRef 的失败版本保留（续查凭据、体积小）。
+ * activeVersion 随删除平移，保持指向同一条版本。
+ */
+function capVideoVersions(
+  versions: NodeVersion[],
+  activeVersion: number,
+): { versions: NodeVersion[]; activeVersion: number } {
+  const isHeavy = (v: NodeVersion) => !!v.content && v.content.startsWith('data:')
+  let heavy = versions.filter(isHeavy).length
+  if (heavy <= MAX_VIDEO_VERSIONS) return { versions, activeVersion }
+  const next: NodeVersion[] = []
+  let active = activeVersion
+  versions.forEach((v, i) => {
+    if (heavy > MAX_VIDEO_VERSIONS && isHeavy(v)) {
+      heavy--
+      if (i <= activeVersion) active -= 1
+      return
+    }
+    next.push(v)
+  })
+  return {
+    versions: next,
+    activeVersion: Math.max(0, Math.min(active, next.length - 1)),
+  }
+}
 
 /**
  * 撤销/重做只回退画布结构（节点增删、连线、导入/新建），不回退生成结果：
@@ -1020,12 +1132,16 @@ export const useStudioStore = create<StudioState>()(
               }
               safeSet(g, (s) => {
                 const cur = s.nodes.find((n) => n.id === id)
-                const versions = [...(cur?.data.versions ?? []), ...results]
+                const merged = [...(cur?.data.versions ?? []), ...results]
+                const capped = capVideoVersions(
+                  merged,
+                  merged.length - results.length + okIndex,
+                )
                 return {
                   nodes: mutateNode(s.nodes, id, {
                     status: 'done',
-                    versions,
-                    activeVersion: versions.length - results.length + okIndex,
+                    versions: capped.versions,
+                    activeVersion: capped.activeVersion,
                     progressNote: undefined,
                   }),
                 }
@@ -1116,12 +1232,13 @@ export const useStudioStore = create<StudioState>()(
             safeSet(g, (s) => {
               const cur = s.nodes.find((n) => n.id === id)
               if (!cur) return {}
-              const versions = [...cur.data.versions, version]
+              const merged = [...cur.data.versions, version]
+              const capped = capVideoVersions(merged, merged.length - 1)
               return {
                 nodes: mutateNode(s.nodes, id, {
                   status: 'done',
-                  versions,
-                  activeVersion: versions.length - 1,
+                  versions: capped.versions,
+                  activeVersion: capped.activeVersion,
                   progressNote: undefined,
                 }),
               }
@@ -1502,7 +1619,10 @@ export const useStudioStore = create<StudioState>()(
           try {
             const rec = await getProject(pid)
             if (!rec) return
-            const nodes = rec.graph.nodes as PineNode[]
+            const { nodes, edges } = sanitizeArchiveGraph(
+              rec.graph.nodes ?? [],
+              rec.graph.edges ?? [],
+            )
             // 档案无媒体且不比当前画布多内容时不覆盖（罕见：旧版剥离档案）
             const hasMedia = nodes.some((n) =>
               n.data.versions.some((v) => v.content?.startsWith('data:')),
@@ -1511,42 +1631,50 @@ export const useStudioStore = create<StudioState>()(
             generation++
             // 档案恢复=会话起点，此前的撤销栈（可能属于恢复前画布）一并清空
             set({
-              nodes: nodes.map((n) => ({ ...n, selected: false, dragging: false })),
-              edges: rec.graph.edges as PineEdge[],
+              nodes,
+              edges,
               projectName: rec.name,
               selectedNodeId: null,
               past: [],
               future: [],
             })
+          } catch (err) {
+            // 坏档案不阻断挂载：保持当前画布（localStorage 版），仅告警
+            console.error('[pineline] 项目档案恢复失败，已跳过', err)
           } finally {
             restoringProject = false
           }
         },
 
         loadProject: async (id) => {
-          const rec = await getProject(id)
-          if (!rec) return false
-          // 切换前先落档当前画布，避免丢工作
-          await get().snapshotCurrentProject()
-          generation++
-          // 项目边界不可撤销：清空撤销栈，否则 ⌘Z 连按会把上一个项目的画布
-          // 回退出来（且 2s 自动快照会把旧项目内容写进当前项目档案，持久化污染）
-          set({
-            nodes: (rec.graph.nodes as PineNode[]).map((n) => ({
-              ...n,
-              selected: false,
-              dragging: false,
-            })),
-            edges: rec.graph.edges as PineEdge[],
-            projectName: rec.name,
-            // credits 是用户级模拟额度，不随项目档案覆盖（档案字段仅向后兼容保留）
-            selectedNodeId: null,
-            currentProjectId: id,
-            past: [],
-            future: [],
-          })
-          get().requestFitView()
-          return true
+          try {
+            const rec = await getProject(id)
+            if (!rec) return false
+            // 切换前先落档当前画布，避免丢工作
+            await get().snapshotCurrentProject()
+            const { nodes, edges } = sanitizeArchiveGraph(
+              rec.graph.nodes ?? [],
+              rec.graph.edges ?? [],
+            )
+            generation++
+            // 项目边界不可撤销：清空撤销栈，否则 ⌘Z 连按会把上一个项目的画布
+            // 回退出来（且 2s 自动快照会把旧项目内容写进当前项目档案，持久化污染）
+            set({
+              nodes,
+              edges,
+              projectName: rec.name,
+              // credits 是用户级模拟额度，不随项目档案覆盖（档案字段仅向后兼容保留）
+              selectedNodeId: null,
+              currentProjectId: id,
+              past: [],
+              future: [],
+            })
+            get().requestFitView()
+            return true
+          } catch (err) {
+            console.error('[pineline] 项目载入失败', err)
+            return false
+          }
         },
 
         createProject: async () => {
@@ -1591,7 +1719,7 @@ export const useStudioStore = create<StudioState>()(
     {
       name: 'pineline-studio-v1',
       version: 4,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => guardedLocalStorage),
       // v2：shot 多桩 handle 剥离；v3：projectName；v4：节点体系收敛（8 类 → 3 类 + preset + versions）
       migrate: (persisted, version) => {
         const s = persisted as StudioState
