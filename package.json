@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "test:tapnow": "node scripts/verify-tapnow-redesign.mjs",
     "test:seedance": "node scripts/verify-seedance-body.mjs",
+    "test:agent-ops": "node scripts/verify-agent-ops.mjs",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0"
   },
