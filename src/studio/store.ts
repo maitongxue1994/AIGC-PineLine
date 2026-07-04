@@ -1459,11 +1459,14 @@ export const useStudioStore = create<StudioState>()(
             )
             if (!hasMedia && nodes.length <= get().nodes.length) return
             generation++
+            // 档案恢复=会话起点，此前的撤销栈（可能属于恢复前画布）一并清空
             set({
               nodes: nodes.map((n) => ({ ...n, selected: false, dragging: false })),
               edges: rec.graph.edges as PineEdge[],
               projectName: rec.name,
               selectedNodeId: null,
+              past: [],
+              future: [],
             })
           } finally {
             restoringProject = false
@@ -1475,8 +1478,9 @@ export const useStudioStore = create<StudioState>()(
           if (!rec) return false
           // 切换前先落档当前画布，避免丢工作
           await get().snapshotCurrentProject()
-          commit()
           generation++
+          // 项目边界不可撤销：清空撤销栈，否则 ⌘Z 连按会把上一个项目的画布
+          // 回退出来（且 2s 自动快照会把旧项目内容写进当前项目档案，持久化污染）
           set({
             nodes: (rec.graph.nodes as PineNode[]).map((n) => ({
               ...n,
@@ -1485,9 +1489,11 @@ export const useStudioStore = create<StudioState>()(
             })),
             edges: rec.graph.edges as PineEdge[],
             projectName: rec.name,
-            credits: rec.credits,
+            // credits 是用户级模拟额度，不随项目档案覆盖（档案字段仅向后兼容保留）
             selectedNodeId: null,
             currentProjectId: id,
+            past: [],
+            future: [],
           })
           get().requestFitView()
           return true
@@ -1496,7 +1502,6 @@ export const useStudioStore = create<StudioState>()(
         createProject: async () => {
           await get().snapshotCurrentProject()
           const id = `p-${crypto.randomUUID()}`
-          commit()
           generation++
           set({
             nodes: [],
@@ -1504,6 +1509,8 @@ export const useStudioStore = create<StudioState>()(
             selectedNodeId: null,
             projectName: '未命名项目',
             currentProjectId: id,
+            past: [],
+            future: [],
           })
           await putProject({
             id,
@@ -1518,7 +1525,6 @@ export const useStudioStore = create<StudioState>()(
 
         detachProject: (id) => {
           if (get().currentProjectId !== id) return
-          commit()
           generation++
           set({
             nodes: [],
@@ -1526,6 +1532,8 @@ export const useStudioStore = create<StudioState>()(
             selectedNodeId: null,
             projectName: '未命名工程',
             currentProjectId: null,
+            past: [],
+            future: [],
           })
         },
       }

@@ -89,7 +89,14 @@ export const useAgentStore = create<AgentState>()(
             })
             const reply: AgentMessage = {
               ...msg('assistant', res.reply),
-              ...(res.ops.length ? { ops: res.ops, opsState: 'pending' as const } : {}),
+              ...(res.ops.length
+                ? {
+                    ops: res.ops,
+                    opsState: 'pending' as const,
+                    // 记录 ops 归属项目：切换项目后这批操作不能再执行
+                    projectId: useStudioStore.getState().currentProjectId,
+                  }
+                : {}),
             }
             patchSession(session.id, (s) => ({ ...s, messages: [...s.messages, reply] }))
             // 自动执行模式：直接执行并写回结果
@@ -112,6 +119,22 @@ export const useAgentStore = create<AgentState>()(
           if (!session) return
           const message = session.messages.find((m) => m.id === messageId)
           if (!message?.ops || message.opsState === 'executed') return
+          // 跨项目防护：ops 针对生成时的画布，切项目后 ref 失效且可能误改新项目
+          if (message.projectId && message.projectId !== useStudioStore.getState().currentProjectId) {
+            patchSession(session.id, (s) => ({
+              ...s,
+              messages: s.messages.map((m) =>
+                m.id === messageId
+                  ? {
+                      ...m,
+                      opsState: 'dismissed' as const,
+                      result: '已取消：这批操作属于另一个项目的画布，请回到原项目或重新对话',
+                    }
+                  : m,
+              ),
+            }))
+            return
+          }
           // 清空画布是破坏性操作：无论手动/自动模式，画布非空时都必须经用户确认
           if (
             message.ops.some((o) => o.op === 'clear_canvas') &&

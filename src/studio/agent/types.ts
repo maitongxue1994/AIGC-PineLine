@@ -51,6 +51,8 @@ export type AgentMessage = {
   opsState?: 'pending' | 'executed' | 'dismissed'
   /** 执行结果摘要 */
   result?: string
+  /** ops 生成时归属的项目 id（跨项目防护：切换项目后拒绝执行旧 ops） */
+  projectId?: string | null
   createdAt: number
 }
 
