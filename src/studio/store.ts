@@ -147,6 +147,8 @@ type StudioState = {
   // 自增信号：画布监听后执行 fitView（模板/建链后自动把新节点带入视野）
   fitViewTick: number
   requestFitView: () => void
+  /** 一键整理：按拓扑层从左到右分列、层内纵向堆叠，可 ⌘Z 撤销 */
+  autoLayout: () => void
   runPipeline: (ids?: string[]) => Promise<void>
   createPipelineFromBrief: (brief: string) => string[]
   /**
@@ -660,6 +662,44 @@ export const useStudioStore = create<StudioState>()(
 
         requestFitView: () => set((s) => ({ fitViewTick: s.fitViewTick + 1 })),
 
+        // 一键整理画布：Kahn 拓扑层 → 一层一列（上游在左），层内按原 y 序纵排。
+        // 高度优先用 React Flow v12 回写的 measured 实测值，未测量时按 kind 估算
+        autoLayout: () => {
+          const { nodes, edges } = get()
+          if (!nodes.length) return
+          commit()
+          const layers = topoLayers(nodes, edges)
+          const byId = new Map(nodes.map((n) => [n.id, n]))
+          const COL_W = 560
+          const GAP_Y = 64
+          const estimateH = (n: PineNode) => {
+            const measured = (n as { measured?: { height?: number } }).measured?.height
+            if (measured) return measured
+            if (n.data.kind === 'video') return 320
+            if (n.data.kind === 'text') return 280
+            return 380
+          }
+          const placed = new Map<string, Position>()
+          layers.forEach((layer, li) => {
+            let y = 80
+            const ordered = [...layer].sort(
+              (a, b) => (byId.get(a)?.position.y ?? 0) - (byId.get(b)?.position.y ?? 0),
+            )
+            for (const nid of ordered) {
+              const n = byId.get(nid)
+              if (!n) continue
+              placed.set(nid, { x: 80 + li * COL_W, y })
+              y += estimateH(n) + GAP_Y
+            }
+          })
+          set((s) => ({
+            nodes: s.nodes.map((n) =>
+              placed.has(n.id) ? { ...n, position: placed.get(n.id)! } : n,
+            ),
+          }))
+          get().requestFitView()
+        },
+
         // 模板 = 起一个新工作流：清空并替换画布；commit 在前，⌘Z 一步可撤回原画布
         applyTemplate: (id) => {
           const tpl = buildTemplate(id)
@@ -797,20 +837,28 @@ export const useStudioStore = create<StudioState>()(
           const copy = buildNode(
             src.data.kind,
             src.data.preset,
-            { x: src.position.x + 48, y: src.position.y + 48 },
+            { x: src.position.x + 72, y: src.position.y + 72 },
             {
               title: `${src.data.title} 副本`,
               prompt: src.data.prompt,
               params: { ...src.data.params },
             },
           )
-          // 素材节点的版本就是内容本身，复制时保留；生成类节点则重置为待运行
-          if (src.data.kind === 'asset') {
-            copy.data.versions = src.data.versions
-            copy.data.activeVersion = src.data.activeVersion
-            copy.data.status = src.data.status
-          }
-          return pushNode(copy)
+          // 所有类型都保留产出（版本引用拷贝，无体积负担）：复制出的剧本/分镜/
+          // 图片不再是空白节点（用户实测反馈）；running 归位 idle
+          copy.data.versions = src.data.versions
+          copy.data.activeVersion = src.data.activeVersion
+          copy.data.status = src.data.status === 'running' ? 'idle' : src.data.status
+          if (src.data.shots) copy.data.shots = src.data.shots
+          // 副本接管 React Flow 选中态：原节点选中时 z=1000，若不转移选中，
+          // 副本（z=0）会被原节点完全盖住，看起来像「没复制出来」
+          copy.selected = true
+          commit()
+          set((s) => ({
+            nodes: [...s.nodes.map((n) => ({ ...n, selected: false })), copy],
+            selectedNodeId: copy.id,
+          }))
+          return copy.id
         },
 
         deleteNode: (id) => {
@@ -852,7 +900,12 @@ export const useStudioStore = create<StudioState>()(
                 x: base.x + (n.position.x - minX),
                 y: base.y + (n.position.y - minY),
               },
-              data: { ...n.data, versions: n.data.kind === 'asset' ? n.data.versions : [], activeVersion: 0, status: n.data.kind === 'asset' ? n.data.status : ('idle' as const), error: undefined },
+              // 与 duplicateNode 一致：粘贴同样保留产出与镜头表（引用拷贝），running 归位
+              data: {
+                ...n.data,
+                status: n.data.status === 'running' ? ('idle' as const) : n.data.status,
+                error: undefined,
+              },
             }
           })
           const edges = clipboard.edges.map((e) => ({
@@ -1001,6 +1054,14 @@ export const useStudioStore = create<StudioState>()(
                 const basePrompt = node.data.prompt.trim() || fallback || ''
                 if (!basePrompt)
                   throw new Error('缺少提示词：请在下方输入，或从上游节点连线')
+                // Agent 直连创建的分镜图节点 prompt 为空、运行时才临时取镜：把实际
+                // 采用的镜头描述回写节点，画布上可见可编辑（派生流程本就会回填，
+                // 此前 Agent 路径的分镜图输入栏一直空白——用户实测反馈）
+                if (preset === 'shot' && !node.data.prompt.trim() && fallback) {
+                  safeSet(g, (s) => ({
+                    nodes: mutateNode(s.nodes, id, { prompt: fallback }),
+                  }))
+                }
                 // 摄影机预设注入（摄影机面板「保存」回填的镜头光学描述）
                 const prompt = params.camera ? `${basePrompt}. ${params.camera}` : basePrompt
                 const batch = params.batch ?? 1
@@ -1025,22 +1086,36 @@ export const useStudioStore = create<StudioState>()(
                   }))
                   recordHistory(id, 'image', preset, prompt, batchVersions)
                 } else {
+                  // 编辑语义：节点已有图片产出（视频截帧/上一轮生成）时，把当前图
+                  // 作为首个参考图传入——「在这张图基础上改」而非凭提示词重开盲盒；
+                  // 产出以新版本追加（原图可回退），与高级面板 runImageEdit 一致
+                  const selfImage = activeContent(node.data)
+                  const editing = !!selfImage && isImageContent(selfImage)
+                  const refs = editing
+                    ? [selfImage as string, ...refImgs].slice(0, 6)
+                    : refImgs
                   const res = await generateImage({
                     prompt,
-                    referenceImages: refImgs.length ? refImgs : undefined,
+                    referenceImages: refs.length ? refs : undefined,
                     aspectRatio: params.aspectRatio,
                     quality: params.quality,
                     model: resolveApiModel(IMAGE_MODELS, params.imageModel),
                   })
-                  const oneVersion = [newVersion(res.image)]
-                  safeSet(g, (s) => ({
-                    nodes: mutateNode(s.nodes, id, {
-                      status: 'done',
-                      versions: oneVersion,
-                      activeVersion: 0,
-                    }),
-                  }))
-                  recordHistory(id, 'image', preset, prompt, oneVersion)
+                  const created = newVersion(res.image, editing ? '编辑' : undefined)
+                  safeSet(g, (s) => {
+                    const cur = s.nodes.find((n) => n.id === id)
+                    const versions = editing
+                      ? [...(cur?.data.versions ?? []), created]
+                      : [created]
+                    return {
+                      nodes: mutateNode(s.nodes, id, {
+                        status: 'done',
+                        versions,
+                        activeVersion: versions.length - 1,
+                      }),
+                    }
+                  })
+                  recordHistory(id, 'image', preset, prompt, [created])
                 }
               }
             } else if (kind === 'video') {
@@ -1306,28 +1381,63 @@ export const useStudioStore = create<StudioState>()(
           set({ pipelineRunning: true })
           try {
             const { nodes, edges, runNode } = get()
-            // 传 ids 时只跑指定子图（如 Agent 刚创建的链），不重跑画布上其他节点
-            const subset = ids ? nodes.filter((n) => ids.includes(n.id)) : nodes
-            const subIds = new Set(subset.map((n) => n.id))
-            const subEdges = edges.filter(
-              (e) => subIds.has(e.source) && subIds.has(e.target),
-            )
-            const layers = topoLayers(subset, subEdges)
+            // 分层深度按**全画布**图计算，而不是只看 ids 子图——Agent 传来的
+            // run ids 可能漏掉中间节点（如分镜节点），子图断链会让下游与上游
+            // 掉进同一层并行开跑（实测：分镜脚本没生成完，分镜图/视频就全开跑）
+            const layersAll = topoLayers(nodes, edges)
+            const depth = new Map<string, number>()
+            layersAll.forEach((layer, d) => layer.forEach((nid) => depth.set(nid, d)))
+            const targetIds = new Set(ids ?? nodes.map((n) => n.id))
+            const byDepth = new Map<number, string[]>()
+            for (const n of nodes) {
+              if (!targetIds.has(n.id)) continue
+              const d = depth.get(n.id) ?? 0
+              byDepth.set(d, [...(byDepth.get(d) ?? []), n.id])
+            }
+            const layers = [...byDepth.entries()]
+              .sort((a, b) => a[0] - b[0])
+              .map(([, layer]) => layer)
+
+            // 上游（含不在本次 run 集合里的）仍在生成时等待其落定，而不是拿
+            // 旧产出/空产出直接开跑；代际切换或超过 25 分钟兜底放行
+            const waitForRunningUpstreams = async (layer: string[]) => {
+              const deadline = Date.now() + 25 * 60_000
+              for (;;) {
+                if (g !== generation || Date.now() > deadline) return
+                const cur = get()
+                const busy = layer.some((nid) =>
+                  cur.edges.some((e) => {
+                    if (e.target !== nid) return false
+                    const u = cur.nodes.find((n) => n.id === e.source)
+                    return u?.data.status === 'running'
+                  }),
+                )
+                if (!busy) return
+                await sleep(1000)
+              }
+            }
+
             let skipped = 0
             for (const layer of layers) {
               if (g !== generation) break
+              await waitForRunningUpstreams(layer)
+              if (g !== generation) break
               // 级联保护：直接上游失败或无产出（已被跳过）的节点不再运行，
-              // 避免上游超时后下游连环报「缺少剧本/缺少提示词」（用户实测反馈）
+              // 避免上游超时后下游连环报「缺少剧本/缺少提示词」（用户实测反馈）。
+              // 判定沿全量 edges；但「idle 且无产出」只对本次 run 集合内的上游
+              // 生效——集合外的空闲上游本就不会运行，维持旧行为不误伤
               const cur = get()
               const runnable = layer.filter((nid) => {
-                const ups = subEdges
+                const ups = cur.edges
                   .filter((e) => e.target === nid)
                   .map((e) => cur.nodes.find((n) => n.id === e.source))
                   .filter((u): u is PineNode => !!u)
                 const blocked = ups.some(
                   (u) =>
                     u.data.status === 'error' ||
-                    (u.data.status !== 'done' && !activeContent(u.data)),
+                    (targetIds.has(u.id) &&
+                      u.data.status !== 'done' &&
+                      !activeContent(u.data)),
                 )
                 if (blocked) skipped++
                 return !blocked
@@ -1383,13 +1493,21 @@ export const useStudioStore = create<StudioState>()(
           // 第一步：派生节点 + 连线（commit 由 addNode/onConnect 的 150ms 合并窗归并成一步撤销）
           const baseX = sb.position.x + 460
           const baseY = sb.position.y
+          // 槽位从「已派生数量」续排：分批派生时 k 从 0 重数会让第二批与第一批
+          // 坐标完全重叠、逐个叠死（用户实测反馈）；行距 560 给竖版分镜图留高度
+          const existing = state.edges.filter((e) => {
+            if (e.source !== storyboardId) return false
+            const t = state.nodes.find((n) => n.id === e.target)
+            return t?.data.kind === 'image' && t.data.preset === 'shot'
+          }).length
           const ids: string[] = []
           chosen.forEach((shotIdx, k) => {
+            const slot = existing + k
             const shot = shots[shotIdx]
             const id = get().addNode(
               'image',
               'shot',
-              { x: baseX + (k % 3) * 420, y: baseY + Math.floor(k / 3) * 480 },
+              { x: baseX + (slot % 3) * 420, y: baseY + Math.floor(slot / 3) * 560 },
               {
                 title: `#${shotIdx + 1} ${shot.title}`.slice(0, 24),
                 params: { shotIndex: shotIdx },
