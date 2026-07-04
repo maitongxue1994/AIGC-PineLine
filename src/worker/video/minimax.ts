@@ -50,11 +50,15 @@ export const minimax: VideoProvider = {
       throw new PineHttpError(400, `首尾帧模式仅支持 ${MINIMAX_FL2V_MODEL}，请在模型选择器切换`)
     }
 
+    // 官方互斥：10s 仅 768P，1080P 只支持 6s → 10s 时自动降档到 768P
+    let resolution = mapResolution(req.resolution, !!req.firstFrame)
+    if (duration === 10 && resolution === '1080P') resolution = '768P'
+
     const body: Record<string, unknown> = {
       model,
       prompt: req.prompt.slice(0, 2000),
       duration,
-      resolution: mapResolution(req.resolution, !!req.firstFrame),
+      resolution,
       prompt_optimizer: true,
     }
     if (req.firstFrame) body.first_frame_image = req.firstFrame

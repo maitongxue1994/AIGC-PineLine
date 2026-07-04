@@ -65,7 +65,7 @@ export function buildSeedanceBody(req: VideoCreateReq): Record<string, unknown> 
     resolution: req.resolution ?? '720p',
     ratio,
     duration,
-    generate_audio: true,
+    generate_audio: req.generateAudio ?? true,
     watermark: false,
   }
 }

@@ -38,6 +38,7 @@ export default function VideoParamsPopover({ id, data }: { id: string; data: Pin
     ? (params.videoResolution ?? '720p')
     : model.resolutions[0]
   const dur = Math.min(model.durationMax, Math.max(model.durationMin, params.videoDuration ?? 5))
+  const audioOn = params.videoAudio ?? true
 
   return (
     <Popover width={320}>
@@ -186,6 +187,31 @@ export default function VideoParamsPopover({ id, data }: { id: string; data: Pin
             onChange={(v) => updateNodeParams(id, { videoDuration: v })}
           />
         </div>
+
+        {/* 生成音效（官方 generate_audio，默认 true；仅 audio 能力模型显示） */}
+        {model.audio && (
+          <div className="flex items-center justify-between">
+            <div className="text-[14px] font-semibold" style={{ color: '#D6D6DB' }}>
+              生成音效
+              <span className="ml-2 text-[12px] font-normal" style={{ color: TOKENS.textFaint }}>
+                关闭后输出无声视频
+              </span>
+            </div>
+            <button
+              role="switch"
+              aria-checked={audioOn}
+              title="官方 generate_audio 参数"
+              onClick={() => updateNodeParams(id, { videoAudio: !audioOn })}
+              className="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+              style={{ background: audioOn ? '#F5F5F7' : 'rgba(255,255,255,0.14)' }}
+            >
+              <span
+                className="absolute top-0.5 h-5 w-5 rounded-full transition-all"
+                style={{ left: audioOn ? 22 : 2, background: audioOn ? '#0B0B0C' : '#fff' }}
+              />
+            </button>
+          </div>
+        )}
       </div>
     </Popover>
   )

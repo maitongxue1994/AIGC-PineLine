@@ -25,8 +25,10 @@ export interface VideoCreateReq {
   duration?: number
   /** 16:9 | 9:16 | 1:1 | auto；不支持比例的家跟随首帧 */
   ratio?: string
-  /** 480p | 720p | 1080p */
+  /** 480p | 720p | 1080p | 4k（4k 仅 Seedance 2.0 标准版） */
   resolution?: string
+  /** 是否生成同步音频（Seedance 2.0 系列/1.5 Pro 官方 generate_audio，默认 true） */
+  generateAudio?: boolean
 }
 
 export type VideoTaskPhase = 'queued' | 'running' | 'done' | 'error'

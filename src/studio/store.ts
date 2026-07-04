@@ -935,6 +935,7 @@ export const useStudioStore = create<StudioState>()(
                 duration: params.videoDuration ?? 5,
                 ratio: params.videoRatio ?? 'auto',
                 resolution: params.videoResolution ?? '720p',
+                generateAudio: params.videoAudio ?? true,
               }
               // 倍数条数并行生成，全部落定后统一入版本（部分失败保留成功条目）
               const count = params.videoMultiplier ?? 1

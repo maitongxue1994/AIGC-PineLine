@@ -95,6 +95,8 @@ export type NodeParams = {
   videoResolution?: VideoResolution
   videoMultiplier?: 1 | 2
   videoModel?: string
+  /** 是否生成同步音频（官方 generate_audio，默认 true；仅 audio 能力模型可关） */
+  videoAudio?: boolean
   /** 首尾帧参考的 ⇄ 交换态（进 params 供 runNode 读取，而非组件局部态） */
   framesSwapped?: boolean
   /** 软剪辑区间（秒）：播放范围 clamp；由剪辑模式确认写入 */
@@ -213,6 +215,8 @@ export type VideoCreateRequest = {
   duration?: number
   ratio?: string
   resolution?: string
+  /** 是否生成同步音频（官方 generate_audio，默认 true） */
+  generateAudio?: boolean
 }
 
 export type VideoCreateResponse = { taskId: string }

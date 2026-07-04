@@ -12,6 +12,7 @@ import {
   Music,
   Plus,
   Sparkles,
+  Trash2,
   UserRoundPlus,
   X,
   Zap,
@@ -24,11 +25,15 @@ import { isImageContent, type NodeParams, type PineNodeData } from '../../types'
 import VideoModelPicker from './VideoModelPicker'
 import VideoParamsPopover from './VideoParamsPopover'
 
-/** 全能参考三类素材（多模态参考生视频，仅 Seedance 2.0 系列）：官方上限 图9/视频3/音频3 */
+/**
+ * 全能参考三类素材（多模态参考生视频，仅 Seedance 2.0 系列）。
+ * 官方上限（volcengine 82379/1520757）：图 0~9 / 视频 0~3 / 音频 0~3，无混合总数上限；
+ * 单张图 <30MB、音频单个 ≤15MB；视频官方单个 ≤200MB，但 base64 请求体 ≤64MB，前端收紧到 50MB。
+ */
 const OMNI_KINDS = [
   { kind: 'image', field: 'omniRefs', accept: 'image/*', prefix: 'image/', max: 9, maxMB: 30, label: '参考图', Icon: ImageIcon },
   { kind: 'video', field: 'omniVideos', accept: 'video/*', prefix: 'video/', max: 3, maxMB: 50, label: '参考视频', Icon: Film },
-  { kind: 'audio', field: 'omniAudios', accept: 'audio/*', prefix: 'audio/', max: 3, maxMB: 20, label: '参考音频', Icon: Music },
+  { kind: 'audio', field: 'omniAudios', accept: 'audio/*', prefix: 'audio/', max: 3, maxMB: 15, label: '参考音频', Icon: Music },
 ] as const
 
 type OmniKind = (typeof OMNI_KINDS)[number]['kind']
@@ -36,6 +41,33 @@ type OmniField = (typeof OMNI_KINDS)[number]['field']
 
 /** data URL 的近似字节数（base64 段 × 3/4） */
 const dataUrlBytes = (u: string) => Math.ceil((u.length - (u.indexOf(',') + 1)) * 0.75)
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('read'))
+    reader.readAsDataURL(file)
+  })
+
+/** 读取图片像素尺寸（官方要求宽高 (300,6000)px、宽高比 (0.4,2.5)） */
+const loadImageSize = (url: string) =>
+  new Promise<{ w: number; h: number }>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+    img.onerror = () => reject(new Error('image'))
+    img.src = url
+  })
+
+/** 读取视频/音频时长（秒；官方要求单段 [2,15]s 且各自合计 ≤15s） */
+const loadMediaDuration = (url: string, kind: 'video' | 'audio') =>
+  new Promise<number>((resolve, reject) => {
+    const el = document.createElement(kind)
+    el.preload = 'metadata'
+    el.onloadedmetadata = () => resolve(Math.round(el.duration * 10) / 10)
+    el.onerror = () => reject(new Error(kind))
+    el.src = url
+  })
 
 /**
  * 视频生成输入栏（video-node-tools §5）：
@@ -86,14 +118,16 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
 
   const omniRefs = params.omniRefs ?? []
   const omniVideos = params.omniVideos ?? []
+  const omniAudios = params.omniAudios ?? []
+  const omniTotal = omniRefs.length + omniVideos.length + omniAudios.length
 
   const omniTotalBytes = (extra: string[]) =>
-    [...(params.omniRefs ?? []), ...(params.omniVideos ?? []), ...(params.omniAudios ?? []), ...extra].reduce(
+    [...omniRefs, ...omniVideos, ...omniAudios, ...extra].reduce(
       (sum, u) => sum + dataUrlBytes(u),
       0,
     )
 
-  const handleOmniUpload = (kind: OmniKind, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleOmniUpload = async (kind: OmniKind, e: React.ChangeEvent<HTMLInputElement>) => {
     const cfg = OMNI_KINDS.find((k) => k.kind === kind)!
     const files = Array.from(e.target.files ?? [])
     e.target.value = ''
@@ -101,7 +135,7 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
     const current = (params[cfg.field] ?? []) as string[]
     const slots = cfg.max - current.length
     if (slots <= 0) {
-      flash(`${cfg.label}最多 ${cfg.max} 个`)
+      flash(`${cfg.label}已达官方上限 ${cfg.max} 个`)
       return
     }
     const valid = files.filter((f) => f.type.startsWith(cfg.prefix)).slice(0, slots)
@@ -109,30 +143,53 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
       flash(`仅支持${cfg.label}文件`)
       return
     }
-    Promise.all(
-      valid.map(
-        (file) =>
-          new Promise<string>((resolve, reject) => {
-            if (file.size > cfg.maxMB * 1024 * 1024) {
-              reject(new Error('oversize'))
-              return
-            }
-            const reader = new FileReader()
-            reader.onload = () => resolve(String(reader.result))
-            reader.onerror = reject
-            reader.readAsDataURL(file)
-          }),
-      ),
-    )
-      .then((loaded) => {
-        // 官方约束：整个请求体 ≤64MB，前端拦截超限
-        if (omniTotalBytes(loaded) > 64 * 1024 * 1024) {
-          flash('参考素材总大小超过 64MB，请压缩或减少')
+    if (files.length > valid.length) {
+      flash(`${cfg.label}还可添加 ${slots} 个，多余文件已忽略`)
+    }
+    if (valid.some((f) => f.size > cfg.maxMB * 1024 * 1024)) {
+      flash(`${cfg.label}单个需 ≤${cfg.maxMB}MB`)
+      return
+    }
+    try {
+      const loaded = await Promise.all(valid.map(readFileAsDataUrl))
+      // 官方约束：整个请求体 ≤64MB，前端拦截超限
+      if (omniTotalBytes(loaded) > 64 * 1024 * 1024) {
+        flash('参考素材总大小超过 64MB，请压缩或减少')
+        return
+      }
+      // 官方素材规格前置校验，避免任务提交后才被 API 打回
+      if (kind === 'image') {
+        for (const url of loaded) {
+          const { w, h } = await loadImageSize(url)
+          if (w <= 300 || h <= 300 || w >= 6000 || h >= 6000) {
+            flash(`参考图宽高需在 300~6000px 之间（当前 ${w}×${h}）`)
+            return
+          }
+          const ar = w / h
+          if (ar <= 0.4 || ar >= 2.5) {
+            flash('参考图宽高比（宽/高）需在 0.4~2.5 之间')
+            return
+          }
+        }
+      } else {
+        const media = kind as 'video' | 'audio'
+        const newSecs = await Promise.all(loaded.map((u) => loadMediaDuration(u, media)))
+        // 元数据时长留 0.1s 容差
+        if (newSecs.some((s) => s < 1.9 || s > 15.1)) {
+          flash(`单段${cfg.label}时长需在 2~15 秒之间`)
           return
         }
-        updateNodeParams(id, { [cfg.field]: [...current, ...loaded] } as Partial<NodeParams>)
-      })
-      .catch(() => flash(`${cfg.label}上传失败（单个需 ≤${cfg.maxMB}MB）`))
+        const oldSecs = await Promise.all(current.map((u) => loadMediaDuration(u, media)))
+        const total = [...oldSecs, ...newSecs].reduce((a, b) => a + b, 0)
+        if (total > 15.1) {
+          flash(`全部${cfg.label}合计时长不能超过 15 秒（当前约 ${Math.round(total)} 秒）`)
+          return
+        }
+      }
+      updateNodeParams(id, { [cfg.field]: [...current, ...loaded] } as Partial<NodeParams>)
+    } catch {
+      flash(`${cfg.label}读取失败，请检查文件后重试`)
+    }
   }
 
   const removeOmni = (field: OmniField, idx: number) => {
@@ -140,6 +197,9 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
     next.splice(idx, 1)
     updateNodeParams(id, { [field]: next } as Partial<NodeParams>)
   }
+
+  const clearAllOmni = () =>
+    updateNodeParams(id, { omniRefs: [], omniVideos: [], omniAudios: [] })
 
   return (
     <NodeToolbar position={Position.Bottom} offset={14} className="nodrag">
@@ -249,22 +309,38 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
                             </button>
                           </div>
                         ))}
-                        {list.length < k.max && (
-                          <button
-                            title={`上传${k.label}（${list.length}/${k.max}）`}
-                            onClick={() => inputRefs.current[k.kind]?.click()}
-                            className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[14px] border-[1.5px] border-dashed border-white/20 transition hover:border-white/40"
-                            style={{ color: TOKENS.textMuted }}
-                          >
-                            <k.Icon size={14} />
-                            <span className="text-[8px]" style={{ color: TOKENS.textFaint }}>
-                              {k.label}
-                            </span>
-                          </button>
-                        )}
+                        <button
+                          disabled={list.length >= k.max}
+                          title={
+                            list.length >= k.max
+                              ? `${k.label}已达官方上限 ${k.max} 个`
+                              : `上传${k.label}（${list.length}/${k.max}）`
+                          }
+                          onClick={() => inputRefs.current[k.kind]?.click()}
+                          className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[14px] border-[1.5px] border-dashed border-white/20 transition enabled:hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-35"
+                          style={{ color: TOKENS.textMuted }}
+                        >
+                          <k.Icon size={14} />
+                          <span className="text-[8px]" style={{ color: TOKENS.textFaint }}>
+                            {list.length ? `${list.length}/${k.max}` : k.label}
+                          </span>
+                        </button>
                       </Fragment>
                     )
                   })}
+                  {omniTotal > 0 && (
+                    <button
+                      title="清空全部参考素材"
+                      onClick={clearAllOmni}
+                      className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[14px] border-[1.5px] border-dashed border-white/20 transition hover:border-red-400/60 hover:text-red-300"
+                      style={{ color: TOKENS.textMuted }}
+                    >
+                      <Trash2 size={14} />
+                      <span className="text-[8px]" style={{ color: TOKENS.textFaint }}>
+                        清空
+                      </span>
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -439,7 +515,7 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
           accept={k.accept}
           multiple
           className="hidden"
-          onChange={(e) => handleOmniUpload(k.kind, e)}
+          onChange={(e) => void handleOmniUpload(k.kind, e)}
         />
       ))}
     </NodeToolbar>

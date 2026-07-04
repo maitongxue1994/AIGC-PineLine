@@ -98,4 +98,24 @@ check('缺省 model → doubao-seedance-2-0-260128', () =>
 check('缺省 resolution → 720p', () =>
   assert.equal(buildSeedanceBody({ provider: 'seedance', prompt: 'x' }).resolution, '720p'))
 
+// ---- 7. generate_audio 开关（官方默认 true，可显式关闭出无声视频） ----
+check('generate_audio 缺省 → true', () =>
+  assert.equal(buildSeedanceBody({ provider: 'seedance', prompt: 'x' }).generate_audio, true))
+check('generateAudio: false → generate_audio false 透传', () =>
+  assert.equal(
+    buildSeedanceBody({ provider: 'seedance', prompt: 'x', generateAudio: false }).generate_audio,
+    false,
+  ))
+
+// ---- 8. 全能参考无提示词（官方允许：至少 1 图或 1 视频即可，无需文本） ----
+const omniOnly = buildSeedanceBody({
+  provider: 'seedance',
+  prompt: '',
+  omniRefs: ['data:image/png;base64,AAA'],
+})
+check('全能参考无提示词：content 无 text 项', () =>
+  assert.ok(!omniOnly.content.some((c) => c.type === 'text')))
+check('全能参考无提示词：参考图仍完整入 content', () =>
+  assert.equal(omniOnly.content.filter((c) => c.type === 'image_url').length, 1))
+
 console.log(`\n✅ Seedance 请求体校验全部通过：${pass} 项`)
