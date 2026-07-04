@@ -20,11 +20,12 @@ import {
 import { useStudioStore } from '../../store'
 import { estimateCost, VIDEO_MODELS, VIDEO_PROMPT_MAX_CHARS } from '../../nodeCatalog'
 import { SHADOWS, TOKENS } from '../../designTokens'
-import { Chip, SyncTextarea, VDivider } from '../composerKit'
+import { Chip, Popover, SyncTextarea, VDivider } from '../composerKit'
 import { isImageContent, type NodeParams, type PineNodeData } from '../../types'
 import VideoModelPicker from './VideoModelPicker'
 import VideoParamsPopover from './VideoParamsPopover'
 import PromptEditorDialog from '../../dialogs/PromptEditorDialog'
+import AssetPickerDialog from '../../dialogs/AssetPickerDialog'
 
 /**
  * 全能参考三类素材（多模态参考生视频，仅 Seedance 2.0 系列）。
@@ -97,6 +98,12 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
   const frames = JSON.parse(upstreamImgs) as { nodeId: string; src: string }[]
 
   const [openPop, setOpenPop] = useState<'model' | 'params' | null>(null)
+  // 全能参考添加菜单（本地上传/素材库/生成历史）；音频无历史/素材库来源，直走文件框
+  const [omniMenu, setOmniMenu] = useState<OmniKind | null>(null)
+  const [omniPicker, setOmniPicker] = useState<{
+    kind: 'image' | 'video'
+    tab: 'library' | 'history'
+  } | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const textRef = useRef<HTMLTextAreaElement | null>(null)
@@ -129,37 +136,29 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
       0,
     )
 
-  const handleOmniUpload = async (kind: OmniKind, e: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * dataURL 官方规格校验 + 追加进 params。
+   * 本地上传 / 素材库 / 生成历史三条入库路径共用同一套校验，避免任务提交后才被 API 打回。
+   */
+  const addOmniDataUrls = async (kind: OmniKind, incoming: string[]) => {
     const cfg = OMNI_KINDS.find((k) => k.kind === kind)!
-    const files = Array.from(e.target.files ?? [])
-    e.target.value = ''
-    if (!files.length) return
     const current = (params[cfg.field] ?? []) as string[]
     const slots = cfg.max - current.length
     if (slots <= 0) {
       flash(`${cfg.label}已达官方上限 ${cfg.max} 个`)
       return
     }
-    const valid = files.filter((f) => f.type.startsWith(cfg.prefix)).slice(0, slots)
-    if (!valid.length) {
-      flash(`仅支持${cfg.label}文件`)
-      return
-    }
-    if (files.length > valid.length) {
-      flash(`${cfg.label}还可添加 ${slots} 个，多余文件已忽略`)
-    }
-    if (valid.some((f) => f.size > cfg.maxMB * 1024 * 1024)) {
+    const loaded = incoming.slice(0, slots)
+    if (loaded.some((u) => dataUrlBytes(u) > cfg.maxMB * 1024 * 1024)) {
       flash(`${cfg.label}单个需 ≤${cfg.maxMB}MB`)
       return
     }
     try {
-      const loaded = await Promise.all(valid.map(readFileAsDataUrl))
       // 官方约束：整个请求体 ≤64MB，前端拦截超限
       if (omniTotalBytes(loaded) > 64 * 1024 * 1024) {
         flash('参考素材总大小超过 64MB，请压缩或减少')
         return
       }
-      // 官方素材规格前置校验，避免任务提交后才被 API 打回
       if (kind === 'image') {
         for (const url of loaded) {
           const { w, h } = await loadImageSize(url)
@@ -189,6 +188,28 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
         }
       }
       updateNodeParams(id, { [cfg.field]: [...current, ...loaded] } as Partial<NodeParams>)
+    } catch {
+      flash(`${cfg.label}读取失败，请检查文件后重试`)
+    }
+  }
+
+  const handleOmniUpload = async (kind: OmniKind, e: React.ChangeEvent<HTMLInputElement>) => {
+    const cfg = OMNI_KINDS.find((k) => k.kind === kind)!
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (!files.length) return
+    const valid = files.filter((f) => f.type.startsWith(cfg.prefix))
+    if (!valid.length) {
+      flash(`仅支持${cfg.label}文件`)
+      return
+    }
+    if (valid.some((f) => f.size > cfg.maxMB * 1024 * 1024)) {
+      flash(`${cfg.label}单个需 ≤${cfg.maxMB}MB`)
+      return
+    }
+    try {
+      const loaded = await Promise.all(valid.map(readFileAsDataUrl))
+      await addOmniDataUrls(kind, loaded)
     } catch {
       flash(`${cfg.label}读取失败，请检查文件后重试`)
     }
@@ -311,22 +332,65 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
                             </button>
                           </div>
                         ))}
-                        <button
-                          disabled={list.length >= k.max}
-                          title={
-                            list.length >= k.max
-                              ? `${k.label}已达官方上限 ${k.max} 个`
-                              : `上传${k.label}（${list.length}/${k.max}）`
-                          }
-                          onClick={() => inputRefs.current[k.kind]?.click()}
-                          className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-[14px] border-[1.5px] border-dashed border-white/20 transition enabled:hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-35"
-                          style={{ color: TOKENS.textMuted }}
-                        >
-                          <k.Icon size={14} />
-                          <span className="text-[8px]" style={{ color: TOKENS.textFaint }}>
-                            {list.length ? `${list.length}/${k.max}` : k.label}
-                          </span>
-                        </button>
+                        <div className="relative shrink-0">
+                          <button
+                            disabled={list.length >= k.max}
+                            title={
+                              list.length >= k.max
+                                ? `${k.label}已达官方上限 ${k.max} 个`
+                                : `添加${k.label}（${list.length}/${k.max}）`
+                            }
+                            onClick={() =>
+                              // 音频无素材库/历史来源，直走本地文件框
+                              k.kind === 'audio'
+                                ? inputRefs.current[k.kind]?.click()
+                                : setOmniMenu(omniMenu === k.kind ? null : k.kind)
+                            }
+                            className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-[14px] border-[1.5px] border-dashed border-white/20 transition enabled:hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-35"
+                            style={{ color: TOKENS.textMuted }}
+                          >
+                            <k.Icon size={14} />
+                            <span className="text-[8px]" style={{ color: TOKENS.textFaint }}>
+                              {list.length ? `${list.length}/${k.max}` : k.label}
+                            </span>
+                          </button>
+                          {omniMenu === k.kind && k.kind !== 'audio' && (
+                            <Popover width={170} onClose={() => setOmniMenu(null)}>
+                              <div className="p-2">
+                                <button
+                                  onClick={() => {
+                                    setOmniMenu(null)
+                                    inputRefs.current[k.kind]?.click()
+                                  }}
+                                  className="w-full rounded-[12px] px-3 py-2.5 text-left text-[14px] transition hover:bg-white/[0.05]"
+                                  style={{ color: TOKENS.textBody }}
+                                >
+                                  本地上传
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setOmniMenu(null)
+                                    setOmniPicker({ kind: k.kind as 'image' | 'video', tab: 'library' })
+                                  }}
+                                  className="w-full rounded-[12px] px-3 py-2.5 text-left text-[14px] transition hover:bg-white/[0.05]"
+                                  style={{ color: TOKENS.textBody }}
+                                >
+                                  从素材库选择
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setOmniMenu(null)
+                                    setOmniPicker({ kind: k.kind as 'image' | 'video', tab: 'history' })
+                                  }}
+                                  className="w-full rounded-[12px] px-3 py-2.5 text-left text-[14px] transition hover:bg-white/[0.05]"
+                                  style={{ color: TOKENS.textBody }}
+                                >
+                                  从生成历史选择
+                                </button>
+                              </div>
+                            </Popover>
+                          )}
+                        </div>
                       </Fragment>
                     )
                   })}
@@ -541,6 +605,20 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
           hint="Seedance 官方建议：中文 ≤500 字 / 英文 ≤1000 词，过长易被忽略细节"
           onChange={(v) => setPrompt(id, v)}
           onClose={() => setEditorOpen(false)}
+        />
+      )}
+
+      {omniPicker && (
+        <AssetPickerDialog
+          title={omniPicker.kind === 'video' ? '选择参考视频' : '选择参考图'}
+          kinds={[omniPicker.kind]}
+          initialTab={omniPicker.tab}
+          onPick={(p) => {
+            setOmniPicker(null)
+            // 与本地上传共用同一套官方规格校验（尺寸/时长/64MB 总量）
+            void addOmniDataUrls(omniPicker.kind, [p.dataUrl])
+          }}
+          onClose={() => setOmniPicker(null)}
         />
       )}
 

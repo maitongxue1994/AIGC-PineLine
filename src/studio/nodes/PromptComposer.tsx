@@ -77,7 +77,8 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
   const refs = JSON.parse(upstreamRefs) as { nodeId: string; src: string }[]
 
   const [openPop, setOpenPop] = useState<'model' | 'preset' | 'ratio' | 'batch' | 'tone' | 'length' | 'addref' | null>(null)
-  const [pickerOpen, setPickerOpen] = useState(false)
+  // false=关闭；'library'/'history'=打开且落在对应 tab（参考素材可来自素材库或生成历史）
+  const [pickerOpen, setPickerOpen] = useState<false | 'library' | 'history'>(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const textRef = useRef<HTMLTextAreaElement | null>(null)
@@ -180,11 +181,18 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
                       本地上传
                     </button>
                     <button
-                      onClick={() => { setOpenPop(null); setPickerOpen(true) }}
+                      onClick={() => { setOpenPop(null); setPickerOpen('library') }}
                       className="w-full rounded-[12px] px-3 py-2.5 text-left text-[14px] transition hover:bg-white/[0.05]"
                       style={{ color: TOKENS.textBody }}
                     >
                       从素材库选择
+                    </button>
+                    <button
+                      onClick={() => { setOpenPop(null); setPickerOpen('history') }}
+                      className="w-full rounded-[12px] px-3 py-2.5 text-left text-[14px] transition hover:bg-white/[0.05]"
+                      style={{ color: TOKENS.textBody }}
+                    >
+                      从生成历史选择
                     </button>
                   </div>
                 </Popover>
@@ -554,6 +562,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
         {pickerOpen && (
           <AssetPickerDialog
             title="选择参考图"
+            initialTab={pickerOpen}
             onPick={(a) => {
               setPickerOpen(false)
               attachRef(a.dataUrl)
