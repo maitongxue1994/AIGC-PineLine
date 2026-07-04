@@ -1,12 +1,178 @@
 import { useEffect, useState } from 'react'
 import { useReactFlow } from '@xyflow/react'
-import { FileText, Film } from 'lucide-react'
-import { listHistory, type HistoryEntry } from '../assetdb'
+import { Cloud, FileText, Film, HardDrive, Trash2 } from 'lucide-react'
+import { clearGenLog, listGenLog, listHistory, type GenLogEntry, type HistoryEntry } from '../assetdb'
+import { fetchWorkerLogs, type WorkerLogEntry } from '../api'
 import { useStudioStore } from '../store'
 import { useUIStore } from '../uiStore'
 import { SHADOWS, TOKENS } from '../designTokens'
 
-/** 生成历史面板：图片/视频/文本 tab，按日期分组；点击回源节点或重新入画布 */
+const fmtTime = (ts: number) => {
+  const d = new Date(ts)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+const shortPath = (path: string) =>
+  path.replace('/api/generate/', '').replace('upstream:', '↑')
+
+/**
+ * 生成日志视图：本地记录（IndexedDB genlog，成败都留痕）+ 云端实例（Worker 环形缓冲）。
+ * 超时/失败的生成请求可在此凭 request-id 找回/对账（用户实测需求）。
+ */
+function GenLogView() {
+  const [source, setSource] = useState<'local' | 'cloud'>('local')
+  const [rows, setRows] = useState<GenLogEntry[]>([])
+  const [cloud, setCloud] = useState<{ entries: WorkerLogEntry[]; isolateId: string; hint: string } | null>(null)
+  const [cloudErr, setCloudErr] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  useEffect(() => {
+    void listGenLog().then(setRows)
+  }, [])
+
+  const loadCloud = () => {
+    setCloudErr(null)
+    fetchWorkerLogs()
+      .then(setCloud)
+      .catch((e) => setCloudErr(e instanceof Error ? e.message : String(e)))
+  }
+
+  const copy = (text: string) => {
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(text)
+      setTimeout(() => setCopied(null), 1200)
+    })
+  }
+
+  const logRow = (key: string, ts: number, ok: boolean, main: string, sub?: string, rid?: string) => (
+    <div key={key} className="rounded-[10px] bg-white/[0.04] p-2.5">
+      <div className="flex items-center gap-2 text-[11px]">
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ background: ok ? '#4BBF6B' : '#E5484D' }}
+        />
+        <span className="min-w-0 flex-1 truncate" style={{ color: TOKENS.textBody }}>
+          {main}
+        </span>
+        <span className="shrink-0" style={{ color: TOKENS.textFaint }}>
+          {fmtTime(ts)}
+        </span>
+      </div>
+      {sub && (
+        <div className="mt-1 line-clamp-2 pl-3.5 text-[10px] leading-relaxed" style={{ color: ok ? TOKENS.textFaint : '#E5959A' }}>
+          {sub}
+        </div>
+      )}
+      {rid && (
+        <button
+          onClick={() => copy(rid)}
+          title="点击复制 request-id（可去供应商控制台对账找回）"
+          className="mt-1 block max-w-full truncate pl-3.5 text-left font-mono text-[10px] transition hover:text-white"
+          style={{ color: copied === rid ? '#4BBF6B' : TOKENS.textMuted }}
+        >
+          {copied === rid ? '✓ 已复制' : `rid: ${rid}`}
+        </button>
+      )}
+    </div>
+  )
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-1.5 px-3 pt-2.5">
+        {(
+          [
+            ['local', '本地记录', HardDrive],
+            ['cloud', '云端实例', Cloud],
+          ] as const
+        ).map(([k, label, Icon]) => (
+          <button
+            key={k}
+            onClick={() => {
+              setSource(k)
+              if (k === 'cloud' && !cloud) loadCloud()
+            }}
+            className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition"
+            style={{
+              background: source === k ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
+              color: source === k ? TOKENS.textTitle : TOKENS.textMuted,
+            }}
+          >
+            <Icon size={11} /> {label}
+          </button>
+        ))}
+        <span className="flex-1" />
+        {source === 'local' && rows.length > 0 && (
+          <button
+            title="清空本地生成日志"
+            onClick={() => void clearGenLog().then(() => setRows([]))}
+            className="rounded p-1 transition hover:text-red-300"
+            style={{ color: TOKENS.textFaint }}
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
+        {source === 'local' ? (
+          rows.length === 0 ? (
+            <div className="py-10 text-center text-[12px]" style={{ color: TOKENS.textFaint }}>
+              暂无生成请求记录（成功与失败都会自动记录在本机）
+            </div>
+          ) : (
+            rows.map((r) =>
+              logRow(
+                r.id,
+                r.createdAt,
+                r.ok,
+                `${shortPath(r.path)}${r.model ? ` · ${r.model}` : ''} · ${(r.ms / 1000).toFixed(1)}s`,
+                r.error ?? r.prompt,
+                r.requestId,
+              ),
+            )
+          )
+        ) : cloudErr ? (
+          <div className="py-10 text-center text-[12px]" style={{ color: '#E5959A' }}>
+            云端日志拉取失败：{cloudErr}
+            <button onClick={loadCloud} className="mt-2 block w-full text-[12px] underline" style={{ color: TOKENS.textMuted }}>
+              重试
+            </button>
+          </div>
+        ) : !cloud ? (
+          <div className="py-10 text-center text-[12px]" style={{ color: TOKENS.textFaint }}>
+            拉取中…
+          </div>
+        ) : (
+          <>
+            <div className="px-1 text-[10px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
+              实例 {cloud.isolateId.slice(0, 8)} · {cloud.hint}
+            </div>
+            {cloud.entries.length === 0 ? (
+              <div className="py-8 text-center text-[12px]" style={{ color: TOKENS.textFaint }}>
+                当前实例暂无记录（Workers 多实例轮转，可稍后重试）
+              </div>
+            ) : (
+              [...cloud.entries]
+                .sort((a, b) => b.ts - a.ts)
+                .map((r, i) =>
+                  logRow(
+                    `${r.ts}-${i}`,
+                    r.ts,
+                    r.ok,
+                    `${shortPath(r.path)}${r.model ? ` · ${r.model}` : ''} · ${(r.ms / 1000).toFixed(1)}s`,
+                    r.error ?? r.note,
+                    r.requestId,
+                  ),
+                )
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** 生成历史面板：图片/视频/文本/日志 tab，按日期分组；点击回源节点或重新入画布 */
 export default function HistoryPanel() {
   const focusNode = useStudioStore((s) => s.focusNode)
   const addAssetNode = useStudioStore((s) => s.addAssetNode)
@@ -17,7 +183,7 @@ export default function HistoryPanel() {
   const { screenToFlowPosition } = useReactFlow()
 
   const [rows, setRows] = useState<HistoryEntry[]>([])
-  const [tab, setTab] = useState<'image' | 'video' | 'text'>('image')
+  const [tab, setTab] = useState<'image' | 'video' | 'text' | 'log'>('image')
 
   useEffect(() => {
     void listHistory().then(setRows)
@@ -26,7 +192,7 @@ export default function HistoryPanel() {
   const centerPos = () =>
     screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
 
-  const items = rows.filter((r) => r.kind === tab)
+  const items = tab === 'log' ? [] : rows.filter((r) => r.kind === tab)
   const counts = {
     image: rows.filter((r) => r.kind === 'image').length,
     video: rows.filter((r) => r.kind === 'video').length,
@@ -69,6 +235,7 @@ export default function HistoryPanel() {
             ['image', `图片 (${counts.image})`],
             ['video', `视频 (${counts.video})`],
             ['text', `文本 (${counts.text})`],
+            ['log', '日志'],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -85,6 +252,9 @@ export default function HistoryPanel() {
         ))}
       </div>
 
+      {tab === 'log' ? (
+        <GenLogView />
+      ) : (
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {items.length === 0 && (
           <div className="py-10 text-center text-[13px]" style={{ color: TOKENS.textFaint }}>
@@ -160,6 +330,7 @@ export default function HistoryPanel() {
           </div>
         ))}
       </div>
+      )}
     </div>
   )
 }

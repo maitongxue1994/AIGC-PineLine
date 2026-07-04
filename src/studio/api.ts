@@ -110,6 +110,28 @@ export function agentChat(req: AgentChatRequest, signal?: AbortSignal): Promise<
   return postJson<AgentChatRequest, AgentChatResponse>('/api/agent/chat', req, signal)
 }
 
+/** Worker 侧内存环形缓冲日志（单实例 best-effort；完整日志在 Cloudflare Workers Logs） */
+export type WorkerLogEntry = {
+  ts: number
+  path: string
+  ok: boolean
+  status: number
+  ms: number
+  error?: string
+  requestId?: string
+  model?: string
+  note?: string
+}
+
+export function fetchWorkerLogs(): Promise<{
+  entries: WorkerLogEntry[]
+  isolateId: string
+  now: number
+  hint: string
+}> {
+  return postJson('/api/debug/logs', {})
+}
+
 // ---------------- 视频生成（异步任务：创建 → 轮询 → 取件代理） ----------------
 
 export function createVideoTask(req: VideoCreateRequest): Promise<VideoCreateResponse> {
