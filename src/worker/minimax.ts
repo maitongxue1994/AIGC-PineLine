@@ -6,7 +6,7 @@ const MODEL = 'MiniMax-M2.7'
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
 
 type MiniMaxResponse = {
-  choices?: Array<{ message?: { content?: string } }>
+  choices?: Array<{ message?: { content?: string; reasoning_content?: string } }>
   base_resp?: { status_code?: number; status_msg?: string }
 }
 
@@ -16,6 +16,15 @@ export async function callMinimaxChat(
   apiKey: string,
   opts: { temperature?: number; maxTokens?: number } = {},
 ): Promise<string> {
+  return (await callMinimaxChatFull(messages, apiKey, opts)).content
+}
+
+/** 同 callMinimaxChat，额外带出 M2.7 推理模型的思考过程（Agent 面板「思考过程」展示） */
+export async function callMinimaxChatFull(
+  messages: ChatMessage[],
+  apiKey: string,
+  opts: { temperature?: number; maxTokens?: number } = {},
+): Promise<{ content: string; reasoning?: string }> {
   const res = await fetchWithTimeout(
     MINIMAX_ENDPOINT,
     {
@@ -46,9 +55,13 @@ export async function callMinimaxChat(
     throw new Error(`MiniMax ${json.base_resp.status_code}: ${json.base_resp.status_msg ?? ''}`)
   }
 
-  const content = json.choices?.[0]?.message?.content
+  const message = json.choices?.[0]?.message
+  const content = message?.content
   if (!content) throw new Error('MiniMax 未返回内容')
-  return content
+  return {
+    content,
+    ...(message?.reasoning_content ? { reasoning: message.reasoning_content } : {}),
+  }
 }
 
 export function callMinimaxText(
