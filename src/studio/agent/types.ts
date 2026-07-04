@@ -23,6 +23,8 @@ export type AgentOp =
 
 export type AgentChatRequest = {
   messages: { role: 'user' | 'assistant'; content: string }[]
+  /** 聊天模型（前端 TEXT_MODELS 的 id）：缺省/minimax 系走 MiniMax，doubao-* 走方舟 */
+  model?: string
   canvas: {
     nodes: {
       id: string
@@ -33,6 +35,8 @@ export type AgentChatRequest = {
       status: string
       hasImage: boolean
       versionCount: number
+      /** 节点参数摘要（模型/shotIndex/比例/时长等非空键）——LLM 编辑节点的依据 */
+      params?: Record<string, unknown>
     }[]
     edges: { source: string; target: string }[]
   }

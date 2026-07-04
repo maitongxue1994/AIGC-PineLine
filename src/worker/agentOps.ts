@@ -23,7 +23,21 @@ const VALID_PRESETS = new Set([
 const VALID_PARAM_KEYS = new Set([
   'shotIndex', 'aspectRatio', 'quality', 'batch', 'tone', 'length', 'splitMode', 'splitter',
   'videoMode', 'videoRatio', 'videoDuration', 'videoResolution', 'videoModel', 'videoAudio',
+  'textModel', 'imageModel',
 ])
+/**
+ * 模型键的值白名单（对齐前端 nodeCatalog 的 TEXT/IMAGE/VIDEO_MODELS id）。
+ * 本模块零依赖（test:agent-ops 门禁直测），不 import 前端文件——枚举以字面量维护。
+ * 非法模型值只丢该键，不整条丢 op。
+ */
+const MODEL_VALUE_WHITELIST: Record<string, ReadonlySet<string>> = {
+  textModel: new Set(['minimax-m2.7', 'doubao-seed-2.0-pro', 'doubao-seed-2.0-lite', 'doubao-seed-evolving']),
+  imageModel: new Set(['gemini-3.1-flash', 'seedream-5.0']),
+  videoModel: new Set([
+    'seedance-2.0', 'seedance-2.0-fast', 'seedance-2.0-mini',
+    'hailuo-2.3', 'hailuo-02', 'wan-2.7', 'kling-v2-6', 'veo-3.1-fast',
+  ]),
+}
 // 完整管线（剧本+分镜+N分镜图+N视频+连线+run）很容易超 20 条，放宽到 48
 export const MAX_OPS = 48
 
@@ -33,7 +47,10 @@ function pickParams(raw: unknown): Record<string, unknown> | null {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!VALID_PARAM_KEYS.has(k)) continue
-    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') out[k] = v
+    if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') continue
+    const allowValues = MODEL_VALUE_WHITELIST[k]
+    if (allowValues && (typeof v !== 'string' || !allowValues.has(v))) continue
+    out[k] = v
   }
   return Object.keys(out).length ? out : null
 }

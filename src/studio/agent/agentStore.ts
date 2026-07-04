@@ -12,6 +12,9 @@ type AgentState = {
   /** 执行模式：手动确认（默认）/ 自动执行 */
   mode: 'manual' | 'auto'
   setMode: (m: 'manual' | 'auto') => void
+  /** 聊天模型（TEXT_MODELS 的 id）：minimax 系走 MiniMax，doubao-* 走方舟 */
+  model: string
+  setModel: (m: string) => void
   sessions: AgentSession[]
   activeSessionId: string | null
   sending: boolean
@@ -50,6 +53,8 @@ export const useAgentStore = create<AgentState>()(
         toggle: () => set((s) => ({ open: !s.open })),
         mode: 'manual',
         setMode: (m) => set({ mode: m }),
+        model: 'minimax-m2.7',
+        setModel: (m) => set({ model: m }),
         sessions: [],
         activeSessionId: null,
         sending: false,
@@ -83,12 +88,26 @@ export const useAgentStore = create<AgentState>()(
           set({ sending: true })
           sendAbort = new AbortController()
           try {
-            const history = [...activeSession()!.messages]
-              .slice(-12)
-              .map((m) => ({ role: m.role, content: m.content }))
+            // 执行结果回喂：assistant 的 reply 是执行**前**写好的同包文本，若不把
+            // 真实执行结果带回历史，LLM 会一直以为「已执行」（用户实测：先说已
+            // 执行 15 项、下一轮才发现画布没变化说抱歉重来）
+            const history = [...activeSession()!.messages].slice(-12).map((m) => {
+              let content = m.content
+              if (m.role === 'assistant' && m.ops?.length) {
+                if (m.opsState === 'executed' && m.result) {
+                  content += `\n[系统备注·画布操作执行结果] ${m.result}`
+                } else if (m.opsState === 'dismissed') {
+                  content += `\n[系统备注] 用户放弃了这批画布操作，均未执行`
+                } else if (m.opsState === 'pending') {
+                  content += `\n[系统备注] 这批画布操作尚未执行（等待用户确认）`
+                }
+              }
+              return { role: m.role, content }
+            })
             const res = await agentChat(
               {
                 messages: history,
+                model: get().model,
                 canvas: canvasSnapshot(),
                 selection: useStudioStore.getState().selectedNodeId
                   ? [useStudioStore.getState().selectedNodeId as string]
@@ -207,6 +226,7 @@ export const useAgentStore = create<AgentState>()(
       partialize: (s) =>
         ({
           mode: s.mode,
+          model: s.model,
           sessions: s.sessions.slice(0, MAX_SESSIONS),
           activeSessionId: s.activeSessionId,
         }) as unknown as AgentState,

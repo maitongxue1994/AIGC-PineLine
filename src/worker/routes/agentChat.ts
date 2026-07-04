@@ -1,4 +1,5 @@
 import { callMinimaxChatFull, type ChatMessage } from '../minimax'
+import { callArkChat } from '../ark'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 import { sanitizeOps } from '../agentOps'
@@ -10,6 +11,8 @@ import { sanitizeOps } from '../agentOps'
 
 type Body = {
   messages?: { role: 'user' | 'assistant'; content: string }[]
+  /** 聊天模型（前端 TEXT_MODELS 的 id）：缺省/minimax-m2.7 走 MiniMax，doubao-* 走方舟 */
+  model?: string
   canvas?: {
     nodes?: {
       id: string
@@ -20,10 +23,22 @@ type Body = {
       status: string
       hasImage: boolean
       versionCount: number
+      /** 节点参数摘要（模型/shotIndex/比例/时长等，前端已挑非空键） */
+      params?: Record<string, unknown>
     }[]
     edges?: { source: string; target: string }[]
   }
   selection?: string[]
+}
+
+/**
+ * 前端模型 id → 方舟真实模型 id（对齐 src/studio/nodeCatalog.ts TEXT_MODELS 的 apiModel；
+ * Worker 不 import 前端文件，映射以字面量维护）。未命中一律回落 MiniMax 通道。
+ */
+const ARK_CHAT_MODELS: Record<string, string> = {
+  'doubao-seed-2.0-pro': 'doubao-seed-2-0-pro-260215',
+  'doubao-seed-2.0-lite': 'doubao-seed-2-0-lite-260428',
+  'doubao-seed-evolving': 'doubao-seed-evolving',
 }
 
 const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创作管线工作台的编排 Agent。用户用自然语言描述创作需求，你帮他们在节点画布上搭建/修改/运行生成管线。
@@ -46,12 +61,23 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 - {"op":"add_node","ref":"n3","kind":"image","preset":"shot","title":"分镜图 1","params":{"shotIndex":0},"position":{"x":1040,"y":80}}
 - {"op":"add_node","ref":"n6","kind":"video","title":"镜头视频 1","params":{"videoDuration":5},"position":{"x":1520,"y":80}}
 - {"op":"set_prompt","id":"<已有节点id或本轮ref>","prompt":"…"}
-- {"op":"set_params","id":"…","params":{"aspectRatio":"16:9","quality":"1K","batch":1,"tone":"cinematic","length":"short","shotIndex":0,"videoDuration":5,"videoResolution":"720p"}}
+- {"op":"set_params","id":"…","params":{…}}：修改节点参数（对已有节点 id 或本轮 ref 均可）。可用键：
+  - 文本节点：tone(cinematic/commercial/drama/documentary)、length(short/medium/long)；图片节点：aspectRatio("16:9" 等)、quality(1K/2K/4K)、batch(1-4)、shotIndex；视频节点：videoDuration(4-15)、videoResolution(480p/720p/1080p)、videoRatio、videoMode、videoAudio。
+  - 模型键（用户要求换模型时用，值必须原样取自枚举）：
+    - textModel：minimax-m2.7(MiniMax M2.7，默认) / doubao-seed-2.0-pro(豆包 Seed 2.0 Pro) / doubao-seed-2.0-lite(豆包 Seed 2.0 Lite) / doubao-seed-evolving(豆包自进化)
+    - imageModel：gemini-3.1-flash(Gemini 3.1 Flash，默认) / seedream-5.0(Seedream 5.0)
+    - videoModel：seedance-2.0(Seedance 2.0，默认) / seedance-2.0-fast(Seedance 2.0 Fast) / seedance-2.0-mini(Seedance 2.0 Mini) / hailuo-2.3(海螺 2.3) / hailuo-02(海螺-02 首尾帧) / wan-2.7(通义万相 2.7) / kling-v2-6(可灵 2.6) / veo-3.1-fast(VEO 3.1 Fast)
 - {"op":"rename","id":"…","title":"…"}
 - {"op":"connect","source":"…","target":"…"}
 - {"op":"delete_node","id":"…"}
 - {"op":"run","ids":["…"]}（按依赖顺序运行这些节点）
 - {"op":"clear_canvas"}（清空画布；前端执行前会向用户二次确认）
+
+## 修改已有节点（含换模型）
+- 画布快照的每个节点带 params（当前模型/参数配置，缺省键 = 用默认模型/默认值）。
+- 用户要求修改现有节点的模型/参数/提示词时，直接用 set_params/set_prompt 作用于快照里的节点 id，不要新建节点。
+- 批量改模型示例——用户说「把所有分镜图的模型换成 Seedream 5.0」，对快照中每个 preset 为 shot 的图片节点各出一条：
+  {"op":"set_params","id":"<该节点id>","params":{"imageModel":"seedream-5.0"}}
 
 ## 规则
 1. 只输出一个 JSON 对象：{"reply":"给用户的中文回复","ops":[…]}。不要 markdown 代码围栏，不要任何解释文字。
@@ -94,9 +120,16 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
     if (!history.length || history[history.length - 1].role !== 'user') {
       return jsonError('messages 不能为空且最后一条须为 user')
     }
-    if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
+    const arkModel = body.model ? ARK_CHAT_MODELS[body.model] : undefined
+    if (arkModel && !env.ARK_API_KEY) {
+      return jsonError(
+        '豆包聊天模型未接入：请配置 Worker secret ARK_API_KEY（与 Seedance 同一密钥，详见 docs/视频生成接入指南.md），或切回 MiniMax M2.7',
+        501,
+      )
+    }
+    if (!arkModel && !env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
 
-    // 画布快照摘要（prompt 截断，不含图片数据）
+    // 画布快照摘要（prompt 截断，不含图片数据；params 前端已挑模型/关键参数非空键）
     const nodes = (body.canvas?.nodes ?? []).slice(0, 60).map((n) => ({
       ...n,
       prompt: (n.prompt ?? '').slice(0, 120),
@@ -105,8 +138,10 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
     const edges = (body.canvas?.edges ?? []).slice(0, 120)
     const selection = (body.selection ?? []).slice(0, 10)
 
+    // 节点每行一条紧凑 JSON（带 params），LLM 能看到各节点当前模型/参数
+    const nodeLines = nodes.length ? nodes.map((n) => JSON.stringify(n)).join('\n') : '（空画布）'
     const contextMsg =
-      `当前画布快照：\n节点：${JSON.stringify(nodes)}\n连线：${JSON.stringify(edges)}\n` +
+      `当前画布快照：\n节点（每行一个）：\n${nodeLines}\n连线：${JSON.stringify(edges)}\n` +
       `选中节点：${JSON.stringify(selection)}`
 
     const messages: ChatMessage[] = [
@@ -116,11 +151,11 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
       ...history.map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) })),
     ]
 
-    const { content: raw, reasoning } = await callMinimaxChatFull(messages, env.MINIMAX_API_KEY, {
-      temperature: 0.3,
-      // 完整管线的 ops JSON 更长（剧本+分镜+N分镜图+N视频），3000 会截断
-      maxTokens: 4096,
-    })
+    // 完整管线的 ops JSON 更长（剧本+分镜+N分镜图+N视频），3000 会截断
+    const chatOpts = { temperature: 0.3, maxTokens: 4096 }
+    const { content: raw, reasoning } = arkModel
+      ? await callArkChat(arkModel, messages, env.ARK_API_KEY!, chatOpts)
+      : await callMinimaxChatFull(messages, env.MINIMAX_API_KEY, chatOpts)
     const parsed = parseAgentJson(raw)
     const { ops, dropped } = sanitizeOps(parsed.ops)
     const reply =

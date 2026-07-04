@@ -55,6 +55,35 @@ check('set_params 全非法键 → 整条丢弃', () => {
   assert.equal(r.dropped, 1)
 })
 
+// ---- 4b. 模型键：键白名单放行 + 值白名单校验 ----
+check('set_params textModel/imageModel 合法值透传', () => {
+  const r = sanitizeOps([
+    { op: 'set_params', id: 'a', params: { textModel: 'doubao-seed-2.0-lite', imageModel: 'seedream-5.0' } },
+  ])
+  assert.deepEqual(r.ops[0].params, {
+    textModel: 'doubao-seed-2.0-lite',
+    imageModel: 'seedream-5.0',
+  })
+})
+check('模型键非法值只丢该键，不整条丢 op', () => {
+  const r = sanitizeOps([
+    { op: 'set_params', id: 'a', params: { imageModel: 'gpt-image-99', aspectRatio: '16:9' } },
+  ])
+  assert.deepEqual(r.ops[0].params, { aspectRatio: '16:9' })
+})
+check('videoModel 值白名单（非法值剔除，合法值透传）', () => {
+  const bad = sanitizeOps([{ op: 'set_params', id: 'a', params: { videoModel: 'sora-99' } }])
+  assert.equal(bad.ops.length, 0)
+  const good = sanitizeOps([{ op: 'set_params', id: 'a', params: { videoModel: 'seedance-2.0-fast' } }])
+  assert.deepEqual(good.ops[0].params, { videoModel: 'seedance-2.0-fast' })
+})
+check('add_node 初始 params 同样校验模型值', () => {
+  const r = sanitizeOps([
+    { op: 'add_node', ref: 'n1', kind: 'image', preset: 'shot', params: { shotIndex: 1, imageModel: 'seedream-5.0', textModel: 'bad-model' } },
+  ])
+  assert.deepEqual(r.ops[0].params, { shotIndex: 1, imageModel: 'seedream-5.0' })
+})
+
 // ---- 5. 非法 kind / preset 拒绝 ----
 check('kind=asset 拒绝', () => {
   const r = sanitizeOps([{ op: 'add_node', ref: 'n1', kind: 'asset' }])

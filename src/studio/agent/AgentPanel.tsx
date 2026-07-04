@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useAgentStore } from './agentStore'
 import { useStudioStore } from '../store'
+import { TEXT_MODELS } from '../nodeCatalog'
 import { activeContent, isImageContent } from '../types'
 import { describeOp } from './types'
 import { SHADOWS, TOKENS } from '../designTokens'
@@ -105,6 +106,8 @@ export default function AgentPanel() {
   const stop = useAgentStore((s) => s.stop)
   const confirmOps = useAgentStore((s) => s.confirmOps)
   const dismissOps = useAgentStore((s) => s.dismissOps)
+  const chatModel = useAgentStore((s) => s.model)
+  const setChatModel = useAgentStore((s) => s.setModel)
 
   const selectedNode = useStudioStore((s) =>
     s.selectedNodeId ? s.nodes.find((n) => n.id === s.selectedNodeId) ?? null : null,
@@ -113,11 +116,14 @@ export default function AgentPanel() {
   const [draft, setDraft] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [modeOpen, setModeOpen] = useState(false)
+  const [modelOpen, setModelOpen] = useState(false)
   const listRef = useRef<HTMLDivElement | null>(null)
   const historyRef = useRef<HTMLDivElement | null>(null)
   const modeRef = useRef<HTMLDivElement | null>(null)
+  const modelRef = useRef<HTMLDivElement | null>(null)
   useDismissable(historyOpen, () => setHistoryOpen(false), () => [historyRef.current])
   useDismissable(modeOpen, () => setModeOpen(false), () => [modeRef.current])
+  useDismissable(modelOpen, () => setModelOpen(false), () => [modelRef.current])
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
   const messages = session?.messages ?? []
@@ -389,9 +395,43 @@ export default function AgentPanel() {
               </div>
             )}
           </div>
-          <span className="text-[12px]" style={{ color: TOKENS.textFaint }}>
-            MiniMax
-          </span>
+          {/* 聊天模型选择（TEXT_MODELS：MiniMax 系走 MiniMax 通道，doubao-* 走方舟） */}
+          <div ref={modelRef} className="relative">
+            <button
+              onClick={() => setModelOpen((v) => !v)}
+              className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[12px] transition hover:bg-white/[0.08]"
+              style={{ color: TOKENS.textFaint }}
+              title="选择对话编排模型"
+            >
+              {TEXT_MODELS.find((m) => m.id === chatModel)?.name ?? 'MiniMax M2.7'}
+              <ChevronDown size={11} />
+            </button>
+            {modelOpen && (
+              <div
+                className="absolute bottom-full left-0 z-50 mb-1 w-52 rounded-[12px] border border-white/[0.08] p-1.5"
+                style={{ background: TOKENS.chipBg, boxShadow: SHADOWS.menu }}
+              >
+                {TEXT_MODELS.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      setChatModel(m.id)
+                      setModelOpen(false)
+                    }}
+                    className="block w-full rounded-[9px] px-2.5 py-2 text-left transition hover:bg-white/[0.06]"
+                    style={{ background: chatModel === m.id ? 'rgba(255,255,255,0.07)' : undefined }}
+                  >
+                    <span className="block text-[13px]" style={{ color: TOKENS.textBody }}>
+                      {m.name}
+                    </span>
+                    <span className="block text-[11px]" style={{ color: TOKENS.textFaint }}>
+                      {m.desc}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <span className="flex-1" />
           {sending ? (
             <button

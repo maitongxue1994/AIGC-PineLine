@@ -30,18 +30,23 @@ export function isArkModel(model?: string): boolean {
 
 // ---------------- 豆包 Seed 语言模型 ----------------
 
+export type ArkChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
+
 type ArkChatResponse = {
-  choices?: Array<{ message?: { content?: string } }>
+  choices?: Array<{ message?: { content?: string; reasoning_content?: string } }>
   error?: { message?: string }
 }
 
-export async function callArkText(
+/**
+ * 多轮对话通道（Agent 编排等）：接收完整 messages[]，OpenAI 兼容 chat/completions。
+ * 额外带出 Seed 推理模型的思考过程（与 callMinimaxChatFull 同形）。
+ */
+export async function callArkChat(
   model: string,
-  systemPrompt: string,
-  userPrompt: string,
+  messages: ArkChatMessage[],
   apiKey: string,
   opts: { temperature?: number; maxTokens?: number; baseUrl?: string } = {},
-): Promise<string> {
+): Promise<{ content: string; reasoning?: string }> {
   const key = requireArkKey(apiKey)
   const started = Date.now()
   const res = await fetchWithTimeout(
@@ -51,10 +56,7 @@ export async function callArkText(
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
+        messages,
         temperature: opts.temperature ?? 0.7,
         max_tokens: opts.maxTokens ?? 4096,
       }),
@@ -73,7 +75,7 @@ export async function callArkText(
       error: message.slice(0, 300),
       ...(requestId ? { requestId } : {}),
       model,
-      note: userPrompt.slice(0, 80),
+      note: (messages[messages.length - 1]?.content ?? '').slice(0, 80),
     })
     throw new Error(requestId ? `${message}（request-id: ${requestId}）` : message)
   }
@@ -81,8 +83,32 @@ export async function callArkText(
   if (!res.ok) {
     fail(`豆包 HTTP ${res.status}: ${json?.error?.message ?? ''}`.trim())
   }
-  const content = json?.choices?.[0]?.message?.content
+  const message = json?.choices?.[0]?.message
+  const content = message?.content
   if (!content) fail('豆包未返回内容')
+  return {
+    content,
+    ...(message?.reasoning_content ? { reasoning: message.reasoning_content } : {}),
+  }
+}
+
+/** system+user 两段的薄封装（剧本/分镜等单轮文本生成沿用） */
+export async function callArkText(
+  model: string,
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  opts: { temperature?: number; maxTokens?: number; baseUrl?: string } = {},
+): Promise<string> {
+  const { content } = await callArkChat(
+    model,
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    apiKey,
+    opts,
+  )
   return content
 }
 

@@ -13,6 +13,13 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
 
   let ok = 0
   let skipped = 0
+  // 失败原因留痕（上限 6 条）：此前只累计数字，Agent 与用户都不知道哪里失败了
+  const errors: string[] = []
+  const fail = (reason: string) => {
+    skipped++
+    if (errors.length < 6) errors.push(reason)
+  }
+  let runOps = 0
   const runTargets: string[] = []
 
   // 新链默认放在现有内容下方
@@ -42,21 +49,21 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
         }
         case 'set_prompt': {
           const id = resolve(op.id)
-          if (!s.nodes.some((n) => n.id === id)) { skipped++; break }
+          if (!s.nodes.some((n) => n.id === id)) { fail(`set_prompt: 节点 ${op.id} 不存在`); break }
           s.setPrompt(id, op.prompt)
           ok++
           break
         }
         case 'set_params': {
           const id = resolve(op.id)
-          if (!s.nodes.some((n) => n.id === id)) { skipped++; break }
+          if (!s.nodes.some((n) => n.id === id)) { fail(`set_params: 节点 ${op.id} 不存在`); break }
           s.updateNodeParams(id, op.params as Partial<NodeParams>)
           ok++
           break
         }
         case 'rename': {
           const id = resolve(op.id)
-          if (!s.nodes.some((n) => n.id === id)) { skipped++; break }
+          if (!s.nodes.some((n) => n.id === id)) { fail(`rename: 节点 ${op.id} 不存在`); break }
           s.updateNodeTitle(id, op.title)
           ok++
           break
@@ -68,21 +75,22 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
             source === target ||
             !s.nodes.some((n) => n.id === source) ||
             !s.nodes.some((n) => n.id === target)
-          ) { skipped++; break }
+          ) { fail(`connect: ${op.source} → ${op.target} 端点无效`); break }
           s.onConnect({ source, sourceHandle: null, target, targetHandle: null })
           ok++
           break
         }
         case 'delete_node': {
           const id = resolve(op.id)
-          if (!s.nodes.some((n) => n.id === id)) { skipped++; break }
+          if (!s.nodes.some((n) => n.id === id)) { fail(`delete_node: 节点 ${op.id} 不存在`); break }
           s.deleteNode(id)
           ok++
           break
         }
         case 'run':
+          // 计数推迟到循环后：目标全部无效时不能谎报「已执行」
+          runOps++
           runTargets.push(...op.ids.map(resolve))
-          ok++
           break
         case 'clear_canvas':
           // 确认已在 agentStore 执行前完成；commit 合并窗内整批 ⌘Z 一步可撤
@@ -90,35 +98,71 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
           ok++
           break
       }
-    } catch {
-      skipped++
+    } catch (err) {
+      fail(`${op.op}: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
   const state = useStudioStore.getState()
   if (ops.some((o) => o.op === 'add_node')) state.requestFitView()
-  if (runTargets.length) {
+  if (runOps > 0) {
     const valid = runTargets.filter((id) => state.nodes.some((n) => n.id === id))
-    if (valid.length) void state.runPipeline(valid)
+    if (!valid.length) {
+      skipped += runOps
+      errors.push('run: 目标节点均不存在，管线未启动')
+    } else if (state.pipelineRunning) {
+      skipped += runOps
+      errors.push('run: 已有管线在运行，本次 run 被忽略，请等当前管线完成')
+    } else {
+      void state.runPipeline(valid)
+      ok += runOps
+      if (valid.length < runTargets.length) {
+        errors.push(`run: ${runTargets.length - valid.length} 个目标节点不存在，已跳过`)
+      }
+    }
   }
 
-  return skipped > 0 ? `已执行 ${ok} 项，跳过 ${skipped} 项无效操作` : `已执行 ${ok} 项操作`
+  const summary =
+    skipped > 0 ? `已执行 ${ok} 项，跳过 ${skipped} 项无效操作` : `已执行 ${ok} 项操作`
+  return errors.length ? `${summary}（${errors.join('；')}）` : summary
 }
+
+/** 快照里携带的参数键：模型与关键生成参数（LLM 编辑节点的依据），媒体类字段一律不带 */
+const SNAPSHOT_PARAM_KEYS = [
+  'textModel',
+  'imageModel',
+  'videoModel',
+  'shotIndex',
+  'aspectRatio',
+  'quality',
+  'batch',
+  'videoMode',
+  'videoDuration',
+  'videoResolution',
+] as const
 
 /** 发送给 Agent 的画布快照摘要（不含图片数据） */
 export function canvasSnapshot() {
   const s = useStudioStore.getState()
   return {
-    nodes: s.nodes.map((n) => ({
-      id: n.id,
-      kind: n.data.kind,
-      preset: n.data.preset,
-      title: n.data.title,
-      prompt: n.data.prompt.slice(0, 120),
-      status: n.data.status,
-      hasImage: n.data.versions.some((v) => v.content?.startsWith('data:image')),
-      versionCount: n.data.versions.length,
-    })),
+    nodes: s.nodes.map((n) => {
+      const params: Record<string, unknown> = {}
+      for (const k of SNAPSHOT_PARAM_KEYS) {
+        const v = n.data.params[k]
+        if (v != null) params[k] = v
+      }
+      return {
+        id: n.id,
+        kind: n.data.kind,
+        preset: n.data.preset,
+        title: n.data.title,
+        prompt: n.data.prompt.slice(0, 120),
+        status: n.data.status,
+        hasImage: n.data.versions.some((v) => v.content?.startsWith('data:image')),
+        versionCount: n.data.versions.length,
+        ...(Object.keys(params).length ? { params } : {}),
+      }
+    }),
     edges: s.edges.map((e) => ({ source: e.source, target: e.target })),
   }
 }
