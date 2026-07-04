@@ -27,7 +27,7 @@ export const TOKENS = {
   maskFill: 'rgba(63,155,245,0.42)',
 
   /** 连线 */
-  edgeStroke: 'rgba(255,255,255,0.35)',
+  edgeStroke: 'rgba(255,255,255,0.5)',
   edgeStrokeSelected: '#FFFFFF',
   edgeWidth: 1.5,
 

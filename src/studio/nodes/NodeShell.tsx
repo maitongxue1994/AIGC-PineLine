@@ -112,6 +112,42 @@ export default function NodeShell({
 
       {/* 版本层叠背卡（两层，右下阶梯偏移） */}
       <div className="relative">
+        {/* 连接端口：贴卡片左右边缘的常驻小圆点（edge 端点与节点闭合），可拖出连线 */}
+        {hasTarget && (
+          <Handle
+            type="target"
+            position={Position.Left}
+            className="!z-10 !h-[11px] !w-[11px] !border-[1.5px] !border-white/60 !bg-[#1A1A1C] transition-transform hover:!scale-150"
+            onClick={(e) => handlePortClick(e, 'target')}
+          />
+        )}
+        {hasSource && (
+          <Handle
+            type="source"
+            position={Position.Right}
+            className="!z-10 !h-[11px] !w-[11px] !border-[1.5px] !border-white/60 !bg-[#1A1A1C] transition-transform hover:!scale-150"
+            onClick={(e) => handlePortClick(e, 'source')}
+          />
+        )}
+        {/* 左右 ⊕ 快捷添加（选中/悬停出现，点击弹「引用该节点生成」菜单） */}
+        {hasTarget && (
+          <button
+            title="向左添加上游节点"
+            onClick={(e) => handlePortClick(e, 'target')}
+            className={`${portCls} absolute -left-[34px] top-1/2 -translate-y-1/2 border-[1.5px] border-white/40`}
+          >
+            <Plus size={15} className="pointer-events-none" style={{ color: 'rgba(255,255,255,0.7)' }} />
+          </button>
+        )}
+        {hasSource && (
+          <button
+            title="向右添加下游节点"
+            onClick={(e) => handlePortClick(e, 'source')}
+            className={`${portCls} absolute -right-[34px] top-1/2 -translate-y-1/2 border-[1.5px] border-white/40`}
+          >
+            <Plus size={15} className="pointer-events-none" style={{ color: 'rgba(255,255,255,0.7)' }} />
+          </button>
+        )}
         {stacked && (
           <>
             <div
@@ -228,28 +264,6 @@ export default function NodeShell({
             <X size={12} />
           </button>
         </div>
-      )}
-
-      {/* 左右 ⊕ 连接端口（24px 圆，白 α.4 描边；可拖出连线，点按弹菜单） */}
-      {hasTarget && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          className={`${portCls} !left-[-34px] !h-6 !w-6 !border-[1.5px] !border-white/40 !bg-transparent`}
-          onClick={(e) => handlePortClick(e, 'target')}
-        >
-          <Plus size={15} className="pointer-events-none" style={{ color: 'rgba(255,255,255,0.7)' }} />
-        </Handle>
-      )}
-      {hasSource && (
-        <Handle
-          type="source"
-          position={Position.Right}
-          className={`${portCls} !right-[-34px] !h-6 !w-6 !border-[1.5px] !border-white/40 !bg-transparent`}
-          onClick={(e) => handlePortClick(e, 'source')}
-        >
-          <Plus size={15} className="pointer-events-none" style={{ color: 'rgba(255,255,255,0.7)' }} />
-        </Handle>
       )}
 
       {quickAdd && (
