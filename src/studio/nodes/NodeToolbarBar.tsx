@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import {
   Aperture,
@@ -26,7 +26,7 @@ import { useStudioStore } from '../store'
 import { PIN_COLORS } from '../nodeCatalog'
 import { SHADOWS, TOKENS } from '../designTokens'
 import { downloadDataUrl } from './shared'
-import { useDismissable } from '../hooks/useDismissable'
+import { Popover } from './composerKit'
 import type { NodeKind, PinColor } from '../types'
 
 export type OpsPanelKind = 'angle' | 'inpaint' | 'light' | 'camera'
@@ -111,8 +111,6 @@ export default function NodeToolbarBar({
   const deleteNode = useStudioStore((s) => s.deleteNode)
   const [pinOpen, setPinOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement | null>(null)
-  useDismissable(pinOpen || moreOpen, () => { setPinOpen(false); setMoreOpen(false) }, () => [rootRef.current])
 
   const isImage = kind === 'image'
   const canDownload = !!output
@@ -129,9 +127,10 @@ export default function NodeToolbarBar({
   ]
 
   return (
-    // 工具栏容器锚定节点上方；菜单/色板绝对定位向下展开（容器向上生长会冲出视口顶——用户实测反馈）
-    <NodeToolbar position={Position.Top} offset={12} className="relative">
-      <div ref={rootRef} className="contents">
+    // 菜单/色板走 Popover（portal 到 body，z-[70]）：同节点的 composer NodeToolbar 在 DOM
+    // 后侧且包裹层 zIndex 相同，节点内 absolute 弹层永远被输入面板盖住（历史坑见 composerKit）。
+    // Popover 优先在锚点上方展开、贴视口顶时自动翻转到下方，不会冲出屏幕。
+    <NodeToolbar position={Position.Top} offset={12}>
       <div
         className="flex items-center gap-0.5 rounded-full border border-white/[0.07] px-2.5 py-2"
         style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
@@ -155,15 +154,96 @@ export default function NodeToolbarBar({
             </TBtn>
           </>
         )}
-        <TBtn tip="浏览全部" dot active={moreOpen} onClick={() => { setMoreOpen((v) => !v); setPinOpen(false) }}>
-          <MoreHorizontal size={18} strokeWidth={1.8} />
-        </TBtn>
+        {/* 更多菜单（浏览全部）：Popover 锚定触发钮所在包裹层 */}
+        <div className="relative">
+          <TBtn tip="浏览全部" dot active={moreOpen} onClick={() => { setMoreOpen((v) => !v); setPinOpen(false) }}>
+            <MoreHorizontal size={18} strokeWidth={1.8} />
+          </TBtn>
+          {moreOpen && (
+            <Popover width={300} style={{ background: TOKENS.chipBg }} onClose={() => setMoreOpen(false)}>
+              <div className="overflow-y-auto rounded-[20px] p-2.5" style={{ maxHeight: 'min(60vh, 480px)' }}>
+                <button
+                  onClick={() => { setMoreOpen(false); duplicateNode(id) }}
+                  className="flex w-full items-center gap-3 rounded-[10px] px-3 py-[11px] text-left text-[15px] transition hover:bg-white/[0.06]"
+                  style={{ color: TOKENS.textBody }}
+                >
+                  <Copy size={17} style={{ color: TOKENS.textBody }} />
+                  复制节点
+                  <span className="ml-auto text-[13px]" style={{ color: TOKENS.textMuted }}>⌘D</span>
+                </button>
+                <button
+                  onClick={() => { setMoreOpen(false); deleteNode(id) }}
+                  className="flex w-full items-center gap-3 rounded-[10px] px-3 py-[11px] text-left text-[15px] text-red-300 transition hover:bg-red-500/10"
+                >
+                  <Trash2 size={17} />
+                  删除节点
+                  <span className="ml-auto text-[13px]" style={{ color: TOKENS.textMuted }}>⌫</span>
+                </button>
+                {isImage && (
+                  <>
+                    <div className="mx-2 my-1.5 h-px bg-white/[0.07]" />
+                    {moreDisabled.map((it) => (
+                      <div
+                        key={it.label}
+                        className="flex w-full cursor-not-allowed items-center gap-3 rounded-[10px] px-3 py-[11px] text-[15px] opacity-45"
+                        style={{ color: TOKENS.textBody }}
+                      >
+                        <span style={{ color: TOKENS.textBody }}>{it.icon}</span>
+                        {it.label}
+                        {it.extra && (
+                          <span className="text-[13px]" style={{ color: TOKENS.textMuted }}>
+                            {it.extra}
+                          </span>
+                        )}
+                        <span className="ml-auto text-[11px]" style={{ color: TOKENS.textDisabled }}>
+                          规划中
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </Popover>
+          )}
+        </div>
 
         <Divider />
 
-        <TBtn tip="Pin 标记" active={pinOpen} onClick={() => { setPinOpen((v) => !v); setMoreOpen(false) }}>
-          <Pin size={18} strokeWidth={1.8} style={pin ? { color: PIN_COLORS[pin] } : undefined} />
-        </TBtn>
+        {/* Pin 色板浮条：Popover 锚定触发钮所在包裹层 */}
+        <div className="relative">
+          <TBtn tip="Pin 标记" active={pinOpen} onClick={() => { setPinOpen((v) => !v); setMoreOpen(false) }}>
+            <Pin size={18} strokeWidth={1.8} style={pin ? { color: PIN_COLORS[pin] } : undefined} />
+          </TBtn>
+          {pinOpen && (
+            <Popover
+              width={300}
+              style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar, borderRadius: 9999 }}
+              onClose={() => setPinOpen(false)}
+            >
+              <div className="flex items-center justify-center gap-3.5 px-5 py-3">
+                <button
+                  onClick={() => { setPin(id, null); setPinOpen(false) }}
+                  className="text-[14px] transition hover:text-white"
+                  style={{ color: TOKENS.textBody }}
+                >
+                  无
+                </button>
+                {(Object.keys(PIN_COLORS) as PinColor[]).map((c) => (
+                  <button
+                    key={c}
+                    title={c}
+                    onClick={() => { setPin(id, c); setPinOpen(false) }}
+                    className="h-[26px] w-[26px] rounded-full transition-transform hover:scale-[1.15]"
+                    style={{
+                      background: PIN_COLORS[c],
+                      boxShadow: pin === c ? '0 0 0 2px rgba(255,255,255,0.7)' : undefined,
+                    }}
+                  />
+                ))}
+              </div>
+            </Popover>
+          )}
+        </div>
 
         <Divider />
 
@@ -177,85 +257,6 @@ export default function NodeToolbarBar({
           <Expand size={18} strokeWidth={1.8} />
         </TBtn>
       </div>
-
-      {/* Pin 色板浮条：向下覆盖节点展开 */}
-      {pinOpen && (
-        <div
-          className="absolute left-1/2 top-full z-40 mt-2 flex -translate-x-1/2 items-center gap-3.5 rounded-full border border-white/[0.07] px-5 py-3"
-          style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
-        >
-          <button
-            onClick={() => { setPin(id, null); setPinOpen(false) }}
-            className="text-[14px] transition hover:text-white"
-            style={{ color: TOKENS.textBody }}
-          >
-            无
-          </button>
-          {(Object.keys(PIN_COLORS) as PinColor[]).map((c) => (
-            <button
-              key={c}
-              title={c}
-              onClick={() => { setPin(id, c); setPinOpen(false) }}
-              className="h-[26px] w-[26px] rounded-full transition-transform hover:scale-[1.15]"
-              style={{
-                background: PIN_COLORS[c],
-                boxShadow: pin === c ? '0 0 0 2px rgba(255,255,255,0.7)' : undefined,
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* 更多菜单（浏览全部）：向下覆盖节点展开 + 视口内滚动，杜绝冲出屏幕 */}
-      {moreOpen && (
-        <div
-          className="absolute left-1/2 top-full z-40 mt-2 w-[300px] -translate-x-1/2 overflow-y-auto rounded-[18px] border border-white/[0.08] p-2.5"
-          style={{ background: TOKENS.chipBg, boxShadow: SHADOWS.menu, maxHeight: 'min(60vh, 480px)' }}
-        >
-          <button
-            onClick={() => { setMoreOpen(false); duplicateNode(id) }}
-            className="flex w-full items-center gap-3 rounded-[10px] px-3 py-[11px] text-left text-[15px] transition hover:bg-white/[0.06]"
-            style={{ color: TOKENS.textBody }}
-          >
-            <Copy size={17} style={{ color: TOKENS.textBody }} />
-            复制节点
-            <span className="ml-auto text-[13px]" style={{ color: TOKENS.textMuted }}>⌘D</span>
-          </button>
-          <button
-            onClick={() => { setMoreOpen(false); deleteNode(id) }}
-            className="flex w-full items-center gap-3 rounded-[10px] px-3 py-[11px] text-left text-[15px] text-red-300 transition hover:bg-red-500/10"
-          >
-            <Trash2 size={17} />
-            删除节点
-            <span className="ml-auto text-[13px]" style={{ color: TOKENS.textMuted }}>⌫</span>
-          </button>
-          {isImage && (
-            <>
-              <div className="mx-2 my-1.5 h-px bg-white/[0.07]" />
-              {moreDisabled.map((it) => (
-                <div
-                  key={it.label}
-                  className="flex w-full cursor-not-allowed items-center gap-3 rounded-[10px] px-3 py-[11px] text-[15px] opacity-45"
-                  style={{ color: TOKENS.textBody }}
-                >
-                  <span style={{ color: TOKENS.textBody }}>{it.icon}</span>
-                  {it.label}
-                  {it.extra && (
-                    <span className="text-[13px]" style={{ color: TOKENS.textMuted }}>
-                      {it.extra}
-                    </span>
-                  )}
-                  <span className="ml-auto text-[11px]" style={{ color: TOKENS.textDisabled }}>
-                    规划中
-                  </span>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      )}
-      </div>
-
     </NodeToolbar>
   )
 }

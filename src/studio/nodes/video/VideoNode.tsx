@@ -206,6 +206,27 @@ function VideoNodeInner({ id, data, selected }: NodeProps<PineNode>) {
             className="block h-full w-full object-contain"
           />
 
+          {/* 中央播放/暂停悬浮键：暂停时常显，播放中 hover 才显。nodrag 阻断
+              React Flow 的 pointerdown 起拖（仅 stopPropagation 不够） */}
+          <button
+            title={playing ? '暂停' : '播放'}
+            onClick={(e) => {
+              e.stopPropagation()
+              togglePlay()
+            }}
+            onDoubleClick={(e) => e.stopPropagation()}
+            className={`nodrag absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white backdrop-blur transition ${
+              playing ? 'opacity-0 group-hover/video:opacity-100' : 'opacity-90 hover:opacity-100'
+            }`}
+            style={{ background: 'rgba(10,10,12,0.6)' }}
+          >
+            {playing ? (
+              <Pause size={22} fill="currentColor" strokeWidth={0} />
+            ) : (
+              <Play size={22} fill="currentColor" strokeWidth={0} className="ml-0.5" />
+            )}
+          </button>
+
           {/* 左上：静音 / 收藏（34×34，r11） */}
           <div className="absolute left-3 top-3 flex gap-1.5 opacity-0 transition group-hover/video:opacity-100">
             <button

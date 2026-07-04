@@ -1,7 +1,8 @@
 import { useRef, type ReactNode } from 'react'
 import { useReactFlow, useViewport } from '@xyflow/react'
-import { HelpCircle, Magnet, Map, Scan, X } from 'lucide-react'
+import { HelpCircle, LayoutGrid, Magnet, Map, Scan, X } from 'lucide-react'
 import { useUIStore } from './uiStore'
+import { useStudioStore } from './store'
 import { useDismissable } from './hooks/useDismissable'
 import { SHADOWS, TOKENS } from './designTokens'
 
@@ -55,6 +56,7 @@ export default function BottomControls() {
   const toggleSnap = useUIStore((s) => s.toggleSnap)
   const helpOpen = useUIStore((s) => s.helpOpen)
   const setHelpOpen = useUIStore((s) => s.setHelpOpen)
+  const autoLayout = useStudioStore((s) => s.autoLayout)
   const { fitView, zoomTo } = useReactFlow()
   const { zoom } = useViewport()
   const helpRef = useRef<HTMLDivElement | null>(null)
@@ -77,6 +79,9 @@ export default function BottomControls() {
         </CtrlBtn>
         <CtrlBtn tip="重置（显示全部节点）" onClick={() => void fitView({ padding: 0.2, maxZoom: 1, duration: 300 })}>
           <Scan size={15} />
+        </CtrlBtn>
+        <CtrlBtn tip="整理布局（按管线上下游排列，⌘Z 可撤销）" onClick={autoLayout}>
+          <LayoutGrid size={15} />
         </CtrlBtn>
         <div className="group relative flex items-center">
           <input

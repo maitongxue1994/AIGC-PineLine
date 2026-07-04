@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { NodeToolbar, Position, useReactFlow } from '@xyflow/react'
 import {
   ArrowLeftRight,
@@ -21,9 +21,9 @@ import { PIN_COLORS } from '../../nodeCatalog'
 import { SHADOWS, TOKENS } from '../../designTokens'
 import { downloadDataUrl } from '../shared'
 import { TBtn, ToolbarDivider } from '../NodeToolbarBar'
+import { Popover } from '../composerKit'
 import SaveToLibraryDialog from '../../dialogs/SaveToLibraryDialog'
 import CloudTaskRecoveryDialog from '../../dialogs/CloudTaskRecoveryDialog'
-import { useDismissable } from '../../hooks/useDismissable'
 import type { PinColor, PineNodeData } from '../../types'
 
 function flash(msg: string) {
@@ -100,8 +100,6 @@ export default function VideoToolbarBar({
   const { getNode } = useReactFlow()
 
   const [menu, setMenu] = useState<'frame' | 'more' | 'pin' | null>(null)
-  const rootRef = useRef<HTMLDivElement | null>(null)
-  useDismissable(menu !== null, () => setMenu(null), () => [rootRef.current])
   const [saveOpen, setSaveOpen] = useState(false)
   const [recoveryOpen, setRecoveryOpen] = useState(false)
   const pin = data.pin ?? null
@@ -150,9 +148,9 @@ export default function VideoToolbarBar({
     'flex w-full items-center gap-3 rounded-[9px] px-3.5 py-[11px] text-left text-[15px] transition hover:bg-white/[0.06]'
 
   return (
-    // 下拉一律绝对定位向下展开：容器向上生长会把菜单顶出视口（与 NodeToolbarBar 同修）
-    <NodeToolbar position={Position.Top} offset={12} className="relative">
-      <div ref={rootRef} className="contents">
+    // 菜单/色板走 Popover（portal 到 body，z-[70]）：同节点的 composer NodeToolbar 在
+    // DOM 后侧且包裹层 zIndex 相同，节点内 absolute 弹层会被输入面板盖住（与 NodeToolbarBar 同修）
+    <NodeToolbar position={Position.Top} offset={12}>
       <div
         className="flex items-center gap-0.5 rounded-full border border-white/[0.07] px-2.5 py-2"
         style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
@@ -171,28 +169,147 @@ export default function VideoToolbarBar({
         <TBtn tip="移除当前版本" disabled={!hasVideo} onClick={removeVersion}>
           <Eraser size={18} strokeWidth={1.8} />
         </TBtn>
-        <TBtn
-          tip="截帧"
-          disabled={!hasVideo}
-          active={menu === 'frame'}
-          onClick={() => setMenu(menu === 'frame' ? null : 'frame')}
-        >
-          <Camera size={18} strokeWidth={1.8} />
-        </TBtn>
-        <TBtn
-          tip="更多"
-          dot
-          active={menu === 'more'}
-          onClick={() => setMenu(menu === 'more' ? null : 'more')}
-        >
-          <MoreHorizontal size={18} strokeWidth={1.8} />
-        </TBtn>
+        {/* 截帧下拉：Popover 锚定触发钮所在包裹层 */}
+        <div className="relative">
+          <TBtn
+            tip="截帧"
+            disabled={!hasVideo}
+            active={menu === 'frame'}
+            onClick={() => setMenu(menu === 'frame' ? null : 'frame')}
+          >
+            <Camera size={18} strokeWidth={1.8} />
+          </TBtn>
+          {menu === 'frame' && (
+            <Popover width={220} style={{ background: TOKENS.chipBg }} onClose={() => setMenu(null)}>
+              <div className="rounded-[20px] p-2">
+                {(
+                  [
+                    ['current', '截取当前帧'],
+                    ['first', '截取首帧'],
+                    ['last', '截取尾帧'],
+                  ] as const
+                ).map(([k, label]) => (
+                  <button key={k} onClick={() => void doCapture(k)} className={menuRow} style={{ color: TOKENS.textBody }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </Popover>
+          )}
+        </div>
+        {/* 更多菜单：解析（占位）/ 合规验证 / 云端任务找回 / 复制 / 删除 */}
+        <div className="relative">
+          <TBtn
+            tip="更多"
+            dot
+            active={menu === 'more'}
+            onClick={() => setMenu(menu === 'more' ? null : 'more')}
+          >
+            <MoreHorizontal size={18} strokeWidth={1.8} />
+          </TBtn>
+          {menu === 'more' && (
+            <Popover width={260} style={{ background: TOKENS.chipBg }} onClose={() => setMenu(null)}>
+              <div className="rounded-[20px] p-2">
+                <div className={`${menuRow} cursor-not-allowed opacity-45 hover:bg-transparent`} style={{ color: TOKENS.textBody }}>
+                  <Film size={17} /> 解析
+                  <span className="ml-auto text-[11px]" style={{ color: TOKENS.textDisabled }}>
+                    规划中
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setMenu(null)
+                    updateNodeParams(id, { compliance: true })
+                    flash('✓ 角色已合规，可用于 Seedance 2.0 视频生成')
+                  }}
+                  className={menuRow}
+                  style={{ color: TOKENS.textBody }}
+                >
+                  <ShieldCheck size={17} /> Seedance 2.0 合规验证
+                </button>
+                <button
+                  onClick={() => {
+                    setMenu(null)
+                    setRecoveryOpen(true)
+                  }}
+                  className={menuRow}
+                  style={{ color: TOKENS.textBody }}
+                  title="生成超时但供应商已扣费时，从方舟近 7 天任务列表取回视频"
+                >
+                  <CloudDownload size={17} /> 云端任务找回
+                </button>
+                <div className="my-1.5 border-t border-white/[0.07]" />
+                <button
+                  onClick={() => {
+                    setMenu(null)
+                    duplicateNode(id)
+                  }}
+                  className={menuRow}
+                  style={{ color: TOKENS.textBody }}
+                >
+                  <Copy size={17} /> 复制节点
+                  <span className="ml-auto font-mono text-[12px]" style={{ color: TOKENS.textFaint }}>
+                    ⌘D
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    setMenu(null)
+                    deleteNode(id)
+                  }}
+                  className={`${menuRow} text-red-300 hover:bg-red-500/10`}
+                >
+                  <Trash2 size={17} /> 删除节点
+                  <span className="ml-auto font-mono text-[12px] text-red-300/60">⌫</span>
+                </button>
+              </div>
+            </Popover>
+          )}
+        </div>
 
         <ToolbarDivider />
 
-        <TBtn tip="Pin 标记" active={menu === 'pin'} onClick={() => setMenu(menu === 'pin' ? null : 'pin')}>
-          <Pin size={18} strokeWidth={1.8} style={pin ? { color: PIN_COLORS[pin] } : undefined} />
-        </TBtn>
+        {/* Pin 色板浮条 */}
+        <div className="relative">
+          <TBtn tip="Pin 标记" active={menu === 'pin'} onClick={() => setMenu(menu === 'pin' ? null : 'pin')}>
+            <Pin size={18} strokeWidth={1.8} style={pin ? { color: PIN_COLORS[pin] } : undefined} />
+          </TBtn>
+          {menu === 'pin' && (
+            <Popover
+              width={300}
+              style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar, borderRadius: 9999 }}
+              onClose={() => setMenu(null)}
+            >
+              <div className="flex items-center justify-center gap-3.5 px-5 py-3">
+                <button
+                  onClick={() => {
+                    setPin(id, null)
+                    setMenu(null)
+                  }}
+                  className="text-[14px] transition hover:text-white"
+                  style={{ color: TOKENS.textBody }}
+                >
+                  无
+                </button>
+                {(Object.keys(PIN_COLORS) as PinColor[]).map((c) => (
+                  <button
+                    key={c}
+                    title={c}
+                    onClick={() => {
+                      setPin(id, c)
+                      setMenu(null)
+                    }}
+                    className="h-[26px] w-[26px] rounded-full transition-transform hover:scale-[1.15]"
+                    style={{
+                      background: PIN_COLORS[c],
+                      boxShadow: pin === c ? '0 0 0 2px rgba(255,255,255,0.7)' : undefined,
+                    }}
+                  />
+                ))}
+              </div>
+            </Popover>
+          )}
+        </div>
 
         <ToolbarDivider />
 
@@ -209,123 +326,6 @@ export default function VideoToolbarBar({
         <TBtn tip="全屏查看" disabled={!hasVideo} onClick={onPreview}>
           <Expand size={18} strokeWidth={1.8} />
         </TBtn>
-      </div>
-
-      {/* 截帧下拉（220px） */}
-      {menu === 'frame' && (
-        <div
-          className="absolute left-1/2 top-full z-40 mt-2 w-[220px] -translate-x-1/2 rounded-[14px] border border-white/[0.08] p-2"
-          style={{ background: TOKENS.chipBg, boxShadow: SHADOWS.menu }}
-        >
-          {(
-            [
-              ['current', '截取当前帧'],
-              ['first', '截取首帧'],
-              ['last', '截取尾帧'],
-            ] as const
-          ).map(([k, label]) => (
-            <button key={k} onClick={() => void doCapture(k)} className={menuRow} style={{ color: TOKENS.textBody }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 更多菜单（260px）：解析（占位）/ 合规验证（本地模拟） */}
-      {menu === 'more' && (
-        <div
-          className="absolute left-1/2 top-full z-40 mt-2 w-[260px] -translate-x-1/2 rounded-[14px] border border-white/[0.08] p-2"
-          style={{ background: TOKENS.chipBg, boxShadow: SHADOWS.menu }}
-        >
-          <div className={`${menuRow} cursor-not-allowed opacity-45 hover:bg-transparent`} style={{ color: TOKENS.textBody }}>
-            <Film size={17} /> 解析
-            <span className="ml-auto text-[11px]" style={{ color: TOKENS.textDisabled }}>
-              规划中
-            </span>
-          </div>
-          <button
-            onClick={() => {
-              setMenu(null)
-              updateNodeParams(id, { compliance: true })
-              flash('✓ 角色已合规，可用于 Seedance 2.0 视频生成')
-            }}
-            className={menuRow}
-            style={{ color: TOKENS.textBody }}
-          >
-            <ShieldCheck size={17} /> Seedance 2.0 合规验证
-          </button>
-          <button
-            onClick={() => {
-              setMenu(null)
-              setRecoveryOpen(true)
-            }}
-            className={menuRow}
-            style={{ color: TOKENS.textBody }}
-            title="生成超时但供应商已扣费时，从方舟近 7 天任务列表取回视频"
-          >
-            <CloudDownload size={17} /> 云端任务找回
-          </button>
-          <div className="my-1.5 border-t border-white/[0.07]" />
-          <button
-            onClick={() => {
-              setMenu(null)
-              duplicateNode(id)
-            }}
-            className={menuRow}
-            style={{ color: TOKENS.textBody }}
-          >
-            <Copy size={17} /> 复制节点
-            <span className="ml-auto font-mono text-[12px]" style={{ color: TOKENS.textFaint }}>
-              ⌘D
-            </span>
-          </button>
-          <button
-            onClick={() => {
-              setMenu(null)
-              deleteNode(id)
-            }}
-            className={`${menuRow} text-red-300 hover:bg-red-500/10`}
-          >
-            <Trash2 size={17} /> 删除节点
-            <span className="ml-auto font-mono text-[12px] text-red-300/60">⌫</span>
-          </button>
-        </div>
-      )}
-
-      {/* Pin 色板浮条 */}
-      {menu === 'pin' && (
-        <div
-          className="absolute left-1/2 top-full z-40 mt-2 flex -translate-x-1/2 items-center gap-3.5 rounded-full border border-white/[0.07] px-5 py-3"
-          style={{ background: TOKENS.toolbarBg, boxShadow: SHADOWS.toolbar }}
-        >
-          <button
-            onClick={() => {
-              setPin(id, null)
-              setMenu(null)
-            }}
-            className="text-[14px] transition hover:text-white"
-            style={{ color: TOKENS.textBody }}
-          >
-            无
-          </button>
-          {(Object.keys(PIN_COLORS) as PinColor[]).map((c) => (
-            <button
-              key={c}
-              title={c}
-              onClick={() => {
-                setPin(id, c)
-                setMenu(null)
-              }}
-              className="h-[26px] w-[26px] rounded-full transition-transform hover:scale-[1.15]"
-              style={{
-                background: PIN_COLORS[c],
-                boxShadow: pin === c ? '0 0 0 2px rgba(255,255,255,0.7)' : undefined,
-              }}
-            />
-          ))}
-        </div>
-      )}
-
       </div>
 
       {saveOpen && output && (
