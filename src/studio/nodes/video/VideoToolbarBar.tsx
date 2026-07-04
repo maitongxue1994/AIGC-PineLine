@@ -3,6 +3,7 @@ import { NodeToolbar, Position, useReactFlow } from '@xyflow/react'
 import {
   ArrowLeftRight,
   Camera,
+  CloudDownload,
   Copy,
   Download,
   Eraser,
@@ -21,6 +22,7 @@ import { SHADOWS, TOKENS } from '../../designTokens'
 import { downloadDataUrl } from '../shared'
 import { TBtn, ToolbarDivider } from '../NodeToolbarBar'
 import SaveToLibraryDialog from '../../dialogs/SaveToLibraryDialog'
+import CloudTaskRecoveryDialog from '../../dialogs/CloudTaskRecoveryDialog'
 import { useDismissable } from '../../hooks/useDismissable'
 import type { PinColor, PineNodeData } from '../../types'
 
@@ -101,6 +103,7 @@ export default function VideoToolbarBar({
   const rootRef = useRef<HTMLDivElement | null>(null)
   useDismissable(menu !== null, () => setMenu(null), () => [rootRef.current])
   const [saveOpen, setSaveOpen] = useState(false)
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
   const pin = data.pin ?? null
 
   const removeVersion = () => {
@@ -251,6 +254,17 @@ export default function VideoToolbarBar({
           >
             <ShieldCheck size={17} /> Seedance 2.0 合规验证
           </button>
+          <button
+            onClick={() => {
+              setMenu(null)
+              setRecoveryOpen(true)
+            }}
+            className={menuRow}
+            style={{ color: TOKENS.textBody }}
+            title="生成超时但供应商已扣费时，从方舟近 7 天任务列表取回视频"
+          >
+            <CloudDownload size={17} /> 云端任务找回
+          </button>
           <div className="my-1.5 border-t border-white/[0.07]" />
           <button
             onClick={() => {
@@ -321,6 +335,10 @@ export default function VideoToolbarBar({
           sourceNodeId={id}
           onClose={() => setSaveOpen(false)}
         />
+      )}
+
+      {recoveryOpen && (
+        <CloudTaskRecoveryDialog nodeId={id} onClose={() => setRecoveryOpen(false)} />
       )}
 
     </NodeToolbar>

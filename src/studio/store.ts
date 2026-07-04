@@ -110,6 +110,8 @@ type StudioState = {
   runNode: (id: string) => Promise<void>
   /** 视频任务超时后的续查：用版本上的 taskRef 重进轮询取件，不重新下单 */
   resumeVideoTask: (id: string) => Promise<void>
+  /** 云端任务找回：本地任务 ID 丢失时，从供应商近 7 天列表取回成功任务的视频落版本 */
+  recoverCloudTask: (id: string, taskId: string) => Promise<void>
   /**
    * 高级图像操作的再生成通道（多角度/打光/摄影机/蒙版重绘）：
    * 以当前激活版本为参考图 + 操作提示词重新生成，结果追加为新版本（可回退）。
@@ -1090,6 +1092,50 @@ export const useStudioStore = create<StudioState>()(
           })
           if (result.content) {
             void recordVideoHistory(id, node.data.prompt.trim(), [result])
+          }
+        },
+
+        recoverCloudTask: async (id, taskId) => {
+          const state = get()
+          const node = state.nodes.find((n) => n.id === id)
+          if (!node || node.data.kind !== 'video' || node.data.status === 'running') return
+          const g = generation
+          set((s) => ({
+            nodes: mutateNode(s.nodes, id, {
+              status: 'running',
+              error: undefined,
+              progressNote: '云端取件中…',
+            }),
+          }))
+          try {
+            const blob = await fetchVideoFile({ provider: 'seedance', taskId })
+            const version: NodeVersion = {
+              ...newVersion(await blobToDataUrl(blob)),
+              taskRef: { provider: 'seedance', taskId },
+            }
+            safeSet(g, (s) => {
+              const cur = s.nodes.find((n) => n.id === id)
+              if (!cur) return {}
+              const versions = [...cur.data.versions, version]
+              return {
+                nodes: mutateNode(s.nodes, id, {
+                  status: 'done',
+                  versions,
+                  activeVersion: versions.length - 1,
+                  progressNote: undefined,
+                }),
+              }
+            })
+            void recordVideoHistory(id, node.data.prompt.trim(), [version])
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            safeSet(g, (s) => ({
+              nodes: mutateNode(s.nodes, id, {
+                status: 'error',
+                error: `云端取件失败：${msg}`,
+                progressNote: undefined,
+              }),
+            }))
           }
         },
 

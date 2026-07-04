@@ -10,6 +10,8 @@ import type {
   StoryboardResponse,
   VideoCreateRequest,
   VideoCreateResponse,
+  VideoTasksRequest,
+  VideoTasksResponse,
   VideoReadiness,
   VideoStatusResponse,
 } from './types'
@@ -72,6 +74,11 @@ export function agentChat(req: AgentChatRequest, signal?: AbortSignal): Promise<
 
 export function createVideoTask(req: VideoCreateRequest): Promise<VideoCreateResponse> {
   return postJson<VideoCreateRequest, VideoCreateResponse>('/api/generate/video', req)
+}
+
+/** 供应商侧近 7 天任务列表（云端任务找回；本地任务 ID 丢失时用） */
+export function listVideoTasks(req: VideoTasksRequest): Promise<VideoTasksResponse> {
+  return postJson<VideoTasksRequest, VideoTasksResponse>('/api/generate/video-tasks', req)
 }
 
 export function queryVideoTask(req: {

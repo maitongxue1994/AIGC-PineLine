@@ -228,6 +228,32 @@ export type VideoCreateRequest = {
 
 export type VideoCreateResponse = { taskId: string }
 
+// ---- 云端任务找回（供应商侧近 7 天任务列表，目前仅 Seedance） ----
+
+export type VideoTasksRequest = {
+  provider?: VideoProviderId
+  /** queued / running / succeeded / failed / cancelled；缺省全部 */
+  status?: string
+  pageSize?: number
+}
+
+export type CloudVideoTask = {
+  id: string
+  model: string
+  status: string
+  createdAt: number
+  updatedAt: number
+  resolution: string
+  ratio: string
+  duration: number
+  hasVideo: boolean
+  /** 官方临时 URL（24h 时效），仅导出诊断；取件走 video-file 代理 */
+  videoUrl: string | null
+  error: string | null
+}
+
+export type VideoTasksResponse = { total: number; tasks: CloudVideoTask[] }
+
 export type VideoStatusResponse = {
   status: 'queued' | 'running' | 'done' | 'error'
   error?: string

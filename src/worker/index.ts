@@ -6,6 +6,7 @@ import agentChat from './routes/agentChat'
 import videoCreate from './routes/videoCreate'
 import videoStatus from './routes/videoStatus'
 import videoFile from './routes/videoFile'
+import videoTasks from './routes/videoTasks'
 import {
   assertAuth,
   assertBodySize,
@@ -34,6 +35,7 @@ const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
   '/api/generate/video': videoCreate,
   '/api/generate/video-status': videoStatus,
   '/api/generate/video-file': videoFile,
+  '/api/generate/video-tasks': videoTasks,
   '/api/agent/chat': agentChat,
 }
 

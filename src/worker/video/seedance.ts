@@ -28,6 +28,52 @@ function requireKey(env: VideoEnv): { key: string; base: string } {
   return { key, base: (env.ARK_BASE_URL?.trim() || DEFAULT_BASE).replace(/\/$/, '') }
 }
 
+/** 列表接口（官方 82379/1521675）返回的单条任务摘要 */
+export type SeedanceTaskItem = {
+  id: string
+  model?: string
+  status?: string
+  created_at?: number
+  updated_at?: number
+  resolution?: string
+  ratio?: string
+  duration?: number
+  generate_audio?: boolean
+  content?: { video_url?: string; last_frame_url?: string }
+  error?: { code?: string; message?: string } | null
+}
+
+/**
+ * 查询近 7 天任务列表（ListContentsGenerationsTasks，官方 82379/1521675）。
+ * 用途：前端「云端任务找回」——本地任务 ID 丢失（旧版超时/清档）时，
+ * 从方舟侧找回已扣费成功的任务并经 video-file 代理取件。
+ */
+export async function listSeedanceTasks(
+  env: VideoEnv,
+  opts: { status?: string; pageSize?: number } = {},
+): Promise<{ items: SeedanceTaskItem[]; total: number }> {
+  const { key, base } = requireKey(env)
+  const params = new URLSearchParams({
+    page_num: '1',
+    page_size: String(Math.min(100, Math.max(1, opts.pageSize ?? 50))),
+  })
+  if (opts.status) params.set('filter.status', opts.status)
+  const res = await fetchWithTimeout(
+    `${base}/api/v3/contents/generations/tasks?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${key}` } },
+  )
+  const data = (await res.json().catch(() => null)) as
+    | { items?: SeedanceTaskItem[]; total?: number; error?: { message?: string } }
+    | null
+  if (!res.ok || !Array.isArray(data?.items)) {
+    throw new PineHttpError(
+      502,
+      `Seedance 任务列表查询失败（HTTP ${res.status}）：${data?.error?.message ?? '未知错误'}`,
+    )
+  }
+  return { items: data.items, total: data.total ?? data.items.length }
+}
+
 export const seedance: VideoProvider = {
   async create(req: VideoCreateReq, env: VideoEnv): Promise<{ taskId: string }> {
     const { key, base } = requireKey(env)
