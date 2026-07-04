@@ -39,7 +39,12 @@ export type PresetMeta = {
   defaultTitle: string
   promptPlaceholder: string
   defaultParams: NodeParams
+  /** 提示词硬性字数上限；不设 = 不限（剧本/分镜要支持粘贴长文） */
+  maxChars?: number
 }
+
+/** 视频节点提示词硬上限（对齐 MiniMax prompt≤2000；Seedance 官方建议中文 ≤500 字为软提示） */
+export const VIDEO_PROMPT_MAX_CHARS = 2000
 
 export const TEXT_PRESETS: PresetMeta[] = [
   {
@@ -68,6 +73,7 @@ export const TEXT_PRESETS: PresetMeta[] = [
     defaultTitle: '新广告词',
     promptPlaceholder: '描述产品与卖点，生成广告词/品牌文案',
     defaultParams: { tone: 'commercial', length: 'short' },
+    maxChars: 1000,
   },
   {
     preset: 'free',
@@ -77,6 +83,7 @@ export const TEXT_PRESETS: PresetMeta[] = [
     defaultTitle: '新文本',
     promptPlaceholder: '描述任何你想要生成的文字内容',
     defaultParams: { length: 'medium' },
+    maxChars: 5000,
   },
 ]
 
@@ -89,6 +96,7 @@ export const IMAGE_PRESETS: PresetMeta[] = [
     defaultTitle: '新图片',
     promptPlaceholder: '描述任何你想要生成的画面',
     defaultParams: { aspectRatio: '16:9', quality: '1K', batch: 1 },
+    maxChars: 2000,
   },
   {
     preset: 'shot',
@@ -98,6 +106,7 @@ export const IMAGE_PRESETS: PresetMeta[] = [
     defaultTitle: '新分镜图',
     promptPlaceholder: '描述镜头画面，或连线上游「分镜」节点后留空自动使用首镜',
     defaultParams: { aspectRatio: '16:9', quality: '1K', batch: 1 },
+    maxChars: 2000,
   },
   {
     preset: 'scene-grid',
@@ -107,6 +116,7 @@ export const IMAGE_PRESETS: PresetMeta[] = [
     defaultTitle: '新场景',
     promptPlaceholder: '描述场景，一次生成全景/侧视/特写/俯瞰四张',
     defaultParams: { aspectRatio: '16:9', quality: '1K' },
+    maxChars: 2000,
   },
   {
     preset: 'char-triview',
@@ -116,6 +126,7 @@ export const IMAGE_PRESETS: PresetMeta[] = [
     defaultTitle: '新角色',
     promptPlaceholder: '描述角色外形与服装，生成前/侧/背三视图',
     defaultParams: { quality: '1K' },
+    maxChars: 2000,
   },
   {
     preset: 'prop-triview',
@@ -125,6 +136,7 @@ export const IMAGE_PRESETS: PresetMeta[] = [
     defaultTitle: '新道具',
     promptPlaceholder: '描述道具/产品，生成正面/侧角/俯视三视图',
     defaultParams: { quality: '1K' },
+    maxChars: 2000,
   },
 ]
 

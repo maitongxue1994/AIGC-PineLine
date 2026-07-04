@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Cpu,
+  Maximize2,
   Mic,
   Plus,
   Proportions,
@@ -26,6 +27,7 @@ import {
 import { SHADOWS, TOKENS } from '../designTokens'
 import { Chip, Popover, VDivider } from './composerKit'
 import AssetPickerDialog from '../dialogs/AssetPickerDialog'
+import PromptEditorDialog from '../dialogs/PromptEditorDialog'
 import {
   isImageContent,
   type AspectRatio,
@@ -76,6 +78,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
 
   const [openPop, setOpenPop] = useState<'model' | 'preset' | 'ratio' | 'batch' | 'tone' | 'length' | 'addref' | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const textRef = useRef<HTMLTextAreaElement | null>(null)
 
@@ -190,20 +193,39 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAddRef} />
         </div>
 
-        {/* 中区：提示词 */}
-        <textarea
-          ref={textRef}
-          value={data.prompt}
-          placeholder={meta?.promptPlaceholder ?? '描述任何你想要生成的内容'}
-          onChange={(e) => setPrompt(id, e.target.value)}
-          onMouseDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => {
-            e.stopPropagation()
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !running) runNode(id)
-          }}
-          className="nowheel min-h-[52px] w-full resize-none bg-transparent text-[16px] leading-relaxed outline-none"
-          style={{ color: TOKENS.textBody }}
-        />
+        {/* 中区：提示词（可展开大编辑器；按 preset 限字数，剧本/分镜不限） */}
+        <div className="group/prompt relative">
+          <textarea
+            ref={textRef}
+            value={data.prompt}
+            placeholder={meta?.promptPlaceholder ?? '描述任何你想要生成的内容'}
+            maxLength={meta?.maxChars}
+            onChange={(e) => setPrompt(id, e.target.value)}
+            onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !running) runNode(id)
+            }}
+            className="nowheel min-h-[52px] w-full resize-none bg-transparent pr-8 text-[16px] leading-relaxed outline-none"
+            style={{ color: TOKENS.textBody }}
+          />
+          <button
+            title="展开编辑器"
+            onClick={() => setEditorOpen(true)}
+            className="absolute right-0 top-0 rounded-[8px] p-1.5 opacity-0 transition hover:bg-white/[0.08] group-hover/prompt:opacity-100"
+            style={{ color: TOKENS.textMuted }}
+          >
+            <Maximize2 size={14} />
+          </button>
+          {meta?.maxChars && data.prompt.length >= meta.maxChars * 0.8 && (
+            <span
+              className="absolute bottom-0 right-0 text-[11px] tabular-nums"
+              style={{ color: '#E8A33D' }}
+            >
+              {data.prompt.length} / {meta.maxChars}
+            </span>
+          )}
+        </div>
 
         {/* 下区：参数条 */}
         <div className="flex items-center gap-1 pt-1">
@@ -507,6 +529,17 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
             </button>
           </div>
         </div>
+
+        {editorOpen && (
+          <PromptEditorDialog
+            title={`${data.title} · 提示词`}
+            value={data.prompt}
+            placeholder={meta?.promptPlaceholder}
+            maxLength={meta?.maxChars}
+            onChange={(v) => setPrompt(id, v)}
+            onClose={() => setEditorOpen(false)}
+          />
+        )}
 
         {pickerOpen && (
           <AssetPickerDialog

@@ -18,12 +18,13 @@ import {
   Zap,
 } from 'lucide-react'
 import { useStudioStore } from '../../store'
-import { estimateCost, VIDEO_MODELS } from '../../nodeCatalog'
+import { estimateCost, VIDEO_MODELS, VIDEO_PROMPT_MAX_CHARS } from '../../nodeCatalog'
 import { SHADOWS, TOKENS } from '../../designTokens'
 import { Chip, VDivider } from '../composerKit'
 import { isImageContent, type NodeParams, type PineNodeData } from '../../types'
 import VideoModelPicker from './VideoModelPicker'
 import VideoParamsPopover from './VideoParamsPopover'
+import PromptEditorDialog from '../../dialogs/PromptEditorDialog'
 
 /**
  * 全能参考三类素材（多模态参考生视频，仅 Seedance 2.0 系列）。
@@ -97,6 +98,7 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
 
   const [openPop, setOpenPop] = useState<'model' | 'params' | null>(null)
   const [collapsed, setCollapsed] = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
   const textRef = useRef<HTMLTextAreaElement | null>(null)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
@@ -364,21 +366,41 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
               </button>
             </div>
 
-            {/* 提示词 */}
-            <textarea
-              ref={textRef}
-              value={data.prompt}
-              placeholder={
-                mode === 'omni'
-                  ? '描述镜头运动与画面变化，或上传参考图/视频/音频作全能参考'
-                  : '描述镜头运动与画面变化，或连线上游图片作首尾帧参考'
-              }
-              onChange={(e) => setPrompt(id, e.target.value)}
-              onMouseDown={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-              className="nowheel min-h-[48px] w-full resize-none bg-transparent text-[15px] leading-[1.7] outline-none"
-              style={{ color: TOKENS.textBody }}
-            />
+            {/* 提示词（可展开大编辑器；硬上限 2000，Seedance 官方建议中文 ≤500 字） */}
+            <div className="group/prompt relative">
+              <textarea
+                ref={textRef}
+                value={data.prompt}
+                placeholder={
+                  mode === 'omni'
+                    ? '描述镜头运动与画面变化，或上传参考图/视频/音频作全能参考'
+                    : '描述镜头运动与画面变化，或连线上游图片作首尾帧参考'
+                }
+                maxLength={VIDEO_PROMPT_MAX_CHARS}
+                onChange={(e) => setPrompt(id, e.target.value)}
+                onMouseDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="nowheel min-h-[48px] w-full resize-none bg-transparent pr-8 text-[15px] leading-[1.7] outline-none"
+                style={{ color: TOKENS.textBody }}
+              />
+              <button
+                title="展开编辑器"
+                onClick={() => setEditorOpen(true)}
+                className="absolute right-0 top-0 rounded-[8px] p-1.5 opacity-0 transition hover:bg-white/[0.08] group-hover/prompt:opacity-100"
+                style={{ color: TOKENS.textMuted }}
+              >
+                <Maximize2 size={14} />
+              </button>
+              {data.prompt.length >= 500 && (
+                <span
+                  className="absolute bottom-0 right-0 text-[11px] tabular-nums"
+                  title="Seedance 官方建议：中文提示词 ≤500 字，过长易被模型忽略细节"
+                  style={{ color: '#E8A33D' }}
+                >
+                  {data.prompt.length} / {VIDEO_PROMPT_MAX_CHARS}
+                </span>
+              )}
+            </div>
           </>
         )}
 
@@ -506,6 +528,18 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
           </div>
         </div>
       </div>
+
+      {editorOpen && (
+        <PromptEditorDialog
+          title={`${data.title} · 视频提示词`}
+          value={data.prompt}
+          placeholder="描述镜头运动与画面变化"
+          maxLength={VIDEO_PROMPT_MAX_CHARS}
+          hint="Seedance 官方建议：中文 ≤500 字 / 英文 ≤1000 词，过长易被忽略细节"
+          onChange={(v) => setPrompt(id, v)}
+          onClose={() => setEditorOpen(false)}
+        />
+      )}
 
       {/* 全能参考三类隐藏上传 input（图/视频/音频，均支持多选） */}
       {OMNI_KINDS.map((k) => (
