@@ -247,8 +247,6 @@ export type CloudVideoTask = {
   ratio: string
   duration: number
   hasVideo: boolean
-  /** 官方临时 URL（24h 时效），仅导出诊断；取件走 video-file 代理 */
-  videoUrl: string | null
   error: string | null
 }
 
