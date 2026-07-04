@@ -10,6 +10,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
+import { attachSourceVideoAsOmniRef } from './nodes/videoRefs'
 import { useUIStore } from './uiStore'
 import { useAgentStore } from './agent/agentStore'
 import { KIND_ACCENTS } from './nodeCatalog'
@@ -365,6 +366,13 @@ export default function StudioCanvas() {
           target: newId,
           targetHandle: null,
         })
+        // 视频 → 新视频：上游视频自动作 Seedance 2.0 全能参考（与 ⊕ 快捷添加同逻辑）
+        if (choice.kind === 'video') {
+          const srcNode = useStudioStore
+            .getState()
+            .nodes.find((n) => n.id === pending.fromNodeId)
+          if (srcNode) attachSourceVideoAsOmniRef(srcNode.data, newId)
+        }
       } else {
         onConnect({
           source: newId,

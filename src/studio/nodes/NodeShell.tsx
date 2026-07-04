@@ -7,6 +7,7 @@ import { SHADOWS, TOKENS } from '../designTokens'
 import { NodeTitle } from './shared'
 import QuickAddMenu, { type QuickAddChoice } from './QuickAddMenu'
 import { useDismissable } from '../hooks/useDismissable'
+import { attachSourceVideoAsOmniRef } from './videoRefs'
 import type { PineNodeData } from '../types'
 
 /**
@@ -84,12 +85,14 @@ export default function NodeShell({
       const newId = addNode(c.kind, c.preset, pos)
       if (side === 'source') {
         onConnect({ source: id, sourceHandle: null, target: newId, targetHandle: null })
+        // 视频 → 新视频：上游视频自动作 Seedance 2.0 全能参考
+        if (c.kind === 'video') attachSourceVideoAsOmniRef(data, newId)
       } else {
         onConnect({ source: newId, sourceHandle: null, target: id, targetHandle: null })
       }
       focusNode(newId)
     },
-    [quickAdd, getNode, id, width, addNode, onConnect, focusNode],
+    [quickAdd, getNode, id, width, addNode, onConnect, focusNode, data],
   )
 
   const portCls =
