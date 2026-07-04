@@ -87,8 +87,10 @@ export default function generateStoryboard(req: Request, env: Env): Promise<Resp
       })
     } else {
       if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
+      // MiniMax- 前缀模型（如 MiniMax-M3）透传，其余落默认 M2.7
       raw = await callMinimaxText(SYSTEM_PROMPT, screenplay, env.MINIMAX_API_KEY, {
         maxTokens: 8192,
+        model: body.model,
       })
     }
     const shots = parseModelJson(raw)

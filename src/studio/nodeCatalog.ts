@@ -250,6 +250,8 @@ export type ChatModelInfo = {
 
 export const TEXT_MODELS: ChatModelInfo[] = [
   { id: 'minimax-m2.7', name: 'MiniMax M2.7', provider: 'minimax', desc: '默认 · 推理型' },
+  // M3 官方模型名 'MiniMax-M3'（chatcompletion_v2 同端点，2026-07 经官方文档核实）
+  { id: 'minimax-m3', name: 'MiniMax M3', provider: 'minimax', apiModel: 'MiniMax-M3', desc: '旗舰 · 1M 上下文' },
   { id: 'doubao-seed-2.0-pro', name: 'Doubao Seed 2.0 Pro', provider: 'ark', apiModel: 'doubao-seed-2-0-pro-260215', desc: '豆包旗舰' },
   { id: 'doubao-seed-2.0-lite', name: 'Doubao Seed 2.0 Lite', provider: 'ark', apiModel: 'doubao-seed-2-0-lite-260428', desc: '轻快省' },
   { id: 'doubao-seed-evolving', name: 'Doubao Seed Evolving', provider: 'ark', apiModel: 'doubao-seed-evolving', desc: '自进化' },

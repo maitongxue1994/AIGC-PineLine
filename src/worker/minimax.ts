@@ -14,17 +14,19 @@ type MiniMaxResponse = {
 export async function callMinimaxChat(
   messages: ChatMessage[],
   apiKey: string,
-  opts: { temperature?: number; maxTokens?: number } = {},
+  opts: { temperature?: number; maxTokens?: number; model?: string } = {},
 ): Promise<string> {
   return (await callMinimaxChatFull(messages, apiKey, opts)).content
 }
 
-/** 同 callMinimaxChat，额外带出 M2.7 推理模型的思考过程（Agent 面板「思考过程」展示） */
+/** 同 callMinimaxChat，额外带出推理模型的思考过程（Agent 面板「思考过程」展示）。
+ * opts.model 可指定官方模型名（如 'MiniMax-M3'），缺省 M2.7。 */
 export async function callMinimaxChatFull(
   messages: ChatMessage[],
   apiKey: string,
-  opts: { temperature?: number; maxTokens?: number } = {},
+  opts: { temperature?: number; maxTokens?: number; model?: string } = {},
 ): Promise<{ content: string; reasoning?: string }> {
+  const model = opts.model && opts.model.startsWith('MiniMax-') ? opts.model : MODEL
   const started = Date.now()
   const res = await fetchWithTimeout(
     MINIMAX_ENDPOINT,
@@ -35,7 +37,7 @@ export async function callMinimaxChatFull(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: MODEL,
+        model,
         messages,
         temperature: opts.temperature ?? 0.7,
         // M2.7 推理模型：思考 token 也占预算，2048 会把长剧本/分镜 JSON 砍尾
@@ -56,7 +58,7 @@ export async function callMinimaxChatFull(
       ms: Date.now() - started,
       error: message.slice(0, 300),
       ...(requestId ? { requestId } : {}),
-      model: MODEL,
+      model,
       note: (messages[messages.length - 1]?.content ?? '').slice(0, 80),
     })
     throw new Error(message)
@@ -85,7 +87,7 @@ export function callMinimaxText(
   systemPrompt: string,
   userPrompt: string,
   apiKey: string,
-  opts: { temperature?: number; maxTokens?: number } = {},
+  opts: { temperature?: number; maxTokens?: number; model?: string } = {},
 ): Promise<string> {
   return callMinimaxChat(
     [

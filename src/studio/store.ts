@@ -156,12 +156,16 @@ type StudioState = {
    * 随后调 image-prompt 端点生成生图提示词回填（节点保持 idle，用户确认/编辑后再生图）。
    * 返回派生节点 id（供「全部生成图片」批量运行）。
    */
-  deriveShotImageNodes: (storyboardId: string, indices: number[]) => Promise<string[]>
+  deriveShotImageNodes: (
+    storyboardId: string,
+    indices: number[],
+    opts?: { imageModel?: string },
+  ) => Promise<string[]>
   /**
    * 一键生成全部分镜图：对已派生的下游分镜图节点，缺提示词的先补生图提示词，
    * 然后整批运行（全部派生完成后的主入口，替代重复派生）。
    */
-  generateAllShotImages: (storyboardId: string) => Promise<void>
+  generateAllShotImages: (storyboardId: string, opts?: { imageModel?: string }) => Promise<void>
   exportProject: () => string
   importProject: (raw: string) => void
   resetProject: () => void
@@ -1480,7 +1484,7 @@ export const useStudioStore = create<StudioState>()(
           return [script.id, storyboard.id, shot.id]
         },
 
-        deriveShotImageNodes: async (storyboardId, indices) => {
+        deriveShotImageNodes: async (storyboardId, indices, opts) => {
           const state = get()
           const sb = state.nodes.find((n) => n.id === storyboardId)
           const shots = sb?.data.shots ?? []
@@ -1510,7 +1514,11 @@ export const useStudioStore = create<StudioState>()(
               { x: baseX + (slot % 3) * 420, y: baseY + Math.floor(slot / 3) * 560 },
               {
                 title: `#${shotIdx + 1} ${shot.title}`.slice(0, 24),
-                params: { shotIndex: shotIdx },
+                // 用户在派生面板选了生图模型则批量写入（缺省走各节点默认 Gemini）
+                params: {
+                  shotIndex: shotIdx,
+                  ...(opts?.imageModel ? { imageModel: opts.imageModel } : {}),
+                },
               },
             )
             get().onConnect({ source: storyboardId, sourceHandle: null, target: id, targetHandle: null })
@@ -1545,7 +1553,7 @@ export const useStudioStore = create<StudioState>()(
           return ids
         },
 
-        generateAllShotImages: async (storyboardId) => {
+        generateAllShotImages: async (storyboardId, opts) => {
           const s = get()
           const sb = s.nodes.find((n) => n.id === storyboardId)
           const shots = sb?.data.shots ?? []
@@ -1584,6 +1592,12 @@ export const useStudioStore = create<StudioState>()(
                 }
               }),
             )
+          }
+          // 面板选了生图模型：批量覆盖所有派生节点的 imageModel 再开跑
+          if (opts?.imageModel) {
+            for (const n of derived) {
+              get().updateNodeParams(n.id, { imageModel: opts.imageModel })
+            }
           }
           flash(`开始生成 ${derived.length} 张分镜图…`)
           void get().runPipeline(derived.map((n) => n.id))

@@ -86,7 +86,10 @@ export default function generateScript(req: Request, env: Env): Promise<Response
       return jsonOk({ script })
     }
     if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
-    const script = await callMinimaxText(system, brief, env.MINIMAX_API_KEY)
+    // MiniMax- 前缀模型（如 MiniMax-M3）透传，其余落默认 M2.7
+    const script = await callMinimaxText(system, brief, env.MINIMAX_API_KEY, {
+      model: body.model,
+    })
     return jsonOk({ script })
   }, '/api/generate/script')
 }

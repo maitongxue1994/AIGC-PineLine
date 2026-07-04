@@ -41,6 +41,11 @@ const ARK_CHAT_MODELS: Record<string, string> = {
   'doubao-seed-evolving': 'doubao-seed-evolving',
 }
 
+/** MiniMax 通道的非默认模型（缺省走 M2.7） */
+const MINIMAX_CHAT_MODELS: Record<string, string> = {
+  'minimax-m3': 'MiniMax-M3',
+}
+
 const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创作管线工作台的编排 Agent。用户用自然语言描述创作需求，你帮他们在节点画布上搭建/修改/运行生成管线。
 
 ## 画布模型
@@ -64,7 +69,7 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 - {"op":"set_params","id":"…","params":{…}}：修改节点参数（对已有节点 id 或本轮 ref 均可）。可用键：
   - 文本节点：tone(cinematic/commercial/drama/documentary)、length(short/medium/long)；图片节点：aspectRatio("16:9" 等)、quality(1K/2K/4K)、batch(1-4)、shotIndex；视频节点：videoDuration(4-15)、videoResolution(480p/720p/1080p)、videoRatio、videoMode、videoAudio。
   - 模型键（用户要求换模型时用，值必须原样取自枚举）：
-    - textModel：minimax-m2.7(MiniMax M2.7，默认) / doubao-seed-2.0-pro(豆包 Seed 2.0 Pro) / doubao-seed-2.0-lite(豆包 Seed 2.0 Lite) / doubao-seed-evolving(豆包自进化)
+    - textModel：minimax-m2.7(MiniMax M2.7，默认) / minimax-m3(MiniMax M3) / doubao-seed-2.0-pro(豆包 Seed 2.0 Pro) / doubao-seed-2.0-lite(豆包 Seed 2.0 Lite) / doubao-seed-evolving(豆包自进化)
     - imageModel：gemini-3.1-flash(Gemini 3.1 Flash，默认) / seedream-5.0(Seedream 5.0)
     - videoModel：seedance-2.0(Seedance 2.0，默认) / seedance-2.0-fast(Seedance 2.0 Fast) / seedance-2.0-mini(Seedance 2.0 Mini) / hailuo-2.3(海螺 2.3) / hailuo-02(海螺-02 首尾帧) / wan-2.7(通义万相 2.7) / kling-v2-6(可灵 2.6) / veo-3.1-fast(VEO 3.1 Fast)
 - {"op":"rename","id":"…","title":"…"}
@@ -155,7 +160,10 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
     const chatOpts = { temperature: 0.3, maxTokens: 4096 }
     const { content: raw, reasoning } = arkModel
       ? await callArkChat(arkModel, messages, env.ARK_API_KEY!, chatOpts)
-      : await callMinimaxChatFull(messages, env.MINIMAX_API_KEY, chatOpts)
+      : await callMinimaxChatFull(messages, env.MINIMAX_API_KEY, {
+          ...chatOpts,
+          model: body.model ? MINIMAX_CHAT_MODELS[body.model] : undefined,
+        })
     const parsed = parseAgentJson(raw)
     const { ops, dropped } = sanitizeOps(parsed.ops)
     const reply =

@@ -3,7 +3,7 @@ import type { NodeProps } from '@xyflow/react'
 import { Clapperboard, FileText, Loader2, Maximize2, Play, X } from 'lucide-react'
 import { useStudioStore } from '../store'
 import { activeContent, type PineNode, type ShotItem } from '../types'
-import { presetMeta } from '../nodeCatalog'
+import { IMAGE_MODELS, presetMeta } from '../nodeCatalog'
 import { TOKENS } from '../designTokens'
 import NodeShell from './NodeShell'
 import NodeToolbarBar from './NodeToolbarBar'
@@ -43,6 +43,8 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   // 展开时默认全选未派生镜头
   const [checked, setChecked] = useState<Set<number>>(() => new Set())
   const [busy, setBusy] = useState(false)
+  // 批量生图模型（undefined = 各节点默认 Gemini）；用户实测要求派生/批量生成可选模型
+  const [imageModel, setImageModel] = useState<string | undefined>(undefined)
 
   const openPanel = () => {
     setChecked(new Set(undived))
@@ -62,7 +64,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
     if (busy || !toDerive.length) return
     setBusy(true)
     try {
-      await deriveShotImageNodes(id, toDerive.sort((a, b) => a - b))
+      await deriveShotImageNodes(id, toDerive.sort((a, b) => a - b), { imageModel })
       setOpen(false)
     } finally {
       setBusy(false)
@@ -73,7 +75,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
     if (busy || pipelineRunning) return
     setBusy(true)
     try {
-      await generateAllShotImages(id)
+      await generateAllShotImages(id, { imageModel })
     } finally {
       setBusy(false)
     }
@@ -82,10 +84,38 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   const btn =
     'flex items-center justify-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-45'
 
+  // 生图模型选择（分段小胶囊）：undefined = 默认（各节点自己的设置/Gemini）
+  const modelPicker = (
+    <div className="flex items-center gap-1 px-0.5">
+      <span className="shrink-0 text-[10px]" style={{ color: TOKENS.textFaint }}>
+        生图模型
+      </span>
+      {IMAGE_MODELS.map((m) => {
+        const active = imageModel === m.id
+        return (
+          <button
+            key={m.id}
+            onClick={() => setImageModel(active ? undefined : m.id)}
+            title={active ? '再点一次恢复默认' : m.desc}
+            className="rounded-full px-2 py-0.5 text-[10px] transition"
+            style={{
+              background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+              color: active ? '#F5F5F7' : TOKENS.textMuted,
+            }}
+          >
+            {m.name}
+          </button>
+        )
+      })}
+    </div>
+  )
+
   return (
     <div className="nodrag border-t border-white/[0.06] p-2.5">
       {allDerived ? (
         // 全部镜头都已派生分镜图节点：入口直接生成全部图片（缺提示词的自动补齐）
+        <div className="space-y-1.5">
+        {modelPicker}
         <button
           onClick={() => void generateAll()}
           disabled={busy || pipelineRunning}
@@ -99,6 +129,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
           )}
           {busy || pipelineRunning ? '生成中…' : `全部生成图片（${shots.length} 张）`}
         </button>
+        </div>
       ) : !open ? (
         <button
           onClick={openPanel}
@@ -151,6 +182,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
               )
             })}
           </div>
+          {modelPicker}
           <div className="flex gap-1.5">
             <button
               onClick={() => void derive()}

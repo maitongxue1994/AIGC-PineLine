@@ -31,7 +31,7 @@ const VALID_PARAM_KEYS = new Set([
  * 非法模型值只丢该键，不整条丢 op。
  */
 const MODEL_VALUE_WHITELIST: Record<string, ReadonlySet<string>> = {
-  textModel: new Set(['minimax-m2.7', 'doubao-seed-2.0-pro', 'doubao-seed-2.0-lite', 'doubao-seed-evolving']),
+  textModel: new Set(['minimax-m2.7', 'minimax-m3', 'doubao-seed-2.0-pro', 'doubao-seed-2.0-lite', 'doubao-seed-evolving']),
   imageModel: new Set(['gemini-3.1-flash', 'seedream-5.0']),
   videoModel: new Set([
     'seedance-2.0', 'seedance-2.0-fast', 'seedance-2.0-mini',
