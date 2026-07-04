@@ -18,11 +18,13 @@ export type LibraryAsset = {
 export type HistoryEntry = {
   id: string
   nodeId: string
-  kind: 'text' | 'image'
+  kind: 'text' | 'image' | 'video'
   preset: string | null
   prompt: string
-  /** 图片为 dataURL 缩图（原图）；文本为正文 */
+  /** 图片为 dataURL（原图）；文本为正文；视频为 dataURL 本体 */
   content: string
+  /** 视频首帧海报缩图（jpeg dataURL），列表展示用 */
+  poster?: string
   label?: string
   createdAt: number
 }
@@ -43,6 +45,8 @@ export type ProjectRecord = {
 const DB_NAME = 'pineline-studio'
 const DB_VERSION = 2
 const HISTORY_LIMIT = 200
+/** 视频体积大（单条可达数十 MB），历史单独收紧 LRU 上限 */
+const VIDEO_HISTORY_LIMIT = 20
 const FOLDERS_KEY = 'pineline-library-v1'
 
 export const DEFAULT_FOLDERS: LibraryFolder[] = [
@@ -230,6 +234,9 @@ export async function appendHistory(
     const all = store.getAll()
     all.onsuccess = () => {
       const list = (all.result as HistoryEntry[]).sort((a, b) => b.createdAt - a.createdAt)
+      // 视频单独更小的 LRU 上限，再做总量裁剪
+      const videos = list.filter((r) => r.kind === 'video')
+      for (const stale of videos.slice(VIDEO_HISTORY_LIMIT)) store.delete(stale.id)
       for (const stale of list.slice(HISTORY_LIMIT)) store.delete(stale.id)
     }
   } catch {

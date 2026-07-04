@@ -1028,7 +1028,8 @@ export const useStudioStore = create<StudioState>()(
                   }),
                 }
               })
-              // 视频体积大，不写 IndexedDB 生成历史；长期留存走「保存到素材库」
+              // 视频入生成历史（含首帧海报；assetdb 内有视频单独 LRU 上限 20 条）
+              void recordVideoHistory(id, prompt, results)
             }
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
@@ -1087,6 +1088,9 @@ export const useStudioStore = create<StudioState>()(
               }),
             }
           })
+          if (result.content) {
+            void recordVideoHistory(id, node.data.prompt.trim(), [result])
+          }
         },
 
         runImageEdit: async (id, prompt, opts) => {
@@ -1601,7 +1605,7 @@ let clipboard: Clipboard = null
 /** 生成历史（IndexedDB，非关键路径，失败静默） */
 function recordHistory(
   nodeId: string,
-  kind: 'text' | 'image',
+  kind: 'text' | 'image' | 'video',
   preset: string | null,
   prompt: string,
   versions: NodeVersion[],
@@ -1616,6 +1620,51 @@ function recordHistory(
       content: v.content as string,
       ...(v.label ? { label: v.label } : {}),
     }))
+  if (entries.length) void appendHistory(entries)
+}
+
+/** 视频首帧海报（≤480px jpeg dataURL），历史面板列表展示用 */
+function videoPoster(src: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const v = document.createElement('video')
+    v.muted = true
+    v.playsInline = true
+    v.src = src
+    v.onerror = () => resolve(null)
+    v.onloadedmetadata = () => {
+      v.currentTime = Math.min(0.1, (v.duration || 1) / 10)
+    }
+    v.onseeked = () => {
+      try {
+        const c = document.createElement('canvas')
+        const scale = Math.min(1, 480 / (v.videoWidth || 480))
+        c.width = Math.max(1, Math.round((v.videoWidth || 640) * scale))
+        c.height = Math.max(1, Math.round((v.videoHeight || 360) * scale))
+        c.getContext('2d')!.drawImage(v, 0, 0, c.width, c.height)
+        resolve(c.toDataURL('image/jpeg', 0.7))
+      } catch {
+        resolve(null)
+      }
+    }
+  })
+}
+
+/** 视频生成历史：异步截首帧海报后入库（IndexedDB 有视频单独 LRU 上限） */
+async function recordVideoHistory(nodeId: string, prompt: string, versions: NodeVersion[]) {
+  const entries: Parameters<typeof appendHistory>[0] = []
+  for (const v of versions) {
+    if (!v.content) continue
+    const poster = await videoPoster(v.content)
+    entries.push({
+      nodeId,
+      kind: 'video',
+      preset: null,
+      prompt: prompt.slice(0, 200),
+      content: v.content,
+      ...(poster ? { poster } : {}),
+      ...(v.label ? { label: v.label } : {}),
+    })
+  }
   if (entries.length) void appendHistory(entries)
 }
 

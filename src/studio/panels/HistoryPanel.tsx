@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useReactFlow } from '@xyflow/react'
-import { FileText } from 'lucide-react'
+import { FileText, Film } from 'lucide-react'
 import { listHistory, type HistoryEntry } from '../assetdb'
 import { useStudioStore } from '../store'
 import { useUIStore } from '../uiStore'
 import { SHADOWS, TOKENS } from '../designTokens'
 
-/** 生成历史面板：图片/文本 tab，按日期分组；点击回源节点或重新入画布 */
+/** 生成历史面板：图片/视频/文本 tab，按日期分组；点击回源节点或重新入画布 */
 export default function HistoryPanel() {
   const focusNode = useStudioStore((s) => s.focusNode)
   const addAssetNode = useStudioStore((s) => s.addAssetNode)
+  const addVideoNode = useStudioStore((s) => s.addVideoNode)
   const addNode = useStudioStore((s) => s.addNode)
   const updateActiveContent = useStudioStore((s) => s.updateActiveContent)
   const setActivePanel = useUIStore((s) => s.setActivePanel)
   const { screenToFlowPosition } = useReactFlow()
 
   const [rows, setRows] = useState<HistoryEntry[]>([])
-  const [tab, setTab] = useState<'image' | 'text'>('image')
+  const [tab, setTab] = useState<'image' | 'video' | 'text'>('image')
 
   useEffect(() => {
     void listHistory().then(setRows)
@@ -28,6 +29,7 @@ export default function HistoryPanel() {
   const items = rows.filter((r) => r.kind === tab)
   const counts = {
     image: rows.filter((r) => r.kind === 'image').length,
+    video: rows.filter((r) => r.kind === 'video').length,
     text: rows.filter((r) => r.kind === 'text').length,
   }
 
@@ -47,6 +49,8 @@ export default function HistoryPanel() {
     } else if (r.kind === 'image') {
       // 源节点已删：以素材节点重新入画布
       addAssetNode(r.content, centerPos())
+    } else if (r.kind === 'video') {
+      addVideoNode(r.content, centerPos())
     } else {
       const id = addNode('text', 'free', centerPos(), { title: '历史文本', prompt: r.prompt })
       updateActiveContent(id, r.content)
@@ -62,8 +66,9 @@ export default function HistoryPanel() {
       <div className="flex items-center gap-4 border-b border-white/[0.07] px-4 pb-2.5 pt-4">
         {(
           [
-            ['image', `图片历史 (${counts.image})`],
-            ['text', `文本历史 (${counts.text})`],
+            ['image', `图片 (${counts.image})`],
+            ['video', `视频 (${counts.video})`],
+            ['text', `文本 (${counts.text})`],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -106,6 +111,28 @@ export default function HistoryPanel() {
                         {r.label}
                       </span>
                     )}
+                  </button>
+                ))}
+              </div>
+            ) : tab === 'video' ? (
+              <div className="grid grid-cols-2 gap-1.5">
+                {list.map((r) => (
+                  <button
+                    key={r.id}
+                    title={`${r.prompt || '（无提示词）'}\n点击回到源节点 / 重新入画布`}
+                    onClick={() => handlePick(r)}
+                    className="relative aspect-video overflow-hidden rounded-[8px] border border-white/[0.08] transition hover:border-white/30"
+                  >
+                    {r.poster ? (
+                      <img src={r.poster} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center bg-white/[0.05]">
+                        <Film size={16} style={{ color: TOKENS.textMuted }} />
+                      </span>
+                    )}
+                    <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1 text-[9px] leading-4 text-white/90">
+                      视频
+                    </span>
                   </button>
                 ))}
               </div>

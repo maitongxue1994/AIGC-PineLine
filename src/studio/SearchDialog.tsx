@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { FileText, Image as ImageIcon, ImagePlus, Search } from 'lucide-react'
+import { FileText, Image as ImageIcon, ImagePlus, Search, Video } from 'lucide-react'
 import { useStudioStore } from './store'
 import { useUIStore } from './uiStore'
 import { activeContent, isImageContent, type NodeKind } from './types'
@@ -9,9 +9,19 @@ import { SHADOWS, TOKENS } from './designTokens'
 const TABS: { key: NodeKind | 'all'; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'image', label: '图片' },
+  { key: 'video', label: '视频' },
   { key: 'text', label: '文本' },
   { key: 'asset', label: '素材' },
 ]
+
+/** data: 媒体内容 → 友好描述（此前素材节点会把 base64 原文渲染进搜索结果） */
+function mediaExcerpt(content: string | null): string {
+  if (!content?.startsWith('data:')) return ''
+  const mime = content.slice(5, content.indexOf(';'))
+  const [type, sub] = mime.split('/')
+  const kindLabel = type === 'video' ? '视频' : type === 'audio' ? '音频' : '图片'
+  return `${kindLabel}内容 · ${(sub ?? '').toUpperCase()}`
+}
 
 /** ⌘F 搜索节点：居中命令面板，匹配标题/提示词/文本产出，点击跳转聚焦（带入视口） */
 export default function SearchDialog() {
@@ -36,7 +46,12 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
       .map((n) => {
         const text = activeContent(n.data)
         const thumb = n.data.versions.find((v) => isImageContent(v.content))?.content ?? null
-        const excerpt = n.data.prompt || (text && !isImageContent(text) ? text : '') || ''
+        // data: 媒体一律转友好描述，不渲染 base64 原文
+        const excerpt =
+          n.data.prompt ||
+          (text && !text.startsWith('data:') ? text : '') ||
+          mediaExcerpt(text) ||
+          ''
         return { id: n.id, kind: n.data.kind, title: n.data.title, preset: n.data.preset, thumb, excerpt }
       })
       .filter(
@@ -117,6 +132,8 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
                     <FileText size={16} style={{ color: TOKENS.textMuted }} />
                   ) : r.kind === 'asset' ? (
                     <ImagePlus size={16} style={{ color: TOKENS.textMuted }} />
+                  ) : r.kind === 'video' ? (
+                    <Video size={16} style={{ color: TOKENS.textMuted }} />
                   ) : (
                     <ImageIcon size={16} style={{ color: TOKENS.textMuted }} />
                   )}
@@ -125,7 +142,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
                   <span className="block truncate text-[14px] font-semibold" style={{ color: TOKENS.textBody }}>
                     {r.title}
                     <span className="ml-2 text-[11px] font-normal" style={{ color: TOKENS.textFaint }}>
-                      {presetMeta(r.preset)?.label ?? (r.kind === 'asset' ? '素材' : '')}
+                      {presetMeta(r.preset)?.label ?? (r.kind === 'asset' ? '素材' : r.kind === 'video' ? '视频' : '')}
                     </span>
                   </span>
                   <span className="block truncate text-[12px]" style={{ color: TOKENS.textMuted }}>

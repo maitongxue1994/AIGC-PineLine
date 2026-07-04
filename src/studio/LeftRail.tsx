@@ -1,6 +1,10 @@
-import { useEffect, useRef } from 'react'
-import { Clock, FolderOpen, LayoutGrid, MessageCircle, Plus, Search, User } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Clock, FolderOpen, LayoutGrid, MessageCircle, Plus, Search, User, Zap } from 'lucide-react'
 import { useUIStore, type RailPanel } from './uiStore'
+import { useStudioStore } from './store'
+import { useAgentStore } from './agent/agentStore'
+import { useDismissable } from './hooks/useDismissable'
 import { SHADOWS, TOKENS } from './designTokens'
 import AddNodePanel from './panels/AddNodePanel'
 import TemplatePanel from './panels/TemplatePanel'
@@ -48,7 +52,7 @@ function RailBtn({
 
 /**
  * 左侧浮动胶囊导航（设计稿 §07）：
- * 新建节点（白底强调）· 搜索 · 素材库 · 模板 · 评论 · 生成历史 · 头像。
+ * 新建节点（白底强调）· 搜索 · 素材库 · 模板 · AI 助手 · 生成历史 · 账户。
  */
 export default function LeftRail({
   renderPanel,
@@ -59,6 +63,12 @@ export default function LeftRail({
   const activePanel = useUIStore((s) => s.activePanel)
   const setActivePanel = useUIStore((s) => s.setActivePanel)
   const setSearchOpen = useUIStore((s) => s.setSearchOpen)
+  const agentOpen = useAgentStore((s) => s.open)
+  const toggleAgent = useAgentStore((s) => s.toggle)
+  const credits = useStudioStore((s) => s.credits)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const accountRef = useRef<HTMLDivElement>(null)
+  useDismissable(accountOpen, () => setAccountOpen(false), () => [accountRef.current])
   const rootRef = useRef<HTMLDivElement>(null)
 
   // 点击画布空白（rail/面板之外）自动收起面板；pointerdown 不拦截该次点击本身
@@ -119,7 +129,7 @@ export default function LeftRail({
         >
           <LayoutGrid size={17} />
         </RailBtn>
-        <RailBtn title="评论（规划中）" disabled>
+        <RailBtn title="AI 助手：对话搭建生成管线 (⌘J)" active={agentOpen} onClick={toggleAgent}>
           <MessageCircle size={17} />
         </RailBtn>
         <RailBtn
@@ -129,12 +139,49 @@ export default function LeftRail({
         >
           <Clock size={17} />
         </RailBtn>
-        <div
-          className="mt-1 flex h-10 w-10 items-center justify-center rounded-full"
-          style={{ border: '2px solid rgba(255,255,255,0.15)', color: TOKENS.textMuted }}
-          title="本地工程（无账号体系）"
-        >
-          <User size={16} />
+        <div ref={accountRef} className="relative mt-1">
+          <button
+            title="账户与工程信息"
+            onClick={() => setAccountOpen((v) => !v)}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition hover:bg-[#29292C]"
+            style={{
+              border: '2px solid rgba(255,255,255,0.15)',
+              color: accountOpen ? '#F5F5F7' : TOKENS.textMuted,
+            }}
+          >
+            <User size={16} />
+          </button>
+          {accountOpen && (
+            <div
+              className="pl-pop-in absolute bottom-0 left-full ml-3 w-[240px] rounded-[16px] border border-white/[0.08] p-3"
+              style={{ background: TOKENS.popoverBg, boxShadow: SHADOWS.menu }}
+            >
+              <div className="px-1 pb-2 text-[14px] font-semibold" style={{ color: TOKENS.textTitle }}>
+                本地工程
+              </div>
+              <div
+                className="flex items-center justify-between rounded-[10px] bg-white/[0.04] px-3 py-2.5 text-[13px]"
+                title="积分为本地模拟，仅作演示"
+              >
+                <span style={{ color: TOKENS.textMuted }}>积分余额（模拟）</span>
+                <span className="flex items-center gap-1 font-semibold" style={{ color: TOKENS.textBody }}>
+                  <Zap size={13} style={{ color: TOKENS.textMuted }} />
+                  {credits}
+                </span>
+              </div>
+              <Link
+                to="/studio/projects"
+                onClick={() => setAccountOpen(false)}
+                className="mt-1.5 block rounded-[10px] px-3 py-2.5 text-[13px] transition hover:bg-white/[0.06]"
+                style={{ color: TOKENS.textBody }}
+              >
+                项目管理 →
+              </Link>
+              <div className="px-3 pb-1 pt-2 text-[11px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
+                无账号体系：画布与素材均存储在本机浏览器（IndexedDB）
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
