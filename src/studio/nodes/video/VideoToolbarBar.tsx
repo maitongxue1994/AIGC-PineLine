@@ -3,6 +3,7 @@ import { NodeToolbar, Position, useReactFlow } from '@xyflow/react'
 import {
   ArrowLeftRight,
   Camera,
+  Copy,
   Download,
   Eraser,
   Expand,
@@ -12,6 +13,7 @@ import {
   Pin,
   Scissors,
   ShieldCheck,
+  Trash2,
 } from 'lucide-react'
 import { useStudioStore } from '../../store'
 import { PIN_COLORS } from '../../nodeCatalog'
@@ -90,6 +92,8 @@ export default function VideoToolbarBar({
   const addNode = useStudioStore((s) => s.addNode)
   const onConnect = useStudioStore((s) => s.onConnect)
   const updateActiveContent = useStudioStore((s) => s.updateActiveContent)
+  const duplicateNode = useStudioStore((s) => s.duplicateNode)
+  const deleteNode = useStudioStore((s) => s.deleteNode)
   const { getNode } = useReactFlow()
 
   const [menu, setMenu] = useState<'frame' | 'more' | 'pin' | null>(null)
@@ -242,6 +246,30 @@ export default function VideoToolbarBar({
             style={{ color: TOKENS.textBody }}
           >
             <ShieldCheck size={17} /> Seedance 2.0 合规验证
+          </button>
+          <div className="my-1.5 border-t border-white/[0.07]" />
+          <button
+            onClick={() => {
+              setMenu(null)
+              duplicateNode(id)
+            }}
+            className={menuRow}
+            style={{ color: TOKENS.textBody }}
+          >
+            <Copy size={17} /> 复制节点
+            <span className="ml-auto font-mono text-[12px]" style={{ color: TOKENS.textFaint }}>
+              ⌘D
+            </span>
+          </button>
+          <button
+            onClick={() => {
+              setMenu(null)
+              deleteNode(id)
+            }}
+            className={`${menuRow} text-red-300 hover:bg-red-500/10`}
+          >
+            <Trash2 size={17} /> 删除节点
+            <span className="ml-auto font-mono text-[12px] text-red-300/60">⌫</span>
           </button>
         </div>
       )}
