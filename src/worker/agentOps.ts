@@ -23,6 +23,7 @@ const VALID_PRESETS = new Set([
 const VALID_PARAM_KEYS = new Set([
   'shotIndex', 'aspectRatio', 'quality', 'batch', 'tone', 'length', 'splitMode', 'splitter',
   'videoMode', 'videoRatio', 'videoDuration', 'videoResolution', 'videoModel', 'videoAudio',
+  'videoNoSubtitles', 'videoNoBgm', 'videoNoSfx', 'voiceNarration', 'voiceCast',
   'textModel', 'imageModel',
 ])
 /**

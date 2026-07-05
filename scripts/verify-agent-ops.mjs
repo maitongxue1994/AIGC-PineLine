@@ -119,4 +119,18 @@ check('超过 48 条截断', () => {
   assert.equal(r.ops.length, 48)
 })
 
+// ---- 7. 纯净模式 + 音色设定参数键透传 ----
+check('视频纯净模式键透传（videoNoSubtitles/videoNoBgm/videoNoSfx）', () => {
+  const r = sanitizeOps([
+    { op: 'set_params', id: 'v1', params: { videoNoSubtitles: true, videoNoBgm: true, videoNoSfx: false } },
+  ])
+  assert.deepEqual(r.ops[0].params, { videoNoSubtitles: true, videoNoBgm: true, videoNoSfx: false })
+})
+check('分镜音色设定键透传（voiceNarration/voiceCast）', () => {
+  const r = sanitizeOps([
+    { op: 'set_params', id: 'sb', params: { voiceNarration: '中年男性，低沉温润', voiceCast: '张三：青年男声' } },
+  ])
+  assert.deepEqual(r.ops[0].params, { voiceNarration: '中年男性，低沉温润', voiceCast: '张三：青年男声' })
+})
+
 console.log(`\n✅ Agent ops 白名单校验全部通过：${pass} 项`)
