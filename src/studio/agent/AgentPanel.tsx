@@ -4,6 +4,7 @@ import {
   ChevronDown,
   Clock,
   Hand,
+  ImagePlus,
   Loader2,
   Play,
   Plus,
@@ -19,6 +20,8 @@ import { TEXT_MODELS } from '../nodeCatalog'
 import { activeContent, isImageContent } from '../types'
 import { describeOp } from './types'
 import MarkdownMessage from './MarkdownMessage'
+import { compressImageFile, imagesFromClipboard } from './imageAttach'
+import { MAX_ATTACH_IMAGES } from './agentStore'
 import { SHADOWS, TOKENS } from '../designTokens'
 import { useDismissable } from '../hooks/useDismissable'
 
@@ -109,6 +112,9 @@ export default function AgentPanel() {
   const dismissOps = useAgentStore((s) => s.dismissOps)
   const chatModel = useAgentStore((s) => s.model)
   const setChatModel = useAgentStore((s) => s.setModel)
+  const pendingImages = useAgentStore((s) => s.pendingImages)
+  const addPendingImages = useAgentStore((s) => s.addPendingImages)
+  const removePendingImage = useAgentStore((s) => s.removePendingImage)
 
   const selectedNode = useStudioStore((s) =>
     s.selectedNodeId ? s.nodes.find((n) => n.id === s.selectedNodeId) ?? null : null,
@@ -118,6 +124,7 @@ export default function AgentPanel() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [modeOpen, setModeOpen] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const historyRef = useRef<HTMLDivElement | null>(null)
   const modeRef = useRef<HTMLDivElement | null>(null)
@@ -147,6 +154,27 @@ export default function AgentPanel() {
     if (!text || sending) return
     setDraft('')
     void send(text)
+  }
+
+  // 附图（按钮多选 / 粘贴共用）：压缩到长边 1280 后进待发队列，上限 4 张
+  const attachFiles = async (files: File[]) => {
+    const room = MAX_ATTACH_IMAGES - useAgentStore.getState().pendingImages.length
+    if (room <= 0) {
+      window.dispatchEvent(
+        new CustomEvent('pineline:flash', { detail: `最多附 ${MAX_ATTACH_IMAGES} 张图片` }),
+      )
+      return
+    }
+    const picked = files.filter((f) => f.type.startsWith('image/')).slice(0, room)
+    if (!picked.length) return
+    const results = await Promise.allSettled(picked.map(compressImageFile))
+    const okItems = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+    if (okItems.length) addPendingImages(okItems)
+    if (okItems.length < picked.length) {
+      window.dispatchEvent(
+        new CustomEvent('pineline:flash', { detail: '部分图片读取失败，已跳过' }),
+      )
+    }
   }
 
   return (
@@ -258,6 +286,18 @@ export default function AgentPanel() {
                     color: TOKENS.textBody,
                   }}
                 >
+                  {m.images && m.images.length > 0 && (
+                    <div className="mb-1.5 flex gap-1.5">
+                      {m.images.map((t, i) => (
+                        <img
+                          key={i}
+                          src={t}
+                          alt=""
+                          className="h-14 w-14 rounded-[8px] border border-white/[0.12] object-cover"
+                        />
+                      ))}
+                    </div>
+                  )}
                   {m.role === 'assistant' ? <MarkdownMessage text={m.content} /> : m.content}
                 </div>
 
@@ -317,6 +357,29 @@ export default function AgentPanel() {
 
       {/* 输入区 */}
       <div className="border-t border-white/[0.07] p-3.5">
+        {pendingImages.length > 0 && (
+          <div className="mb-2 flex items-center gap-1.5">
+            {pendingImages.map((img, i) => (
+              <span key={i} className="relative">
+                <img
+                  src={img.thumb}
+                  alt=""
+                  className="h-12 w-12 rounded-[10px] border border-white/[0.12] object-cover"
+                />
+                <button
+                  title="移除"
+                  onClick={() => removePendingImage(i)}
+                  className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/85 text-white/80 transition hover:text-white"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+            <span className="text-[11px]" style={{ color: TOKENS.textFaint }}>
+              {pendingImages.length}/{MAX_ATTACH_IMAGES}
+            </span>
+          </div>
+        )}
         {selectedNode && (
           <div className="mb-2 flex items-center gap-2">
             <span
@@ -348,6 +411,13 @@ export default function AgentPanel() {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               handleSend()
+            }
+          }}
+          onPaste={(e) => {
+            const files = imagesFromClipboard(e)
+            if (files.length) {
+              e.preventDefault()
+              void attachFiles(files)
             }
           }}
           placeholder="描述创意或需求，选中节点自动进入上下文…"
@@ -433,6 +503,26 @@ export default function AgentPanel() {
               </div>
             )}
           </div>
+          <button
+            title="添加图片（可多选，也可直接粘贴）——M3/豆包模型可分析参考"
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-full p-2 transition hover:bg-white/[0.08]"
+            style={{ color: pendingImages.length ? TOKENS.textBody : TOKENS.textFaint }}
+          >
+            <ImagePlus size={15} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? [])
+              e.target.value = ''
+              if (files.length) void attachFiles(files)
+            }}
+          />
           <span className="flex-1" />
           {sending ? (
             <button

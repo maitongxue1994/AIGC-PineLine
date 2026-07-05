@@ -25,7 +25,10 @@ export type AgentOp =
   | { op: 'derive_shot_videos'; id: string; run?: boolean }
 
 export type AgentChatRequest = {
-  messages: { role: 'user' | 'assistant'; content: string }[]
+  /** images：base64 data URL（M3/豆包多模态通道消费；M2.7 不支持） */
+  messages: { role: 'user' | 'assistant'; content: string; images?: string[] }[]
+  /** 联网搜索开关（豆包走方舟 Responses web_search；MiniMax 走 Tavily function calling） */
+  webSearch?: boolean
   /** 聊天模型（前端 TEXT_MODELS 的 id）：缺省/minimax 系走 MiniMax，doubao-* 走方舟 */
   model?: string
   canvas: {
@@ -51,12 +54,20 @@ export type AgentChatResponse = {
   ops: AgentOp[]
   /** MiniMax M2.7 推理模型的思考过程（可选，面板折叠展示） */
   thinking?: string
+  /** 联网搜索引用来源（气泡下方 chips） */
+  citations?: { title: string; url: string }[]
+  /** 联网降级说明（如方舟 Responses 不可用回落普通通道） */
+  searchNote?: string
 }
 
 export type AgentMessage = {
   id: string
   role: 'user' | 'assistant'
   content: string
+  /** 附图缩略图（96px，仅回显；原图在模块级内存 Map，刷新后不再随历史重传） */
+  images?: string[]
+  /** 联网搜索引用来源 */
+  citations?: { title: string; url: string }[]
   ops?: AgentOp[]
   /** 操作卡状态：待确认 / 已执行 / 已放弃 */
   opsState?: 'pending' | 'executed' | 'dismissed'

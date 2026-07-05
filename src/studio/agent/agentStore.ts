@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { agentChat } from '../api'
 import { canvasSnapshot, executeOps } from './executeOps'
 import { useStudioStore } from '../store'
+import type { AttachedImage } from './imageAttach'
 import type { AgentMessage, AgentSession } from './types'
 
 type AgentState = {
@@ -15,6 +16,13 @@ type AgentState = {
   /** 聊天模型（TEXT_MODELS 的 id）：minimax 系走 MiniMax，doubao-* 走方舟 */
   model: string
   setModel: (m: string) => void
+  /** 联网搜索开关（持久化）：豆包走方舟 Responses web_search，MiniMax 走 Tavily */
+  webSearch: boolean
+  setWebSearch: (v: boolean) => void
+  /** 待发送图片附件（不持久化；full 喂模型 / thumb 回显） */
+  pendingImages: AttachedImage[]
+  addPendingImages: (items: AttachedImage[]) => void
+  removePendingImage: (index: number) => void
   sessions: AgentSession[]
   activeSessionId: string | null
   sending: boolean
@@ -32,9 +40,21 @@ function msg(role: 'user' | 'assistant', content: string): AgentMessage {
 }
 
 const MAX_SESSIONS = 20
+/** 单条消息最多附图数（与 Worker 校验一致） */
+export const MAX_ATTACH_IMAGES = 4
+/** 历史回带原图的总预算（Worker body 上限 10MB，留出文本余量） */
+const IMG_HISTORY_BUDGET = 8 * 1024 * 1024
 
 /** 当前在飞请求的中止器（模块级，不持久化） */
 let sendAbort: AbortController | null = null
+
+/**
+ * 消息附图原图（模块级内存，不进 localStorage——原图 base64 会瞬间打爆 5MB 配额）。
+ * 刷新后原图失效：历史回带时降级为文字备注，消息气泡仍有缩略图回显。
+ */
+const fullImagesByMsg = new Map<string, string[]>()
+
+const dataUrlBytes = (u: string) => Math.ceil((u.length - (u.indexOf(',') + 1)) * 0.75)
 
 export const useAgentStore = create<AgentState>()(
   persist<AgentState>(
@@ -55,6 +75,15 @@ export const useAgentStore = create<AgentState>()(
         setMode: (m) => set({ mode: m }),
         model: 'minimax-m2.7',
         setModel: (m) => set({ model: m }),
+        webSearch: false,
+        setWebSearch: (v) => set({ webSearch: v }),
+        pendingImages: [],
+        addPendingImages: (items) =>
+          set((st) => ({
+            pendingImages: [...st.pendingImages, ...items].slice(0, MAX_ATTACH_IMAGES),
+          })),
+        removePendingImage: (index) =>
+          set((st) => ({ pendingImages: st.pendingImages.filter((_, i) => i !== index) })),
         sessions: [],
         activeSessionId: null,
         sending: false,
@@ -77,21 +106,48 @@ export const useAgentStore = create<AgentState>()(
         send: async (text) => {
           const content = text.trim()
           if (!content || get().sending) return
+          const attached = get().pendingImages
+          if (attached.length && get().model === 'minimax-m2.7') {
+            window.dispatchEvent(
+              new CustomEvent('pineline:flash', {
+                detail: 'MiniMax M2.7 不支持图片理解，请切换 MiniMax M3 或豆包模型后再发送',
+              }),
+            )
+            return
+          }
           if (!activeSession()) get().newSession()
           const session = activeSession()!
-          const userMsg = msg('user', content)
+          const userMsg: AgentMessage = {
+            ...msg('user', content),
+            ...(attached.length ? { images: attached.map((i) => i.thumb) } : {}),
+          }
+          if (attached.length) {
+            fullImagesByMsg.set(userMsg.id, attached.map((i) => i.full))
+          }
           patchSession(session.id, (s) => ({
             ...s,
             title: s.messages.length ? s.title : content.slice(0, 24),
             messages: [...s.messages, userMsg],
           }))
-          set({ sending: true })
+          set({ sending: true, pendingImages: [] })
           sendAbort = new AbortController()
           try {
             // 执行结果回喂：assistant 的 reply 是执行**前**写好的同包文本，若不把
             // 真实执行结果带回历史，LLM 会一直以为「已执行」（用户实测：先说已
             // 执行 15 项、下一轮才发现画布没变化说抱歉重来）
-            const history = [...activeSession()!.messages].slice(-12).map((m) => {
+            const recent = [...activeSession()!.messages].slice(-12)
+            // 附图从新到旧在预算内回带原图，超出/已失效（刷新）的降级为文字备注
+            const carried = new Map<string, string[]>()
+            let imgBytes = 0
+            for (let i = recent.length - 1; i >= 0; i--) {
+              const full = fullImagesByMsg.get(recent[i].id)
+              if (!full?.length) continue
+              const bytes = full.reduce((sum, u) => sum + dataUrlBytes(u), 0)
+              if (imgBytes + bytes > IMG_HISTORY_BUDGET) break
+              imgBytes += bytes
+              carried.set(recent[i].id, full)
+            }
+            const history = recent.map((m) => {
               let content = m.content
               if (m.role === 'assistant' && m.ops?.length) {
                 if (m.opsState === 'executed' && m.result) {
@@ -102,12 +158,17 @@ export const useAgentStore = create<AgentState>()(
                   content += `\n[系统备注] 这批画布操作尚未执行（等待用户确认）`
                 }
               }
-              return { role: m.role, content }
+              const images = carried.get(m.id)
+              if (!images && m.images?.length) {
+                content += `\n[系统备注] 本条消息原附带 ${m.images.length} 张图片，已不在本次请求中`
+              }
+              return { role: m.role, content, ...(images ? { images } : {}) }
             })
             const res = await agentChat(
               {
                 messages: history,
                 model: get().model,
+                webSearch: get().webSearch,
                 canvas: canvasSnapshot(),
                 selection: useStudioStore.getState().selectedNodeId
                   ? [useStudioStore.getState().selectedNodeId as string]
@@ -118,6 +179,7 @@ export const useAgentStore = create<AgentState>()(
             const reply: AgentMessage = {
               ...msg('assistant', res.reply),
               ...(res.thinking ? { thinking: res.thinking } : {}),
+              ...(res.citations?.length ? { citations: res.citations } : {}),
               ...(res.ops.length
                 ? {
                     ops: res.ops,
@@ -221,12 +283,15 @@ export const useAgentStore = create<AgentState>()(
     },
     {
       name: 'pineline-agent-v1',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      // v1→v2：新增 webSearch（缺省 false）与消息缩略图字段，均向后兼容直接沿用
+      migrate: (persisted) => persisted as AgentState,
       partialize: (s) =>
         ({
           mode: s.mode,
           model: s.model,
+          webSearch: s.webSearch,
           sessions: s.sessions.slice(0, MAX_SESSIONS),
           activeSessionId: s.activeSessionId,
         }) as unknown as AgentState,
