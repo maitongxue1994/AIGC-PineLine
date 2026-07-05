@@ -9,10 +9,15 @@ import { getGenLogs, jsonOk } from '../utils'
  * 注意：不走 runRoute（避免把日志查询本身写进缓冲挤占生成记录）。
  */
 
-/** 模块加载时生成一次：区分 Workers 实例（每个 isolate 各有一份内存缓冲） */
-const isolateId = crypto.randomUUID()
+/**
+ * 实例标识（区分 isolate，各自持有一份内存缓冲）：**必须在请求内惰性生成**——
+ * Workers 禁止在全局作用域生成随机数，模块顶层 randomUUID 会让脚本启动校验
+ * 失败、整次部署被拒（2026-07-05 实测：上一版因此卡住 CF 自动部署 10 小时）。
+ */
+let isolateId: string | null = null
 
 export default function debugLogs(): Promise<Response> {
+  isolateId ??= crypto.randomUUID()
   return Promise.resolve(
     jsonOk({
       entries: getGenLogs(),
