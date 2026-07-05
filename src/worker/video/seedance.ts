@@ -104,7 +104,14 @@ export const seedance: VideoProvider = {
       | { id?: string; error?: { message?: string } }
       | null
     if (!res.ok || !data?.id) {
-      const msg = `Seedance 创建任务失败（HTTP ${res.status}）：${data?.error?.message ?? '未知错误'}`
+      let msg = `Seedance 创建任务失败（HTTP ${res.status}）：${data?.error?.message ?? '未知错误'}`
+      // 官方限制（82379/1520757）：2.0 系列不接受疑似真人人脸的参考图，仅信任
+      // Seedream 文生图产物 / 本账号 30 天内 Seedance 产物等来源 → 给出可操作的中文引导
+      if (/real person/i.test(data?.error?.message ?? '')) {
+        msg +=
+          '。参考图疑似含真人人脸——Seedance 2.0 仅接受信任来源的人像参考（如 Seedream 文生图产物）；' +
+          '请把上游分镜图节点的生图模型切换为 Seedream 重新生成后再试'
+      }
       const requestId = upstreamRequestId(res)
       pushGenLog({
         ts: started,

@@ -86,27 +86,32 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
 
   // 生图模型选择（分段小胶囊）：undefined = 默认（各节点自己的设置/Gemini）
   const modelPicker = (
-    <div className="flex items-center gap-1 px-0.5">
-      <span className="shrink-0 text-[10px]" style={{ color: TOKENS.textFaint }}>
-        生图模型
-      </span>
-      {IMAGE_MODELS.map((m) => {
-        const active = imageModel === m.id
-        return (
-          <button
-            key={m.id}
-            onClick={() => setImageModel(active ? undefined : m.id)}
-            title={active ? '再点一次恢复默认' : m.desc}
-            className="rounded-full px-2 py-0.5 text-[10px] transition"
-            style={{
-              background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
-              color: active ? '#F5F5F7' : TOKENS.textMuted,
-            }}
-          >
-            {m.name}
-          </button>
-        )
-      })}
+    <div className="space-y-1 px-0.5">
+      <div className="flex items-center gap-1">
+        <span className="shrink-0 text-[10px]" style={{ color: TOKENS.textFaint }}>
+          生图模型
+        </span>
+        {IMAGE_MODELS.map((m) => {
+          const active = imageModel === m.id
+          return (
+            <button
+              key={m.id}
+              onClick={() => setImageModel(active ? undefined : m.id)}
+              title={active ? '再点一次恢复默认' : m.desc}
+              className="rounded-full px-2 py-0.5 text-[10px] transition"
+              style={{
+                background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+                color: active ? '#F5F5F7' : TOKENS.textMuted,
+              }}
+            >
+              {m.name}
+            </button>
+          )
+        })}
+      </div>
+      <div className="text-[10px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
+        画面含人物且要生成 Seedance 视频时建议选 Seedream（Seedance 2.0 不接受疑似真人人脸的参考图）
+      </div>
     </div>
   )
 
