@@ -102,6 +102,16 @@ export type NodeParams = {
   videoModel?: string
   /** 是否生成同步音频（官方 generate_audio，默认 true；仅 audio 能力模型可关） */
   videoAudio?: boolean
+  /** 纯净模式：注入官方去字幕约束词（Seedance 无字幕参数，靠提示词压概率） */
+  videoNoSubtitles?: boolean
+  /** 纯净模式：无背景音乐（与 videoNoSfx 同勾且无音色诉求时整体 generate_audio=false） */
+  videoNoBgm?: boolean
+  /** 纯净模式：无音效 */
+  videoNoSfx?: boolean
+  /** 分镜节点：旁白音色串（官方公式：性别+年龄区间+声音属性+语速+情绪基线），派生视频提示词时注入 */
+  voiceNarration?: string
+  /** 分镜节点：角色音色表（每行「角色名：音色描述」），随旁白一并注入派生视频提示词 */
+  voiceCast?: string
   /** 首尾帧参考的 ⇄ 交换态（进 params 供 runNode 读取，而非组件局部态） */
   framesSwapped?: boolean
   /** 软剪辑区间（秒）：播放范围 clamp；由剪辑模式确认写入 */
