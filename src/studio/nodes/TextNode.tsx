@@ -1,15 +1,15 @@
 import { memo, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Clapperboard, FileText, Loader2, Maximize2, Play, X } from 'lucide-react'
+import { ChevronDown, Clapperboard, FileText, Loader2, Maximize2, Mic, Play, X } from 'lucide-react'
 import { useStudioStore } from '../store'
-import { activeContent, type PineNode, type ShotItem } from '../types'
+import { activeContent, type PineNode, type PineNodeData, type ShotItem } from '../types'
 import { IMAGE_MODELS, presetMeta } from '../nodeCatalog'
 import { TOKENS } from '../designTokens'
 import NodeShell from './NodeShell'
 import NodeToolbarBar from './NodeToolbarBar'
 import PromptComposer from './PromptComposer'
 import PromptEditorDialog from '../dialogs/PromptEditorDialog'
-import { CopyButton, SyncTextarea } from './composerKit'
+import { CopyButton, SyncInput, SyncTextarea } from './composerKit'
 
 const CARD_W = 340
 
@@ -217,6 +217,63 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
 }
 
 /**
+ * 音色设定折叠面板（storyboard 节点）：旁白音色串 + 角色音色表。
+ * 官方公式：性别+年龄区间+声音属性+语速+情绪基线（Seedance 1.5 Pro 指南，2.0 指南沿用）；
+ * 派生镜头视频时由 buildVideoPrompt 自动注入，保证整条管线多段视频音色一致。
+ */
+function VoicePanel({ id, data }: { id: string; data: PineNodeData }) {
+  const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
+  const configured = !!(data.params.voiceNarration?.trim() || data.params.voiceCast?.trim())
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="nodrag border-t border-white/[0.06]">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1.5 px-3 py-2 text-[11px] font-semibold transition hover:bg-white/[0.03]"
+        style={{ color: TOKENS.textBody }}
+      >
+        <Mic size={12} style={{ color: TOKENS.textMuted }} />
+        音色设定
+        <span className="font-normal" style={{ color: configured ? '#4BBF6B' : TOKENS.textFaint }}>
+          {configured ? '已设置' : '· 保证多镜头声音一致'}
+        </span>
+        <ChevronDown
+          size={12}
+          className={`ml-auto transition-transform ${open ? 'rotate-180' : ''}`}
+          style={{ color: TOKENS.textMuted }}
+        />
+      </button>
+      {open && (
+        <div className="space-y-1.5 px-3 pb-2.5">
+          <SyncInput
+            value={data.params.voiceNarration ?? ''}
+            onValueChange={(v) => updateNodeParams(id, { voiceNarration: v })}
+            placeholder="旁白音色：如 中年男性，声音低沉温润，语速偏慢，情绪平静克制"
+            onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="w-full rounded-[8px] bg-white/[0.04] px-2.5 py-1.5 text-[11px] outline-none placeholder:text-white/25"
+            style={{ color: TOKENS.textBody }}
+          />
+          <SyncTextarea
+            value={data.params.voiceCast ?? ''}
+            onValueChange={(v) => updateNodeParams(id, { voiceCast: v })}
+            placeholder={'角色音色（每行一个）：\n张三：青年男声，明亮有弹性，语速中等偏快\n李四：老年女声，沙哑缓慢，情绪温和'}
+            onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="nowheel min-h-[56px] w-full resize-none rounded-[8px] bg-white/[0.04] px-2.5 py-1.5 text-[11px] leading-relaxed outline-none placeholder:text-white/25"
+            style={{ color: TOKENS.textBody }}
+          />
+          <div className="text-[10px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
+            官方音色公式：性别 + 年龄区间 + 声音属性 + 语速 + 情绪基线；派生镜头视频时自动注入提示词
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * 文本内容节点（TapNow 式内容卡）：卡片即正文；
  * 分镜预设展示结构化镜头列表 + 两段式「生成分镜图」派生面板。
  */
@@ -271,6 +328,7 @@ function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
                 </div>
               ))}
             </div>
+            <VoicePanel id={id} data={data} />
             {/* key=镜头数：分镜重跑后面板重挂载，勾选态回到全选 */}
             <ShotDerivePanel key={shots.length} id={id} shots={shots} />
           </>
