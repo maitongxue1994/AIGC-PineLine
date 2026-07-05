@@ -172,6 +172,15 @@ type StudioState = {
    * 然后整批运行（全部派生完成后的主入口，替代重复派生）。
    */
   generateAllShotImages: (storyboardId: string, opts?: { imageModel?: string }) => Promise<void>
+  /**
+   * 分镜→一键成片：为每个已派生分镜图建下游视频节点（已有视频的跳过），
+   * 按 Seedance 官方公式预填提示词（含音色/纯净约束）并连线；
+   * opts.run 时立即整批运行。返回新建视频节点 id。
+   */
+  deriveShotVideoNodes: (
+    storyboardId: string,
+    opts?: { videoModel?: string; run?: boolean },
+  ) => Promise<string[]>
   exportProject: () => string
   importProject: (raw: string) => void
   resetProject: () => void
@@ -1653,6 +1662,68 @@ export const useStudioStore = create<StudioState>()(
           }
           flash(`开始生成 ${derived.length} 张分镜图…`)
           void get().runPipeline(derived.map((n) => n.id))
+        },
+
+        deriveShotVideoNodes: async (storyboardId, opts) => {
+          const s = get()
+          const flash = (msg: string) =>
+            window.dispatchEvent(new CustomEvent('pineline:flash', { detail: msg }))
+
+          // 沿边找已派生分镜图节点（shotIndex 绑定），按镜头顺序排列
+          const derived = s.edges
+            .filter((e) => e.source === storyboardId)
+            .map((e) => s.nodes.find((n) => n.id === e.target))
+            .filter(
+              (n): n is PineNode =>
+                !!n &&
+                n.data.kind === 'image' &&
+                n.data.preset === 'shot' &&
+                n.data.params.shotIndex != null,
+            )
+            .sort((a, b) => a.data.params.shotIndex! - b.data.params.shotIndex!)
+          if (!derived.length) {
+            flash('请先派生分镜图，再一键成片')
+            return []
+          }
+
+          // 已有下游视频节点的分镜图跳过（重复触发不叠加）
+          const pending = derived.filter(
+            (img) =>
+              !s.edges.some((e) => {
+                if (e.source !== img.id) return false
+                const t = s.nodes.find((n) => n.id === e.target)
+                return t?.data.kind === 'video'
+              }),
+          )
+          if (!pending.length) {
+            flash('每个分镜图都已挂镜头视频节点')
+            return []
+          }
+
+          const ids: string[] = []
+          for (const img of pending) {
+            const id = get().addNode(
+              'video',
+              null,
+              { x: img.position.x + 460, y: img.position.y },
+              {
+                title: `镜头视频 ${img.data.params.shotIndex! + 1}`,
+                ...(opts?.videoModel ? { params: { videoModel: opts.videoModel } } : {}),
+              },
+            )
+            get().onConnect({ source: img.id, sourceHandle: null, target: id, targetHandle: null })
+            // 按官方公式预填提示词（分镜图画面描述 + 分镜节点音色设定），可再编辑
+            get().fillVideoPromptFromUpstream(id)
+            ids.push(id)
+          }
+          get().requestFitView()
+          flash(
+            opts?.run
+              ? `✓ 已派生 ${ids.length} 个镜头视频，开始生成…`
+              : `✓ 已派生 ${ids.length} 个镜头视频节点，确认提示词后可一键生成`,
+          )
+          if (opts?.run && ids.length) void get().runPipeline(ids)
+          return ids
         },
 
         exportProject: () => {
