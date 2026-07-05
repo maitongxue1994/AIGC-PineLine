@@ -1,6 +1,7 @@
 import { Fragment, useRef, useState } from 'react'
 import { NodeToolbar, Position } from '@xyflow/react'
 import {
+  ArrowDownToLine,
   ArrowLeftRight,
   ArrowUp,
   ChevronDown,
@@ -83,6 +84,17 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
   const runNode = useStudioStore((s) => s.runNode)
   const focusNode = useStudioStore((s) => s.focusNode)
   const credits = useStudioStore((s) => s.credits)
+  const fillFromUpstream = useStudioStore((s) => s.fillVideoPromptFromUpstream)
+  // 上游是否携带可推导的提示词语境（分镜描述/生图提示词/音色设定）→ 显示「填充」按钮
+  const hasUpstreamContext = useStudioStore((s) =>
+    s.edges.some((e) => {
+      if (e.target !== id) return false
+      const src = s.nodes.find((n) => n.id === e.source)
+      if (!src) return false
+      const d = src.data
+      return !!(d.prompt.trim() || d.shots?.length || d.params.voiceNarration || d.params.voiceCast)
+    }),
+  )
   // 上游图片作为首/尾帧参考
   const upstreamImgs = useStudioStore((s) => {
     const refs: { nodeId: string; src: string }[] = []
@@ -474,6 +486,19 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
                 </span>
               )}
             </div>
+
+            {/* 上游语境填充：分镜画面描述 + 音色设定按 Seedance 官方公式组装写入（可再编辑） */}
+            {hasUpstreamContext && !data.prompt.trim() && (
+              <button
+                onClick={() => {
+                  if (!fillFromUpstream(id)) flash('上游没有可推导的分镜描述')
+                }}
+                className="flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] transition hover:bg-white/[0.1]"
+                style={{ background: 'rgba(255,255,255,0.06)', color: TOKENS.textMuted }}
+              >
+                <ArrowDownToLine size={12} /> 填充上游分镜提示词
+              </button>
+            )}
           </>
         )}
 

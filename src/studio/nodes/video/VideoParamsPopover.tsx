@@ -4,7 +4,7 @@ import { DEFAULT_VIDEO_MODEL, VIDEO_MODELS } from '../../nodeCatalog'
 import { SliderRow } from '../../opspanels/OpsPanelShell'
 import { TOKENS } from '../../designTokens'
 import { Popover } from '../composerKit'
-import type { PineNodeData, VideoMode, VideoRatio, VideoResolution } from '../../types'
+import type { NodeParams, PineNodeData, VideoMode, VideoRatio, VideoResolution } from '../../types'
 
 /** 6 个固定比例的图形化尺寸（'auto' 自适应单独整行呈现） */
 const RATIOS: { value: Exclude<VideoRatio, 'auto'>; w: number; h: number }[] = [
@@ -220,6 +220,49 @@ export default function VideoParamsPopover({
             </button>
           </div>
         )}
+
+        {/* 纯净模式：Seedance 无字幕/BGM 参数，靠官方约束词压概率（生成时注入提示词） */}
+        <div>
+          <div className={groupTitle} style={{ color: '#D6D6DB' }}>
+            纯净模式
+            <span className="ml-2 text-[12px] font-normal" style={{ color: TOKENS.textFaint }}>
+              约束词注入提示词
+            </span>
+          </div>
+          <div
+            className="flex flex-col gap-1.5 rounded-[14px] p-2.5"
+            style={{ background: 'rgba(255,255,255,0.04)' }}
+          >
+            {(
+              [
+                ['videoNoSubtitles', '无字幕', '官方约束词压概率；横屏出字幕概率更低', true],
+                ['videoNoBgm', '无背景音乐', '提示词约束（官方无独立开关）', model.audio],
+                ['videoNoSfx', '无音效', '提示词约束', model.audio],
+              ] as const
+            )
+              .filter(([, , , show]) => show)
+              .map(([key, label, hint]) => (
+                <label key={key} className="flex cursor-pointer items-center gap-2" title={hint}>
+                  <input
+                    type="checkbox"
+                    checked={!!params[key]}
+                    onChange={() =>
+                      updateNodeParams(id, { [key]: !params[key] } as Partial<NodeParams>)
+                    }
+                    className="h-3.5 w-3.5 accent-white"
+                  />
+                  <span className="text-[13px]" style={{ color: TOKENS.textBody }}>
+                    {label}
+                  </span>
+                </label>
+              ))}
+            {params.videoNoBgm && params.videoNoSfx && (
+              <div className="text-[11px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
+                无 BGM + 无音效且上游无音色设定时，将整体静音（generate_audio=false）
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </Popover>
   )
