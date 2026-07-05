@@ -1,8 +1,15 @@
 import { memo, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { ChevronDown, Clapperboard, FileText, Loader2, Maximize2, Mic, Play, X } from 'lucide-react'
+import { ChevronDown, Clapperboard, FileText, Film, Loader2, Maximize2, Mic, Play, X } from 'lucide-react'
 import { useStudioStore } from '../store'
-import { activeContent, type PineNode, type PineNodeData, type ShotItem } from '../types'
+import {
+  activeContent,
+  isImageContent,
+  isVideoContent,
+  type PineNode,
+  type PineNodeData,
+  type ShotItem,
+} from '../types'
 import { IMAGE_MODELS, presetMeta } from '../nodeCatalog'
 import { TOKENS } from '../designTokens'
 import NodeShell from './NodeShell'
@@ -21,6 +28,7 @@ const CARD_W = 340
 function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   const deriveShotImageNodes = useStudioStore((s) => s.deriveShotImageNodes)
   const generateAllShotImages = useStudioStore((s) => s.generateAllShotImages)
+  const deriveShotVideoNodes = useStudioStore((s) => s.deriveShotVideoNodes)
   const pipelineRunning = useStudioStore((s) => s.pipelineRunning)
 
   // 已派生的镜头下标（沿连线找下游分镜图节点的 shotIndex；序列化避免选择器每次新引用）
@@ -38,6 +46,63 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   const derived = new Set(derivedKey ? derivedKey.split(',').map(Number) : [])
   const undived = shots.map((_, i) => i).filter((i) => !derived.has(i))
   const allDerived = shots.length > 0 && undived.length === 0
+
+  // 一键成片阶段状态：已出图的分镜图数 / 已挂视频节点数 / 待生成的视频节点数（序列化防新引用）
+  const videoStageKey = useStudioStore((s) => {
+    let withImage = 0
+    let withVideo = 0
+    let videoPending = 0
+    for (const e of s.edges) {
+      if (e.source !== id) continue
+      const n = s.nodes.find((x) => x.id === e.target)
+      if (!n || n.data.kind !== 'image' || n.data.preset !== 'shot' || n.data.params.shotIndex == null)
+        continue
+      if (n.data.versions.some((v) => isImageContent(v.content))) withImage++
+      const videos = s.edges
+        .filter((e2) => e2.source === n.id)
+        .map((e2) => s.nodes.find((x) => x.id === e2.target))
+        .filter((x) => x?.data.kind === 'video')
+      if (videos.length) withVideo++
+      videoPending += videos.filter(
+        (v) => v!.data.status !== 'running' && !v!.data.versions.some((x) => isVideoContent(x.content)),
+      ).length
+    }
+    return `${withImage},${withVideo},${videoPending}`
+  })
+  const [withImage, withVideo, videoPending] = videoStageKey.split(',').map(Number)
+
+  const deriveVideos = async () => {
+    if (busy || pipelineRunning) return
+    setBusy(true)
+    try {
+      await deriveShotVideoNodes(id)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runAllShotVideos = () => {
+    if (pipelineRunning) return
+    const s = useStudioStore.getState()
+    const vids: string[] = []
+    for (const e of s.edges) {
+      if (e.source !== id) continue
+      const img = s.nodes.find((x) => x.id === e.target)
+      if (!img || img.data.kind !== 'image' || img.data.preset !== 'shot') continue
+      for (const e2 of s.edges) {
+        if (e2.source !== img.id) continue
+        const v = s.nodes.find((x) => x.id === e2.target)
+        // 只跑还没有产出的视频节点，避免重复扣积分重生成
+        if (
+          v?.data.kind === 'video' &&
+          v.data.status !== 'running' &&
+          !v.data.versions.some((x) => isVideoContent(x.content))
+        )
+          vids.push(v.id)
+      }
+    }
+    if (vids.length) void useStudioStore.getState().runPipeline(vids)
+  }
 
   const [open, setOpen] = useState(false)
   // 展开时默认全选未派生镜头
@@ -134,6 +199,29 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
           )}
           {busy || pipelineRunning ? '生成中…' : `全部生成图片（${shots.length} 张）`}
         </button>
+        {/* 一键成片：分镜图出图后派生镜头视频节点（预填官方公式提示词），再整批生成 */}
+        {withImage > 0 && withVideo < derived.size && (
+          <button
+            onClick={() => void deriveVideos()}
+            disabled={busy || pipelineRunning}
+            className={`${btn} w-full`}
+            style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
+          >
+            <Film size={12} />
+            一键成片（{derived.size - withVideo} 镜头 → 视频）
+          </button>
+        )}
+        {videoPending > 0 && (
+          <button
+            onClick={runAllShotVideos}
+            disabled={pipelineRunning}
+            className={`${btn} w-full`}
+            style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
+          >
+            {pipelineRunning ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+            {pipelineRunning ? '生成中…' : `生成全部镜头视频（${videoPending}）`}
+          </button>
+        )}
         </div>
       ) : !open ? (
         <button
