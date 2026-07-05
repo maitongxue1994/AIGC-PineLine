@@ -20,6 +20,9 @@ export type AgentOp =
   | { op: 'run'; ids: string[] }
   /** 清空画布再新建管线：前端执行前必弹确认（无论手动/自动模式） */
   | { op: 'clear_canvas' }
+  /** 分镜派生自动化（单条 op 替代 N×add_node+connect）：id 为 storyboard 节点 */
+  | { op: 'derive_shot_images'; id: string; indices?: number[] }
+  | { op: 'derive_shot_videos'; id: string; run?: boolean }
 
 export type AgentChatRequest = {
   messages: { role: 'user' | 'assistant'; content: string }[]
@@ -96,5 +99,9 @@ export function describeOp(op: AgentOp): string {
       return `运行 ${op.ids.length} 个节点`
     case 'clear_canvas':
       return '⚠ 清空当前画布（执行前会再次确认，⌘Z 可撤销）'
+    case 'derive_shot_images':
+      return `派生分镜图${op.indices?.length ? `（镜头 ${op.indices.map((i) => i + 1).join('、')}）` : '（全部未派生镜头）'}`
+    case 'derive_shot_videos':
+      return `一键成片：派生镜头视频${op.run ? '并立即生成' : '（预填提示词，确认后生成）'}`
   }
 }

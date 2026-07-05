@@ -12,8 +12,11 @@ export type AgentOp =
   | { op: 'delete_node'; id: string }
   | { op: 'run'; ids: string[] }
   | { op: 'clear_canvas' }
+  /** 分镜两段式派生（单条 op 替代 N×add_node+connect）：id 为 storyboard 节点 */
+  | { op: 'derive_shot_images'; id: string; indices?: number[] }
+  | { op: 'derive_shot_videos'; id: string; run?: boolean }
 
-const VALID_OPS = new Set(['add_node', 'set_prompt', 'set_params', 'rename', 'connect', 'delete_node', 'run', 'clear_canvas'])
+const VALID_OPS = new Set(['add_node', 'set_prompt', 'set_params', 'rename', 'connect', 'delete_node', 'run', 'clear_canvas', 'derive_shot_images', 'derive_shot_videos'])
 const VALID_KINDS = new Set(['text', 'image', 'video'])
 const VALID_PRESETS = new Set([
   'free', 'script', 'storyboard', 'ad-copy',
@@ -123,6 +126,18 @@ export function sanitizeOps(rawOps: unknown[]): { ops: AgentOp[]; dropped: numbe
         break
       case 'clear_canvas':
         ops.push({ op: 'clear_canvas' })
+        break
+      case 'derive_shot_images': {
+        if (typeof o.id !== 'string') { dropped++; continue }
+        const indices = Array.isArray(o.indices)
+          ? (o.indices.filter((x) => typeof x === 'number' && Number.isInteger(x) && x >= 0) as number[]).slice(0, MAX_OPS)
+          : undefined
+        ops.push({ op: 'derive_shot_images', id: o.id, ...(indices?.length ? { indices } : {}) })
+        break
+      }
+      case 'derive_shot_videos':
+        if (typeof o.id !== 'string') { dropped++; continue }
+        ops.push({ op: 'derive_shot_videos', id: o.id, ...(o.run === true ? { run: true } : {}) })
         break
     }
   }

@@ -133,4 +133,28 @@ check('分镜音色设定键透传（voiceNarration/voiceCast）', () => {
   assert.deepEqual(r.ops[0].params, { voiceNarration: '中年男性，低沉温润', voiceCast: '张三：青年男声' })
 })
 
+// ---- 8. 分镜派生自动化 ops ----
+check('derive_shot_images 透传（indices 过滤非法值）', () => {
+  const r = sanitizeOps([
+    { op: 'derive_shot_images', id: 'sb1', indices: [0, 2, -1, 1.5, 'x'] },
+  ])
+  assert.deepEqual(r.ops[0], { op: 'derive_shot_images', id: 'sb1', indices: [0, 2] })
+})
+check('derive_shot_images 省略 indices（全部未派生）', () => {
+  const r = sanitizeOps([{ op: 'derive_shot_images', id: 'sb1' }])
+  assert.deepEqual(r.ops[0], { op: 'derive_shot_images', id: 'sb1' })
+})
+check('derive_shot_videos 透传（run 仅接受 true）', () => {
+  const r = sanitizeOps([
+    { op: 'derive_shot_videos', id: 'sb1', run: true },
+    { op: 'derive_shot_videos', id: 'sb2', run: 'yes' },
+  ])
+  assert.deepEqual(r.ops[0], { op: 'derive_shot_videos', id: 'sb1', run: true })
+  assert.deepEqual(r.ops[1], { op: 'derive_shot_videos', id: 'sb2' })
+})
+check('derive op 缺 id 拒绝', () => {
+  const r = sanitizeOps([{ op: 'derive_shot_images' }, { op: 'derive_shot_videos' }])
+  assert.equal(r.dropped, 2)
+})
+
 console.log(`\n✅ Agent ops 白名单校验全部通过：${pass} 项`)

@@ -97,6 +97,52 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
           s.resetProject()
           ok++
           break
+        case 'derive_shot_images': {
+          const id = resolve(op.id)
+          const sb = s.nodes.find((n) => n.id === id)
+          if (!sb || sb.data.preset !== 'storyboard') {
+            fail(`derive_shot_images: ${op.id} 不是分镜节点`)
+            break
+          }
+          const shots = sb.data.shots ?? []
+          if (!shots.length) {
+            fail('derive_shot_images: 分镜节点还没有镜头，请先运行分镜')
+            break
+          }
+          // 缺省 = 全部未派生镜头；已派生的剔除（防重复叠加）
+          const derivedSet = new Set<number>()
+          for (const e of s.edges) {
+            if (e.source !== id) continue
+            const t = s.nodes.find((n) => n.id === e.target)
+            if (t?.data.kind === 'image' && t.data.preset === 'shot' && t.data.params.shotIndex != null)
+              derivedSet.add(t.data.params.shotIndex)
+          }
+          const indices = (op.indices ?? shots.map((_, i) => i)).filter(
+            (i) => i < shots.length && !derivedSet.has(i),
+          )
+          if (!indices.length) {
+            fail('derive_shot_images: 所选镜头均已派生')
+            break
+          }
+          await s.deriveShotImageNodes(id, indices)
+          ok++
+          break
+        }
+        case 'derive_shot_videos': {
+          const id = resolve(op.id)
+          const sb = s.nodes.find((n) => n.id === id)
+          if (!sb || sb.data.preset !== 'storyboard') {
+            fail(`derive_shot_videos: ${op.id} 不是分镜节点`)
+            break
+          }
+          const made = await s.deriveShotVideoNodes(id, { run: op.run })
+          if (!made.length) {
+            fail('derive_shot_videos: 没有可挂视频的分镜图，请先派生并生成分镜图')
+            break
+          }
+          ok++
+          break
+        }
       }
     } catch (err) {
       fail(`${op.op}: ${err instanceof Error ? err.message : String(err)}`)
