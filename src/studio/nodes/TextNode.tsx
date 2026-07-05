@@ -9,7 +9,7 @@ import NodeShell from './NodeShell'
 import NodeToolbarBar from './NodeToolbarBar'
 import PromptComposer from './PromptComposer'
 import PromptEditorDialog from '../dialogs/PromptEditorDialog'
-import { SyncTextarea } from './composerKit'
+import { CopyButton, SyncTextarea } from './composerKit'
 
 const CARD_W = 340
 
@@ -292,6 +292,13 @@ function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
             >
               <Maximize2 size={13} />
             </button>
+            <CopyButton
+              text={output}
+              title="复制正文"
+              iconSize={13}
+              className="nodrag absolute right-12 top-1.5 rounded-[8px] bg-black/50 p-1.5 opacity-0 backdrop-blur-sm transition hover:bg-white/[0.14] group-hover/body:opacity-100"
+              style={{ color: TOKENS.textMuted }}
+            />
             {editorOpen && (
               <PromptEditorDialog
                 title={`${data.title} · 正文`}

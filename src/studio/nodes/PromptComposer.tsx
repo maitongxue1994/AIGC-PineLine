@@ -25,7 +25,7 @@ import {
   TEXT_PRESETS,
 } from '../nodeCatalog'
 import { SHADOWS, TOKENS } from '../designTokens'
-import { Chip, Popover, SyncInput, SyncTextarea, VDivider } from './composerKit'
+import { Chip, CopyButton, Popover, SyncInput, SyncTextarea, VDivider } from './composerKit'
 import AssetPickerDialog from '../dialogs/AssetPickerDialog'
 import PromptEditorDialog from '../dialogs/PromptEditorDialog'
 import {
@@ -235,6 +235,12 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
           >
             <Maximize2 size={14} />
           </button>
+          <CopyButton
+            text={data.prompt}
+            title="复制提示词"
+            className="absolute right-12 top-1 rounded-[8px] bg-black/50 p-1.5 opacity-0 backdrop-blur-sm transition hover:bg-white/[0.14] group-hover/prompt:opacity-100"
+            style={{ color: TOKENS.textMuted }}
+          />
           {meta?.maxChars && data.prompt.length >= meta.maxChars * 0.8 && (
             <span
               className="pointer-events-none absolute bottom-1 right-4 rounded-[6px] bg-black/50 px-1.5 py-0.5 text-[11px] tabular-nums backdrop-blur-sm"

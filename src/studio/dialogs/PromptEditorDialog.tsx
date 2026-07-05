@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { SHADOWS, TOKENS } from '../designTokens'
-import { SyncTextarea } from '../nodes/composerKit'
+import { CopyButton, SyncTextarea } from '../nodes/composerKit'
 
 /**
  * 提示词展开编辑器（body Portal 模态，z-[80]）：
@@ -90,6 +90,13 @@ export default function PromptEditorDialog({
           >
             {maxLength ? `${count} / ${maxLength}` : `${count} 字`}
           </span>
+          <CopyButton
+            text={value}
+            label="复制全文"
+            iconSize={13}
+            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] transition hover:bg-white/[0.08]"
+            style={{ color: TOKENS.textBody }}
+          />
           <button
             onClick={onClose}
             className="rounded-full px-4 py-1.5 text-[13px] font-semibold transition hover:opacity-90"

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { Check, Copy } from 'lucide-react'
 import { SHADOWS, TOKENS } from '../designTokens'
 import { useDismissable } from '../hooks/useDismissable'
 
@@ -85,6 +86,57 @@ export const SyncInput = forwardRef<HTMLInputElement, SyncFieldProps<HTMLInputEl
     )
   },
 )
+
+/**
+ * 通用「复制到剪贴板」按钮：✓ 已复制 1.2s 复位（同历史面板 rid 复制交互）；
+ * 剪贴板被浏览器拒绝时走 pineline:flash 提示。label 传入时带文字（如「复制全文」），否则纯图标。
+ */
+export function CopyButton({
+  text,
+  label,
+  title = '复制',
+  iconSize = 14,
+  className,
+  style,
+}: {
+  text: string
+  label?: string
+  title?: string
+  iconSize?: number
+  className?: string
+  style?: CSSProperties
+}) {
+  const [copied, setCopied] = useState(false)
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+  return (
+    <button
+      title={copied ? '已复制' : title}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (!text) return
+        navigator.clipboard?.writeText(text).then(
+          () => {
+            setCopied(true)
+            window.clearTimeout(timer.current)
+            timer.current = window.setTimeout(() => setCopied(false), 1200)
+          },
+          () => {
+            window.dispatchEvent(
+              new CustomEvent('pineline:flash', { detail: '复制失败：浏览器拒绝了剪贴板访问' }),
+            )
+          },
+        )
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      className={className}
+      style={style}
+    >
+      {copied ? <Check size={iconSize} style={{ color: '#4BBF6B' }} /> : <Copy size={iconSize} />}
+      {label ? <span>{copied ? '已复制' : label}</span> : null}
+    </button>
+  )
+}
 
 /** 参数 chip（设计稿 §04：padding 8/12、radius 12、15px 文字、hover 白 6%） */
 export function Chip({

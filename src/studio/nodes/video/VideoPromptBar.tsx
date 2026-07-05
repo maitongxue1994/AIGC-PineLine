@@ -20,7 +20,7 @@ import {
 import { useStudioStore } from '../../store'
 import { estimateCost, VIDEO_MODELS, VIDEO_PROMPT_MAX_CHARS } from '../../nodeCatalog'
 import { SHADOWS, TOKENS } from '../../designTokens'
-import { Chip, Popover, SyncTextarea, VDivider } from '../composerKit'
+import { Chip, CopyButton, Popover, SyncTextarea, VDivider } from '../composerKit'
 import { isImageContent, type NodeParams, type PineNodeData } from '../../types'
 import VideoModelPicker from './VideoModelPicker'
 import VideoParamsPopover from './VideoParamsPopover'
@@ -458,6 +458,12 @@ export default function VideoPromptBar({ id, data }: { id: string; data: PineNod
               >
                 <Maximize2 size={14} />
               </button>
+              <CopyButton
+                text={data.prompt}
+                title="复制提示词"
+                className="absolute right-12 top-1 rounded-[8px] bg-black/50 p-1.5 opacity-0 backdrop-blur-sm transition hover:bg-white/[0.14] group-hover/prompt:opacity-100"
+                style={{ color: TOKENS.textMuted }}
+              />
               {data.prompt.length >= 500 && (
                 <span
                   className="absolute bottom-1 right-4 rounded-[6px] bg-black/50 px-1.5 py-0.5 text-[11px] tabular-nums backdrop-blur-sm"
