@@ -3,6 +3,7 @@ import { useReactFlow } from '@xyflow/react'
 import { Cloud, FileText, Film, HardDrive, Trash2 } from 'lucide-react'
 import { clearGenLog, listGenLog, listHistory, type GenLogEntry, type HistoryEntry } from '../assetdb'
 import { fetchWorkerLogs, type WorkerLogEntry } from '../api'
+import { IS_ADMIN } from '../adminMode'
 import { useStudioStore } from '../store'
 import { useUIStore } from '../uiStore'
 import { SHADOWS, TOKENS } from '../designTokens'
@@ -235,8 +236,9 @@ export default function HistoryPanel() {
             ['image', `图片 (${counts.image})`],
             ['video', `视频 (${counts.video})`],
             ['text', `文本 (${counts.text})`],
-            ['log', '日志'],
-          ] as const
+            // 日志 tab 是后台运维视图（request-id 对账/实例日志），只对管理员（?admin=1）展示
+            ...(IS_ADMIN ? ([['log', '日志']] as const) : []),
+          ] as readonly (readonly [typeof tab, string])[]
         ).map(([k, label]) => (
           <button
             key={k}
