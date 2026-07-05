@@ -2,6 +2,7 @@ import { callMinimaxText } from '../minimax'
 import { callArkText, isArkModel } from '../ark'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
+import { STORYBOARD_SYSTEM_PROMPT } from '../prompts'
 
 type Body = {
   screenplay?: string
@@ -11,12 +12,6 @@ type Body = {
 }
 
 type ShotItem = { id: string; title: string; description: string }
-
-const SYSTEM_PROMPT = [
-  '你是一位专业的分镜师。请把用户给到的剧本文本拆分成可直接用于生图的分镜序列。',
-  '输出严格为 JSON 数组，每项包含 id（短 slug，如 sc01-shot03）、title（一句话镜头标题）、description（一段可直接喂给图像生成模型的详细镜头描述，需涵盖景别、主体、环境、光线、氛围，不超过 80 字）。',
-  '不要输出 Markdown、不要输出说明、不要在 JSON 外写任何字符。',
-].join('\n')
 
 function manualSplit(text: string, splitter: string): ShotItem[] {
   return text
@@ -82,13 +77,13 @@ export default function generateStoryboard(req: Request, env: Env): Promise<Resp
     // 长剧本拆 8-10 镜的 JSON 体量大，给足输出预算防截断
     let raw: string
     if (isArkModel(body.model)) {
-      raw = await callArkText(body.model!, SYSTEM_PROMPT, screenplay, env.ARK_API_KEY ?? '', {
+      raw = await callArkText(body.model!, STORYBOARD_SYSTEM_PROMPT, screenplay, env.ARK_API_KEY ?? '', {
         maxTokens: 8192,
       })
     } else {
       if (!env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
       // MiniMax- 前缀模型（如 MiniMax-M3）透传，其余落默认 M2.7
-      raw = await callMinimaxText(SYSTEM_PROMPT, screenplay, env.MINIMAX_API_KEY, {
+      raw = await callMinimaxText(STORYBOARD_SYSTEM_PROMPT, screenplay, env.MINIMAX_API_KEY, {
         maxTokens: 8192,
         model: body.model,
       })
