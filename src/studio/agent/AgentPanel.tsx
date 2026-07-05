@@ -18,6 +18,7 @@ import { useStudioStore } from '../store'
 import { TEXT_MODELS } from '../nodeCatalog'
 import { activeContent, isImageContent } from '../types'
 import { describeOp } from './types'
+import MarkdownMessage from './MarkdownMessage'
 import { SHADOWS, TOKENS } from '../designTokens'
 import { useDismissable } from '../hooks/useDismissable'
 
@@ -249,15 +250,15 @@ export default function AgentPanel() {
               <div key={m.id}>
                 {m.role === 'assistant' && m.thinking && <ThinkingBlock text={m.thinking} />}
                 <div
-                  className={`max-w-[92%] whitespace-pre-wrap rounded-[14px] px-3.5 py-2.5 text-[14px] leading-relaxed ${
-                    m.role === 'user' ? 'ml-auto' : ''
+                  className={`max-w-[92%] rounded-[14px] px-3.5 py-2.5 text-[14px] leading-relaxed ${
+                    m.role === 'user' ? 'ml-auto whitespace-pre-wrap' : ''
                   }`}
                   style={{
                     background: m.role === 'user' ? 'rgba(46,155,255,0.16)' : 'rgba(255,255,255,0.05)',
                     color: TOKENS.textBody,
                   }}
                 >
-                  {m.content}
+                  {m.role === 'assistant' ? <MarkdownMessage text={m.content} /> : m.content}
                 </div>
 
                 {/* 操作预览卡 */}
