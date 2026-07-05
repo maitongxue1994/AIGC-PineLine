@@ -33,6 +33,7 @@ import {
   VIDEO_MODELS,
 } from './nodeCatalog'
 import { migrateGraph, migrateLegacyEdge } from './migrate'
+import { buildVideoPrompt, resolveGenerateAudio } from './videoPrompt'
 import { appendHistory, getProject, putProject } from './assetdb'
 import {
   activeContent,
@@ -125,6 +126,11 @@ type StudioState = {
   undo: () => void
   redo: () => void
   runNode: (id: string) => Promise<void>
+  /**
+   * 视频节点提示词填充：按 Seedance 官方公式组装上游语境（分镜画面描述 +
+   * 分镜节点音色设定 + 纯净模式约束）写回节点提示词；返回是否有变化。
+   */
+  fillVideoPromptFromUpstream: (id: string) => boolean
   /** 视频任务超时后的续查：用版本上的 taskRef 重进轮询取件，不重新下单 */
   resumeVideoTask: (id: string) => Promise<void>
   /** 云端任务找回：本地任务 ID 丢失时，从供应商近 7 天列表取回成功任务的视频落版本 */
@@ -1127,7 +1133,28 @@ export const useStudioStore = create<StudioState>()(
                 VIDEO_MODELS.find((m) => m.id === (params.videoModel ?? DEFAULT_VIDEO_MODEL)) ??
                 VIDEO_MODELS[0]
               const videoMode = params.videoMode ?? 'frames'
-              const prompt = node.data.prompt.trim()
+              // 按 Seedance 官方公式组装最终提示词（用户手输优先，空则上游分镜；
+              // 音色/纯净约束注入带幂等标记），组装结果回填节点——所见即所发
+              const userPrompt = node.data.prompt.trim()
+              const vctx = videoContextFor(state.nodes, state.edges, id)
+              const purity = {
+                noSubtitles: params.videoNoSubtitles,
+                noBgm: params.videoNoBgm,
+                noSfx: params.videoNoSfx,
+              }
+              const hasVoice = !!(vctx.voiceNarration || vctx.voiceCast)
+              const generateAudio = resolveGenerateAudio(params.videoAudio, purity, hasVoice)
+              const prompt = buildVideoPrompt({
+                userPrompt,
+                shotText: vctx.shotText,
+                voiceNarration: vctx.voiceNarration,
+                voiceCast: vctx.voiceCast,
+                purity,
+                audioOn: generateAudio,
+              })
+              if (prompt && prompt !== userPrompt) {
+                safeSet(g, (s) => ({ nodes: mutateNode(s.nodes, id, { prompt }) }))
+              }
 
               // 首尾帧：沿边取上游图片（与 VideoPromptBar 展示一致），⇄ 交换态在 params
               const frames: string[] = []
@@ -1176,7 +1203,7 @@ export const useStudioStore = create<StudioState>()(
                 duration: params.videoDuration ?? 5,
                 ratio: params.videoRatio ?? 'auto',
                 resolution: params.videoResolution ?? '720p',
-                generateAudio: params.videoAudio ?? true,
+                generateAudio,
               }
               // 轮询期把等待时长透出到节点（每分钟更新一次，用户可感知任务仍在跑）
               const onTick = (elapsedMs: number) => {
@@ -1234,6 +1261,31 @@ export const useStudioStore = create<StudioState>()(
               nodes: mutateNode(s.nodes, id, { status: 'error', error: msg, progressNote: undefined }),
             }))
           }
+        },
+
+        fillVideoPromptFromUpstream: (id) => {
+          const s = get()
+          const node = s.nodes.find((n) => n.id === id)
+          if (!node || node.data.kind !== 'video') return false
+          const params = node.data.params
+          const vctx = videoContextFor(s.nodes, s.edges, id)
+          const purity = {
+            noSubtitles: params.videoNoSubtitles,
+            noBgm: params.videoNoBgm,
+            noSfx: params.videoNoSfx,
+          }
+          const hasVoice = !!(vctx.voiceNarration || vctx.voiceCast)
+          const prompt = buildVideoPrompt({
+            userPrompt: node.data.prompt,
+            shotText: vctx.shotText,
+            voiceNarration: vctx.voiceNarration,
+            voiceCast: vctx.voiceCast,
+            purity,
+            audioOn: resolveGenerateAudio(params.videoAudio, purity, hasVoice),
+          })
+          if (!prompt || prompt === node.data.prompt.trim()) return false
+          set((st) => ({ nodes: mutateNode(st.nodes, id, { prompt }) }))
+          return true
         },
 
         resumeVideoTask: async (id) => {
@@ -2001,6 +2053,60 @@ function shotDescriptionFor(
     }
   }
   return firstShotDescription(getUpstreamTextOutput(nodes, edges, nodeId))
+}
+
+type VideoUpstreamContext = {
+  shotText?: string
+  voiceNarration?: string
+  voiceCast?: string
+}
+
+/**
+ * 视频节点上游语境：沿边上溯 视频 ← 分镜图(shot) ← 分镜(storyboard)。
+ * 画面描述取分镜图生图提示词（派生已回填），空则回退 shots[shotIndex]；
+ * 音色设定（voiceNarration/voiceCast）取自链上的分镜节点；
+ * 视频直连分镜/普通图片节点时同样兜底。
+ */
+function videoContextFor(
+  nodes: PineNode[],
+  edges: PineEdge[],
+  videoId: string,
+): VideoUpstreamContext {
+  const ctx: VideoUpstreamContext = {}
+  const takeVoice = (d: PineNodeData) => {
+    if (!ctx.voiceNarration && d.params.voiceNarration?.trim())
+      ctx.voiceNarration = d.params.voiceNarration.trim()
+    if (!ctx.voiceCast && d.params.voiceCast?.trim()) ctx.voiceCast = d.params.voiceCast.trim()
+  }
+  for (const e of edges) {
+    if (e.target !== videoId) continue
+    const src = nodes.find((n) => n.id === e.source)
+    if (!src) continue
+    const d = src.data
+    if (d.kind === 'image' && d.preset === 'shot') {
+      if (!ctx.shotText) {
+        ctx.shotText =
+          d.prompt.trim() ||
+          shotDescriptionFor(nodes, edges, src.id, d.params.shotIndex) ||
+          undefined
+      }
+      // 分镜图的上游分镜节点携带整条管线的音色设定
+      for (const e2 of edges) {
+        if (e2.target !== src.id) continue
+        const sb = nodes.find((n) => n.id === e2.source)
+        if (sb?.data.preset === 'storyboard') takeVoice(sb.data)
+      }
+    } else if (d.preset === 'storyboard') {
+      takeVoice(d)
+      if (!ctx.shotText && d.shots?.length) {
+        const s = d.shots[0]
+        ctx.shotText = `${s.title}：${s.description}`
+      }
+    } else if (d.kind === 'image' || d.kind === 'asset') {
+      if (!ctx.shotText && d.prompt.trim()) ctx.shotText = d.prompt.trim()
+    }
+  }
+  return ctx
 }
 
 export type { ShotItem }
