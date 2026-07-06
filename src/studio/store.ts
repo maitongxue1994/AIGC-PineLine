@@ -34,7 +34,7 @@ import {
 } from './nodeCatalog'
 import { migrateGraph, migrateLegacyEdge } from './migrate'
 import { buildVideoPrompt, resolveGenerateAudio } from './videoPrompt'
-import { appendHistory, getProject, putProject } from './assetdb'
+import { appendHistory, getProject, isPersistent, putProject } from './assetdb'
 import {
   activeContent,
   isImageContent,
@@ -273,6 +273,44 @@ function newVersion(content: string | null, label?: string, error?: string | nul
  * IndexedDB 配额以 GB 计，**媒体完整保留**（剥离媒体曾导致重开项目分镜图全丢）；
  * 只做状态归位：running→idle、清除选中/拖拽标记。
  */
+/**
+ * 入档媒体合并：画布节点处于剥离/恢复失败的空壳态（无 data: 媒体版本、无全能参考
+ * 素材）而档案同 id 节点有 → 沿用档案的媒体版本，档案只增不减。
+ * 背景：防污染分支只拦「整图无媒体」；档案恢复失败后用户新生成任意一张图，
+ * canvasHasMedia 即为 true，快照会用残缺画布覆盖完整档案——真实丢档路径。
+ */
+function mergeArchiveMedia(cur: PineNode[], prevNodes: PineNode[]): PineNode[] {
+  if (!prevNodes.length) return cur
+  const prevById = new Map(prevNodes.map((n) => [n.id, n]))
+  return cur.map((n) => {
+    const old = prevById.get(n.id)
+    if (!old?.data) return n
+    let data = n.data
+    const curHasMedia = data.versions.some((v) => v.content?.startsWith('data:'))
+    const oldHasMedia = old.data.versions?.some((v) => v.content?.startsWith('data:'))
+    if (!curHasMedia && oldHasMedia) {
+      data = {
+        ...data,
+        versions: old.data.versions,
+        activeVersion: Math.max(
+          0,
+          Math.min(old.data.activeVersion ?? 0, old.data.versions.length - 1),
+        ),
+        status: old.data.status === 'running' ? 'done' : old.data.status,
+      }
+    }
+    // 全能参考素材同被 localStorage 剥离，一并回填
+    const p = data.params
+    const op = old.data.params
+    const omniPatch: Partial<NodeParams> = {}
+    if (!p.omniRefs?.length && op?.omniRefs?.length) omniPatch.omniRefs = op.omniRefs
+    if (!p.omniVideos?.length && op?.omniVideos?.length) omniPatch.omniVideos = op.omniVideos
+    if (!p.omniAudios?.length && op?.omniAudios?.length) omniPatch.omniAudios = op.omniAudios
+    if (Object.keys(omniPatch).length) data = { ...data, params: { ...p, ...omniPatch } }
+    return data === n.data ? n : { ...n, data }
+  })
+}
+
 function sanitizeForArchive(node: PineNode): PineNode {
   return {
     ...node,
@@ -1854,8 +1892,8 @@ export const useStudioStore = create<StudioState>()(
               .flatMap((n) => n.data.versions)
               .find((v) => isImageContent(v.content))?.content ?? null
           const thumb = firstImage ? await makeThumb(firstImage) : null
-          // 本次画布无图（如刷新后媒体被剥离）时保留档案里的旧缩略图
-          const prev = thumb ? null : await getProject(id)
+          // 总是读旧档：入档前做媒体合并（档案只增不减）
+          const prev = await getProject(id)
 
           // 防污染：画布无任何 data: 媒体而档案有 → 画布疑似 localStorage 剥离态，
           // 只刷新元数据、不用无图 graph 覆盖完整档案
@@ -1876,13 +1914,15 @@ export const useStudioStore = create<StudioState>()(
             return
           }
 
+          // 逐节点媒体合并：画布空壳节点沿用档案媒体（防「半剥离画布」覆盖完整档案）
+          const merged = mergeArchiveMedia(s.nodes, prevNodes)
           await putProject({
             id,
             name: s.projectName,
             updatedAt: Date.now(),
             thumb: thumb ?? prev?.thumb ?? null,
             // 媒体完整入档（IndexedDB）——localStorage 才需要剥离
-            graph: { nodes: s.nodes.map(sanitizeForArchive), edges: s.edges },
+            graph: { nodes: merged.map(sanitizeForArchive), edges: s.edges },
             credits: s.credits,
           })
         },
@@ -1893,7 +1933,18 @@ export const useStudioStore = create<StudioState>()(
           restoringProject = true
           try {
             const rec = await getProject(pid)
-            if (!rec) return
+            if (!rec) {
+              // 区分「没有档案」与「库不可用」：后者要明确告知，媒体没丢只是暂时读不到
+              if (!isPersistent()) {
+                window.dispatchEvent(
+                  new CustomEvent('pineline:flash', {
+                    detail:
+                      '本地数据库暂不可用，项目里的图片/视频未能恢复（数据仍在本机）——请关闭其他 PineLine 标签页后刷新',
+                  }),
+                )
+              }
+              return
+            }
             const { nodes, edges } = sanitizeArchiveGraph(
               rec.graph.nodes ?? [],
               rec.graph.edges ?? [],
