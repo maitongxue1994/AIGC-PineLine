@@ -1,6 +1,17 @@
 import { memo, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { ChevronDown, Clapperboard, FileText, Film, Loader2, Maximize2, Mic, Play, X } from 'lucide-react'
+import {
+  ChevronDown,
+  Clapperboard,
+  FileText,
+  Film,
+  Loader2,
+  Maximize2,
+  Mic,
+  Play,
+  UsersRound,
+  X,
+} from 'lucide-react'
 import { useStudioStore } from '../store'
 import {
   activeContent,
@@ -16,6 +27,7 @@ import NodeShell from './NodeShell'
 import NodeToolbarBar from './NodeToolbarBar'
 import PromptComposer from './PromptComposer'
 import PromptEditorDialog from '../dialogs/PromptEditorDialog'
+import EntityExtractDialog from '../dialogs/EntityExtractDialog'
 import { CopyButton, SyncInput, SyncTextarea } from './composerKit'
 
 const CARD_W = 340
@@ -368,11 +380,15 @@ function VoicePanel({ id, data }: { id: string; data: PineNodeData }) {
 function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
   const updateActiveContent = useStudioStore((s) => s.updateActiveContent)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [extractOpen, setExtractOpen] = useState(false)
 
   const meta = presetMeta(data.preset)
   const output = activeContent(data)
   const running = data.status === 'running'
   const shots = data.preset === 'storyboard' ? data.shots ?? [] : []
+  // 资产一致性入口：剧本/分镜有产出后可提取角色/场景/道具
+  const extractable =
+    !running && !!output && (data.preset === 'script' || data.preset === 'storyboard')
 
   // 文本下载走 text/plain data URL
   const downloadHref = output
@@ -468,7 +484,23 @@ function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
             {meta ? `${meta.label} · 选中后在下方输入提示词并运行` : '未生成'}
           </div>
         )}
+        {extractable && (
+          <div className="nodrag border-t border-white/[0.06] p-2">
+            <button
+              onClick={() => setExtractOpen(true)}
+              title="提取需保持视觉一致性的实体，批量生成三视图/宫格参考节点"
+              className="flex w-full items-center justify-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold transition hover:bg-white/[0.07]"
+              style={{ background: 'rgba(255,255,255,0.04)', color: TOKENS.textBody }}
+            >
+              <UsersRound size={12} />
+              提取角色 / 场景 / 道具
+            </button>
+          </div>
+        )}
       </div>
+      {extractOpen && output && (
+        <EntityExtractDialog sourceNodeId={id} text={output} onClose={() => setExtractOpen(false)} />
+      )}
     </NodeShell>
   )
 }
