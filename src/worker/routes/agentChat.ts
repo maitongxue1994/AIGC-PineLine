@@ -5,6 +5,7 @@ import { tavilySearch, WEB_SEARCH_TOOL } from '../tavily'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 import { sanitizeOps } from '../agentOps'
+import { PRODUCT_PROFILE } from '../prompts'
 
 /**
  * Agent 编排端点：多轮对话 → 回复文本 + 画布操作列表（JSON patch）+ 思考过程。
@@ -102,7 +103,9 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 5. 需求不明确时 ops 留空 []，在 reply 里追问。
 6. 不确定的事不要编造；删除节点等破坏性操作要保守，用户明确要求才做。
 7. 用户要求「新建/重新生成一条管线」且画布快照非空时，ops 第一条必须是 {"op":"clear_canvas"}（避免新旧节点叠在一起），并在 reply 里说明会先清空画布；用户只是追加节点/修改现有管线时不要 clear_canvas。
-8. reply 简洁（1-3 句），说明你做了什么或要问什么。`
+8. reply 简洁（1-3 句），说明你做了什么或要问什么。
+
+${PRODUCT_PROFILE}`
 
 function stripFences(s: string): string {
   return s.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
