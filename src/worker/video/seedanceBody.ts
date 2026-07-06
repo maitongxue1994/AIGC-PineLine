@@ -66,6 +66,7 @@ export function buildSeedanceBody(req: VideoCreateReq): Record<string, unknown> 
     ratio,
     duration,
     generate_audio: req.generateAudio ?? true,
-    watermark: false,
+    // 合规：非管理员请求强制供应商水印（forceWatermark），管理员自用不烧
+    watermark: req.forceWatermark === true,
   }
 }

@@ -118,4 +118,13 @@ check('全能参考无提示词：content 无 text 项', () =>
 check('全能参考无提示词：参考图仍完整入 content', () =>
   assert.equal(omniOnly.content.filter((c) => c.type === 'image_url').length, 1))
 
+// ---- 9. 水印合规：默认不烧，forceWatermark 时供应商侧烧「AI 生成」标 ----
+check('watermark 缺省 → false（管理员自用不烧）', () =>
+  assert.equal(buildSeedanceBody({ provider: 'seedance', prompt: 'x' }).watermark, false))
+check('forceWatermark: true → watermark true（非管理员合规兜底）', () =>
+  assert.equal(
+    buildSeedanceBody({ provider: 'seedance', prompt: 'x', forceWatermark: true }).watermark,
+    true,
+  ))
+
 console.log(`\n✅ Seedance 请求体校验全部通过：${pass} 项`)

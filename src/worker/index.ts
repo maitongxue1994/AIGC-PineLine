@@ -17,6 +17,7 @@ import {
   PineHttpError,
   type CoreEnv,
 } from './utils'
+import { checkRateLimit } from './rateLimit'
 
 export interface Env extends CoreEnv {
   ASSETS: Fetcher
@@ -29,6 +30,11 @@ export interface Env extends CoreEnv {
   KLING_API_KEY?: string
   /** 聊天联网搜索（MiniMax 通道，tavily.com）：缺失时联网开关返回 501 指引 */
   TAVILY_API_KEY?: string
+  /** 视频分辨率封顶放开（设为 '4k' 则不再对非管理员回落 1080p）；限流覆写 PINELINE_RATE_* */
+  PINELINE_MAX_RES?: string
+  PINELINE_RATE_VIDEO?: string
+  PINELINE_RATE_IMAGE?: string
+  PINELINE_RATE_TEXT?: string
   /** 画布桥 DO（外部 Agent MCP ↔ 浏览器 WebSocket 中继） */
   CANVAS_BRIDGE: DurableObjectNamespace
 }
@@ -100,8 +106,11 @@ export default {
       }
       try {
         assertOrigin(req, env)
-        // 生成/编排类端点过访问门（ACCESS_REQUIRED → 前端弹输码/购买层）
-        if (GATED_ROUTES.has(url.pathname)) assertAccess(req, env)
+        // 生成/编排类端点过访问门（ACCESS_REQUIRED → 前端弹输码/购买层）+ 限流
+        if (GATED_ROUTES.has(url.pathname)) {
+          const code = assertAccess(req, env)
+          checkRateLimit(code, url.pathname, env as unknown as Record<string, string | undefined>, Date.now())
+        }
         assertBodySize(req)
       } catch (err) {
         if (err instanceof PineHttpError) {

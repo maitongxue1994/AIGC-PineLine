@@ -29,6 +29,12 @@ export interface VideoCreateReq {
   resolution?: string
   /** 是否生成同步音频（Seedance 2.0 系列/1.5 Pro 官方 generate_audio，默认 true） */
   generateAudio?: boolean
+  /**
+   * 强制供应商侧「AI 生成」水印（合规）：非管理员访问码的请求由 videoCreate 置 true，
+   * 供应商侧免费烧标，杜绝试用客户拿到无标识视频（管理员自用代工时 false，交付环节自行加标）。
+   * 内部字段，不由前端传入。
+   */
+  forceWatermark?: boolean
 }
 
 export type VideoTaskPhase = 'queued' | 'running' | 'done' | 'error'
