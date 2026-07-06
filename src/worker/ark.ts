@@ -30,11 +30,26 @@ export function isArkModel(model?: string): boolean {
 
 // ---------------- 豆包 Seed 语言模型 ----------------
 
-export type ArkChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
+export type ArkContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
+/** content 支持多模态 parts（Seed 2.0 视觉：image_url 接受 base64 data URL，单图 ≤10MB） */
+export type ArkChatMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string | ArkContentPart[]
+}
 
 type ArkChatResponse = {
   choices?: Array<{ message?: { content?: string; reasoning_content?: string } }>
   error?: { message?: string }
+}
+
+/** 日志预览：多模态 content 取首个 text part */
+function arkMsgPreview(messages: ArkChatMessage[]): string {
+  const c = messages[messages.length - 1]?.content
+  if (typeof c === 'string') return c.slice(0, 80)
+  return (c?.find((p) => p.type === 'text') as { text?: string } | undefined)?.text?.slice(0, 80) ?? '[多模态消息]'
 }
 
 /**
@@ -75,7 +90,7 @@ export async function callArkChat(
       error: message.slice(0, 300),
       ...(requestId ? { requestId } : {}),
       model,
-      note: (messages[messages.length - 1]?.content ?? '').slice(0, 80),
+      note: arkMsgPreview(messages),
     })
     throw new Error(requestId ? `${message}（request-id: ${requestId}）` : message)
   }

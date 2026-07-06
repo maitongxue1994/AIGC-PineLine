@@ -1,5 +1,5 @@
-import { callMinimaxChatFull, type ChatMessage } from '../minimax'
-import { callArkChat } from '../ark'
+import { callMinimaxChatFull, callMinimaxVisionChat, type ChatMessage } from '../minimax'
+import { callArkChat, type ArkChatMessage } from '../ark'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 import { sanitizeOps } from '../agentOps'
@@ -7,12 +7,15 @@ import { sanitizeOps } from '../agentOps'
 /**
  * Agent 编排端点：多轮对话 → 回复文本 + 画布操作列表（JSON patch）+ 思考过程。
  * 前端把操作渲染成预览卡（手动确认）或直接执行（自动模式）。
+ * 附图消息走多模态通道：MiniMax 切 OpenAI 兼容端点 + M3（M2.7 无视觉），豆包原生 parts。
  */
 
 type Body = {
-  messages?: { role: 'user' | 'assistant'; content: string }[]
+  messages?: { role: 'user' | 'assistant'; content: string; images?: string[] }[]
   /** 聊天模型（前端 TEXT_MODELS 的 id）：缺省/minimax-m2.7 走 MiniMax，doubao-* 走方舟 */
   model?: string
+  /** 联网搜索开关 */
+  webSearch?: boolean
   canvas?: {
     nodes?: {
       id: string
@@ -139,6 +142,26 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
     }
     if (!arkModel && !env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
 
+    // 附图校验：仅 data:image/、单条 ≤4 张、总量 ≤8MB（body 上限 10MB 留文本余量）
+    let imgCount = 0
+    let imgBytes = 0
+    for (const m of history) {
+      if (!m.images?.length) continue
+      if (m.images.length > 4) return jsonError('单条消息最多附 4 张图片')
+      for (const u of m.images) {
+        if (typeof u !== 'string' || !u.startsWith('data:image/')) {
+          return jsonError('图片需为 data:image/ 开头的 dataURL')
+        }
+        imgBytes += Math.ceil((u.length - (u.indexOf(',') + 1)) * 0.75)
+        imgCount++
+      }
+    }
+    if (imgBytes > 8 * 1024 * 1024) return jsonError('图片总量超过 8MB，请减少或压缩后重试')
+    const hasImages = imgCount > 0
+    if (hasImages && !arkModel && body.model !== 'minimax-m3') {
+      return jsonError('MiniMax M2.7 不支持图片理解：请切换 MiniMax M3 或豆包模型', 400)
+    }
+
     // 画布快照摘要（prompt 截断，不含图片数据；params 前端已挑模型/关键参数非空键）
     const nodes = (body.canvas?.nodes ?? []).slice(0, 60).map((n) => ({
       ...n,
@@ -158,17 +181,35 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: contextMsg },
       { role: 'assistant', content: '{"reply":"已了解当前画布状态。","ops":[]}' },
-      ...history.map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) })),
+      ...history.map((m): ChatMessage => {
+        const text = String(m.content).slice(0, 4000)
+        if (m.images?.length) {
+          return {
+            role: m.role,
+            content: [
+              { type: 'text', text },
+              ...m.images.map((url) => ({ type: 'image_url' as const, image_url: { url } })),
+            ],
+          }
+        }
+        return { role: m.role, content: text }
+      }),
     ]
 
     // 完整管线的 ops JSON 更长（剧本+分镜+N分镜图+N视频），3000 会截断
     const chatOpts = { temperature: 0.3, maxTokens: 4096 }
     const { content: raw, reasoning } = arkModel
-      ? await callArkChat(arkModel, messages, env.ARK_API_KEY!, chatOpts)
-      : await callMinimaxChatFull(messages, env.MINIMAX_API_KEY, {
-          ...chatOpts,
-          model: body.model ? MINIMAX_CHAT_MODELS[body.model] : undefined,
-        })
+      ? // ark 通道不含 tool 角色消息，形状与 ArkChatMessage 兼容
+        await callArkChat(arkModel, messages as unknown as ArkChatMessage[], env.ARK_API_KEY!, chatOpts)
+      : hasImages
+        ? await callMinimaxVisionChat(messages, env.MINIMAX_API_KEY, {
+            ...chatOpts,
+            model: 'MiniMax-M3',
+          })
+        : await callMinimaxChatFull(messages, env.MINIMAX_API_KEY, {
+            ...chatOpts,
+            model: body.model ? MINIMAX_CHAT_MODELS[body.model] : undefined,
+          })
     const parsed = parseAgentJson(raw)
     const { ops, dropped } = sanitizeOps(parsed.ops)
     const reply =
