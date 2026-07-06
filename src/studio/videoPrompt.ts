@@ -18,6 +18,9 @@ export type PurityOpts = {
   noSfx?: boolean
 }
 
+/** 参考素材绑定（Seedance @图片N）：按 content 数组顺序，N 从 1 起 */
+export type RefBinding = { kind: string; name: string }
+
 export type VideoPromptInput = {
   /** 用户手输提示词（非空时作为画面描述主体，行为护栏：原语义不变） */
   userPrompt?: string
@@ -27,6 +30,11 @@ export type VideoPromptInput = {
   voiceNarration?: string
   /** 角色音色表（每行「角色名：音色描述」） */
   voiceCast?: string
+  /**
+   * 参考素材绑定（角色/场景/道具），按 reference_image 顺序排列。
+   * 注入 Seedance 官方主体定义「将<图片N>中的[X]定义为<主体N>」，绑定素材与画面主体。
+   */
+  refBindings?: RefBinding[]
   purity?: PurityOpts
   /** generate_audio 关闭时不注入音色/音频类约束（默认 true） */
   audioOn?: boolean
@@ -37,6 +45,14 @@ const SOFT_LIMIT = 500
 
 function assemble(base: string, input: VideoPromptInput): string {
   const segs: string[] = []
+  // Seedance 官方主体定义放最前：将<图片N>中的[素材]定义为<主体N>（@图片N = content 里第 N 张 reference_image）
+  const binds = input.refBindings ?? []
+  if (binds.length && !base.includes('定义为<主体')) {
+    const defs = binds
+      .map((b, i) => `将<图片${i + 1}>中的${b.kind}[${b.name}]定义为<主体${i + 1}>`)
+      .join('；')
+    segs.push(`${defs}。以下画面中提到对应${binds.map((_, i) => `<主体${i + 1}>`).join('、')}时，保持其形象与参考素材完全一致。`)
+  }
   if (base) segs.push(base)
 
   const audioOn = input.audioOn !== false

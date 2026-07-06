@@ -1287,11 +1287,18 @@ export const useStudioStore = create<StudioState>()(
               }
               const hasVoice = !!(vctx.voiceNarration || vctx.voiceCast)
               const generateAudio = resolveGenerateAudio(params.videoAudio, purity, hasVoice)
+              // 全能参考模式：把上游角色/场景/道具实体图作 reference_image + Seedance @图片N 主体绑定
+              // （首帧模式与多模态参考互斥，故仅 omni 生效；frames 默认走分镜图首帧继承一致性）
+              const omni = videoMode === 'omni'
+              const entityRefs = omni ? (vctx.entityRefs ?? []) : []
               const prompt = buildVideoPrompt({
                 userPrompt,
                 shotText: vctx.shotText,
                 voiceNarration: vctx.voiceNarration,
                 voiceCast: vctx.voiceCast,
+                ...(entityRefs.length
+                  ? { refBindings: entityRefs.map((e) => ({ kind: e.kind, name: e.name })) }
+                  : {}),
                 purity,
                 audioOn: generateAudio,
               })
@@ -1313,9 +1320,10 @@ export const useStudioStore = create<StudioState>()(
               }
               const [firstFrame, lastFrame] = frames
 
-              // 全能参考（多模态参考生视频）：本地上传的图/视频/音频
-              const omni = videoMode === 'omni'
-              const omniRefs = omni ? (params.omniRefs ?? []) : []
+              // 全能参考图 = 上游实体图（@图片1..N，顺序与 refBindings 一致）+ 用户手动上传，≤9
+              const omniRefs = omni
+                ? [...entityRefs.map((e) => e.image), ...(params.omniRefs ?? [])].slice(0, 9)
+                : []
               const omniVideos = omni ? (params.omniVideos ?? []) : []
               const omniAudios = omni ? (params.omniAudios ?? []) : []
 
@@ -2347,17 +2355,24 @@ function shotDescriptionFor(
   return firstShotDescription(getUpstreamTextOutput(nodes, edges, nodeId))
 }
 
+/** 上游实体参考（角色/场景/道具）：图 + kind + name，供视频 @图片N 绑定 */
+type EntityRef = { image: string; kind: string; name: string }
+
 type VideoUpstreamContext = {
   shotText?: string
   voiceNarration?: string
   voiceCast?: string
+  /** 该镜头用到的角色/场景/道具实体（沿分镜图上游收集，供 Seedance @图片N 引用） */
+  entityRefs?: EntityRef[]
 }
 
+const entityKindZh = (p: string | null): string =>
+  p === 'char-triview' ? '角色' : p === 'scene-grid' ? '场景' : p === 'prop-triview' ? '道具' : '素材'
+
 /**
- * 视频节点上游语境：沿边上溯 视频 ← 分镜图(shot) ← 分镜(storyboard)。
+ * 视频节点上游语境：沿边上溯 视频 ← 分镜图(shot) ← (分镜 + 角色/场景/道具实体)。
  * 画面描述取分镜图生图提示词（派生已回填），空则回退 shots[shotIndex]；
- * 音色设定（voiceNarration/voiceCast）取自链上的分镜节点；
- * 视频直连分镜/普通图片节点时同样兜底。
+ * 音色设定取自链上分镜节点；实体参考取自分镜图上游的三视图/宫格节点（一致性传递）。
  */
 function videoContextFor(
   nodes: PineNode[],
@@ -2365,10 +2380,19 @@ function videoContextFor(
   videoId: string,
 ): VideoUpstreamContext {
   const ctx: VideoUpstreamContext = {}
+  const entityRefs: EntityRef[] = []
+  const seenEntity = new Set<string>()
   const takeVoice = (d: PineNodeData) => {
     if (!ctx.voiceNarration && d.params.voiceNarration?.trim())
       ctx.voiceNarration = d.params.voiceNarration.trim()
     if (!ctx.voiceCast && d.params.voiceCast?.trim()) ctx.voiceCast = d.params.voiceCast.trim()
+  }
+  const collectEntity = (n: PineNode) => {
+    if (seenEntity.has(n.id)) return
+    const img = n.data.versions.find((v) => isImageContent(v.content))?.content
+    if (!img) return
+    seenEntity.add(n.id)
+    entityRefs.push({ image: img, kind: entityKindZh(n.data.preset), name: n.data.title.trim() })
   }
   for (const e of edges) {
     if (e.target !== videoId) continue
@@ -2382,11 +2406,13 @@ function videoContextFor(
           shotDescriptionFor(nodes, edges, src.id, d.params.shotIndex) ||
           undefined
       }
-      // 分镜图的上游分镜节点携带整条管线的音色设定
+      // 分镜图上游：分镜节点（音色）+ 实体参考节点（@图片N 一致性）
       for (const e2 of edges) {
         if (e2.target !== src.id) continue
-        const sb = nodes.find((n) => n.id === e2.source)
-        if (sb?.data.preset === 'storyboard') takeVoice(sb.data)
+        const up = nodes.find((n) => n.id === e2.source)
+        if (!up) continue
+        if (up.data.preset === 'storyboard') takeVoice(up.data)
+        else if (up.data.kind === 'image' && isEntityPreset(up.data.preset)) collectEntity(up)
       }
     } else if (d.preset === 'storyboard') {
       takeVoice(d)
@@ -2394,10 +2420,14 @@ function videoContextFor(
         const s = d.shots[0]
         ctx.shotText = `${s.title}：${s.description}`
       }
+    } else if (d.kind === 'image' && isEntityPreset(d.preset)) {
+      collectEntity(src) // 实体节点直连视频
     } else if (d.kind === 'image' || d.kind === 'asset') {
       if (!ctx.shotText && d.prompt.trim()) ctx.shotText = d.prompt.trim()
     }
   }
+  // Seedance 参考图 ≤9
+  if (entityRefs.length) ctx.entityRefs = entityRefs.slice(0, 9)
   return ctx
 }
 
