@@ -7,14 +7,23 @@
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/mcp/*"]
+    "run_worker_first": ["/api/*", "/mcp/*", "/d/*"]
   },
-  // 画布桥（外部 Agent MCP ↔ 浏览器 WebSocket 中继）；免费计划要求 SQLite-backed DO。
-  // 注意：本文件与 main 分支 wrangler.jsonc 各自独立维护（assets.directory 不同）。
+  // 画布桥（外部 Agent MCP ↔ 浏览器 WebSocket 中继）+ 积分账本（预扣制计费）；免费计划要求 SQLite-backed DO。
+  // 本文件与 main 分支 wrangler.jsonc 各自独立维护（assets.directory 不同）。
   "durable_objects": {
-    "bindings": [{ "name": "CANVAS_BRIDGE", "class_name": "CanvasBridge" }]
+    "bindings": [
+      { "name": "CANVAS_BRIDGE", "class_name": "CanvasBridge" },
+      { "name": "CREDIT_LEDGER", "class_name": "CreditLedger" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CanvasBridge"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["CanvasBridge"] },
+    { "tag": "v2", "new_sqlite_classes": ["CreditLedger"] }
+  ],
+  // 客户交付页 R2 桶：桶不存在时加此 binding 会导致部署失败，故默认注释。
+  // 启用：① CF 控制台建 pineline-delivery 桶 ② 取消下一行注释并提交本分支。
+  // "r2_buckets": [{ "binding": "DELIVERY_BUCKET", "bucket_name": "pineline-delivery" }],
   "observability": {
     "enabled": true
   }
