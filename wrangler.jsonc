@@ -7,8 +7,14 @@
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/mcp/*"]
   },
+  // 画布桥（外部 Agent MCP ↔ 浏览器 WebSocket 中继）；免费计划要求 SQLite-backed DO。
+  // 注意：本文件与 main 分支 wrangler.jsonc 各自独立维护（assets.directory 不同）。
+  "durable_objects": {
+    "bindings": [{ "name": "CANVAS_BRIDGE", "class_name": "CanvasBridge" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CanvasBridge"] }],
   "observability": {
     "enabled": true
   }
