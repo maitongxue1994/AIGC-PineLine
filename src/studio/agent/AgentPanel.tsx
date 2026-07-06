@@ -22,6 +22,7 @@ import { useStudioStore } from '../store'
 import { TEXT_MODELS } from '../nodeCatalog'
 import { activeContent, isImageContent } from '../types'
 import { describeOp } from './types'
+import { SUGGESTIONS } from './suggestions'
 import MarkdownMessage from './MarkdownMessage'
 import MemoryDialog from './MemoryDialog'
 import { compressImageFile, imagesFromClipboard } from './imageAttach'
@@ -91,10 +92,6 @@ function ThinkingBlock({ text }: { text: string }) {
   )
 }
 
-const SUGGESTIONS = [
-  { title: '搭一条完整短片管线', prompt: '帮我搭一条完整管线：一个雨夜屋顶等待的少年的短片——剧本、分镜、3 个分镜图、3 个视频节点，并直接运行' },
-  { title: '为产品图做广告词', prompt: '新建一个广告词节点，为一款磨砂玻璃香水写主标语和社媒文案' },
-]
 
 /**
  * Agent 对话面板（TapNow 形制）：右侧滑出全高 ~480px；
