@@ -29,6 +29,7 @@ import NodeToolbarBar from './NodeToolbarBar'
 import PromptComposer from './PromptComposer'
 import PromptEditorDialog from '../dialogs/PromptEditorDialog'
 import StoryboardEditorDialog from '../dialogs/StoryboardEditorDialog'
+import VideoGenConfirmDialog from '../dialogs/VideoGenConfirmDialog'
 import EntityExtractDialog from '../dialogs/EntityExtractDialog'
 import { CopyButton, SyncInput, SyncTextarea } from './composerKit'
 
@@ -85,12 +86,16 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   })
   const [withImage, withVideo, videoPending] = videoStageKey.split(',').map(Number)
 
-  // 真·一键成片：派生镜头视频节点（预填官方公式提示词）后直接整批生成，不再需要二次点击
-  const deriveVideos = async () => {
+  // 一键成片：弹二次确认（可选镜头），确认后才派生+生成——防误点生成一堆无法反悔
+  const deriveVideos = () => {
+    if (busy || pipelineRunning) return
+    setVideoConfirmOpen(true)
+  }
+  const runVideoGen = async (indices: number[]) => {
     if (busy || pipelineRunning) return
     setBusy(true)
     try {
-      await deriveShotVideoNodes(id, { run: true })
+      await deriveShotVideoNodes(id, { run: true, indices })
     } finally {
       setBusy(false)
     }
@@ -98,6 +103,8 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
 
   const runAllShotVideos = () => {
     if (pipelineRunning) return
+    if (videoPending > 0 && !window.confirm(`将生成 ${videoPending} 个镜头视频，消耗积分且不可撤销。确定继续？`))
+      return
     const s = useStudioStore.getState()
     const vids: string[] = []
     for (const e of s.edges) {
@@ -120,6 +127,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   }
 
   const [open, setOpen] = useState(false)
+  const [videoConfirmOpen, setVideoConfirmOpen] = useState(false)
   // 展开时默认全选未派生镜头
   const [checked, setChecked] = useState<Set<number>>(() => new Set())
   const [busy, setBusy] = useState(false)
@@ -369,6 +377,13 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
             派生后会为每个分镜图节点生成生图提示词（可确认/编辑），再单独运行或用「全部生成图片」
           </div>
         </div>
+      )}
+      {videoConfirmOpen && (
+        <VideoGenConfirmDialog
+          storyboardId={id}
+          onConfirm={(indices) => void runVideoGen(indices)}
+          onClose={() => setVideoConfirmOpen(false)}
+        />
       )}
     </div>
   )

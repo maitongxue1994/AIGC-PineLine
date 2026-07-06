@@ -205,7 +205,7 @@ type StudioState = {
    */
   deriveShotVideoNodes: (
     storyboardId: string,
-    opts?: { videoModel?: string; run?: boolean },
+    opts?: { videoModel?: string; run?: boolean; indices?: number[] },
   ) => Promise<string[]>
   exportProject: () => string
   importProject: (raw: string) => void
@@ -1938,9 +1938,10 @@ export const useStudioStore = create<StudioState>()(
             return []
           }
 
-          // 已有下游视频节点的分镜图跳过（重复触发不叠加）
+          // 已有下游视频节点的分镜图跳过（重复触发不叠加）；opts.indices 指定则仅这些镜头
           const pending = derived.filter(
             (img) =>
+              (!opts?.indices || opts.indices.includes(img.data.params.shotIndex!)) &&
               !s.edges.some((e) => {
                 if (e.source !== img.id) return false
                 const t = s.nodes.find((n) => n.id === e.target)
