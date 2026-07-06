@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import type { NodeVersion } from '../types'
 import { downloadDataUrl } from '../nodes/shared'
+import { aiFileName, markImageDataUrl } from '../aigcMark'
 import { SHADOWS, TOKENS } from '../designTokens'
 
 /**
@@ -182,10 +183,15 @@ export default function PreviewLightbox({
           <div className="mt-auto">
             <button
               disabled={!current?.content}
-              onClick={() => current?.content && downloadDataUrl(current.content, `${title}.png`)}
+              onClick={() =>
+                current?.content &&
+                void markImageDataUrl(current.content).then((marked) =>
+                  downloadDataUrl(marked, aiFileName(`${title}.png`)),
+                )
+              }
               className="w-full rounded-xl bg-white/10 py-2.5 text-[14px] font-semibold text-white transition hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-40"
             >
-              下载
+              下载（含 AI 生成标识）
             </button>
           </div>
         </div>

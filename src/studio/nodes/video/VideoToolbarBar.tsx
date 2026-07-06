@@ -20,6 +20,7 @@ import { useStudioStore } from '../../store'
 import { PIN_COLORS } from '../../nodeCatalog'
 import { SHADOWS, TOKENS } from '../../designTokens'
 import { downloadDataUrl } from '../shared'
+import { aiFileName } from '../../aigcMark'
 import { TBtn, ToolbarDivider } from '../NodeToolbarBar'
 import { Popover } from '../composerKit'
 import SaveToLibraryDialog from '../../dialogs/SaveToLibraryDialog'
@@ -317,9 +318,18 @@ export default function VideoToolbarBar({
           <FolderPlus size={18} strokeWidth={1.8} />
         </TBtn>
         <TBtn
-          tip="下载"
+          tip="下载（交付前请叠加 AI 生成角标）"
           disabled={!output}
-          onClick={() => output && downloadDataUrl(output, `${data.title}.mp4`)}
+          onClick={() => {
+            if (!output) return
+            downloadDataUrl(output, aiFileName(`${data.title}.mp4`))
+            // 视频无法浏览器烧标：非管理员已有供应商水印；交付/发布前需按标识办法叠加角标
+            window.dispatchEvent(
+              new CustomEvent('pineline:flash', {
+                detail: '视频已下载。交付/发布前请叠加「AI 生成」角标（见服务交付手册）',
+              }),
+            )
+          }}
         >
           <Download size={18} strokeWidth={1.8} />
         </TBtn>

@@ -26,6 +26,7 @@ import { useStudioStore } from '../store'
 import { PIN_COLORS } from '../nodeCatalog'
 import { SHADOWS, TOKENS } from '../designTokens'
 import { downloadDataUrl } from './shared'
+import { aiFileName, markImageDataUrl } from '../aigcMark'
 import { Popover } from './composerKit'
 import type { NodeKind, PinColor } from '../types'
 
@@ -250,7 +251,14 @@ export default function NodeToolbarBar({
         <TBtn tip="保存到素材库" disabled={!hasImage || !onSaveToLibrary} onClick={onSaveToLibrary}>
           <FolderPlus size={18} strokeWidth={1.8} />
         </TBtn>
-        <TBtn tip="下载" disabled={!canDownload} onClick={() => output && downloadDataUrl(output, filename)}>
+        <TBtn
+          tip="下载（含 AI 生成标识）"
+          disabled={!canDownload}
+          onClick={() =>
+            output &&
+            void markImageDataUrl(output).then((marked) => downloadDataUrl(marked, aiFileName(filename)))
+          }
+        >
           <Download size={18} strokeWidth={1.8} />
         </TBtn>
         <TBtn tip="全屏查看" disabled={!hasImage} onClick={onPreview}>

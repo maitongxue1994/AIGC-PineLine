@@ -59,7 +59,9 @@ function assemble(base: string, input: VideoPromptInput): string {
   const p = input.purity ?? {}
   const constraints: string[] = []
   if (p.noSubtitles && !base.includes('保持无字幕')) {
-    // 官方 FAQ 原话约束词组合（横屏概率更低由 UI 提示，不在此处强改比例）
+    // 官方 FAQ 原话约束词组合（横屏概率更低由 UI 提示，不在此处强改比例）。
+    // 注：此处「不要生成水印」是防模型在**画面内容里**乱画随机水印/字样；与交付时按
+    // 《标识办法》**叠加**的合规「AI 生成」角标不冲突——一个防画面污染，一个是合规标识。
     constraints.push('保持无字幕，避免生成任何文字或字幕，不要生成Logo，不要生成水印')
   }
   if (audioOn && !base.includes('无背景音乐') && !base.includes('无音效')) {
