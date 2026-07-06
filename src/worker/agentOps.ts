@@ -15,10 +15,16 @@ export type AgentOp =
   /** 分镜两段式派生（支持等待上游产出后接续）：id 为 storyboard 节点；generate=派生后自动批量生图 */
   | { op: 'derive_shot_images'; id: string; indices?: number[]; generate?: boolean }
   | { op: 'derive_shot_videos'; id: string; run?: boolean }
+  /**
+   * 把本轮用户上传的第 imageIndex 张图落成命名实体参考节点（角色/场景/道具）。
+   * 名称须与剧本里的称呼一致，后续派生分镜图时按名自动挂载为参考图。
+   */
+  | { op: 'add_reference'; imageIndex: number; kind: 'char' | 'scene' | 'prop'; name: string }
   /** 把用户的稳定偏好/项目设定写入本地长期记忆 */
   | { op: 'remember'; content: string }
 
-const VALID_OPS = new Set(['add_node', 'set_prompt', 'set_params', 'rename', 'connect', 'delete_node', 'run', 'clear_canvas', 'derive_shot_images', 'derive_shot_videos', 'remember'])
+const VALID_OPS = new Set(['add_node', 'set_prompt', 'set_params', 'rename', 'connect', 'delete_node', 'run', 'clear_canvas', 'derive_shot_images', 'derive_shot_videos', 'add_reference', 'remember'])
+const VALID_REF_KINDS = new Set(['char', 'scene', 'prop'])
 const VALID_KINDS = new Set(['text', 'image', 'video'])
 const VALID_PRESETS = new Set([
   'free', 'script', 'storyboard', 'ad-copy',
@@ -146,6 +152,21 @@ export function sanitizeOps(rawOps: unknown[]): { ops: AgentOp[]; dropped: numbe
         if (typeof o.id !== 'string') { dropped++; continue }
         ops.push({ op: 'derive_shot_videos', id: o.id, ...(o.run === true ? { run: true } : {}) })
         break
+      case 'add_reference': {
+        const idx = typeof o.imageIndex === 'number' ? o.imageIndex : Number(o.imageIndex)
+        if (
+          !Number.isInteger(idx) || idx < 0 ||
+          typeof o.kind !== 'string' || !VALID_REF_KINDS.has(o.kind) ||
+          typeof o.name !== 'string' || !o.name.trim()
+        ) { dropped++; continue }
+        ops.push({
+          op: 'add_reference',
+          imageIndex: idx,
+          kind: o.kind as 'char' | 'scene' | 'prop',
+          name: o.name.trim().slice(0, 24),
+        })
+        break
+      }
       case 'remember':
         if (typeof o.content !== 'string' || !o.content.trim()) { dropped++; continue }
         ops.push({ op: 'remember', content: o.content.trim().slice(0, 500) })
