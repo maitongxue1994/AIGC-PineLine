@@ -157,4 +157,15 @@ check('derive op 缺 id 拒绝', () => {
   assert.equal(r.dropped, 2)
 })
 
+// ---- 9. remember 记忆写入 ----
+check('remember 透传（截 500 字）', () => {
+  const r = sanitizeOps([{ op: 'remember', content: `偏好电影感${'长'.repeat(600)}` }])
+  assert.equal(r.ops[0].op, 'remember')
+  assert.equal(r.ops[0].content.length, 500)
+})
+check('remember 空内容拒绝', () => {
+  const r = sanitizeOps([{ op: 'remember', content: '   ' }, { op: 'remember' }])
+  assert.equal(r.dropped, 2)
+})
+
 console.log(`\n✅ Agent ops 白名单校验全部通过：${pass} 项`)

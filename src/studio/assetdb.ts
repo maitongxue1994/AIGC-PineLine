@@ -76,6 +76,19 @@ export type GenLogEntry = {
   requestId?: string
 }
 
+/**
+ * 用户长期记忆（v4 新增 memory 库）：画布助手跨对话携带的用户偏好/项目设定。
+ * 来源：agent=助手 remember op 自动沉淀；user=记忆管理手动添加；import=外部
+ * 记忆文件（如 Claude Code 的 MEMORY.md）导入。
+ */
+export type MemoryEntry = {
+  id: string
+  content: string
+  source: 'agent' | 'user' | 'import'
+  createdAt: number
+  updatedAt: number
+}
+
 /** 项目档案：画布图（剥离 data: 媒体）+ 缩略图 + 元数据（v2 新增 projects 库） */
 export type ProjectRecord = {
   id: string
@@ -88,10 +101,12 @@ export type ProjectRecord = {
 }
 
 const DB_NAME = 'pineline-studio'
-const DB_VERSION = 3
+const DB_VERSION = 4
 const HISTORY_LIMIT = 200
 /** 生成请求日志上限（纯文本小记录，多留一些便于排查） */
 const GENLOG_LIMIT = 500
+/** 用户长期记忆条数上限（LRU 按更新时间裁剪） */
+const MEMORY_LIMIT = 100
 /** 视频体积大（单条可达数十 MB），历史单独收紧 LRU 上限 */
 const VIDEO_HISTORY_LIMIT = 20
 const FOLDERS_KEY = 'pineline-library-v1'
@@ -111,6 +126,7 @@ const memAssets = new Map<string, LibraryAsset>()
 const memHistory: HistoryEntry[] = []
 const memProjects = new Map<string, ProjectRecord>()
 const memGenLog: GenLogEntry[] = []
+const memMemory = new Map<string, MemoryEntry>()
 
 export function isPersistent(): boolean {
   return persistent
@@ -139,6 +155,10 @@ function openDb(): Promise<IDBDatabase | null> {
           const s = db.createObjectStore('genlog', { keyPath: 'id' })
           s.createIndex('createdAt', 'createdAt')
         }
+        if (!db.objectStoreNames.contains('memory')) {
+          const s = db.createObjectStore('memory', { keyPath: 'id' })
+          s.createIndex('updatedAt', 'updatedAt')
+        }
       }
       req.onsuccess = () => resolve(req.result)
       req.onerror = () => {
@@ -154,7 +174,7 @@ function openDb(): Promise<IDBDatabase | null> {
 }
 
 function tx<T>(
-  store: 'assets' | 'history' | 'projects' | 'genlog',
+  store: 'assets' | 'history' | 'projects' | 'genlog' | 'memory',
   mode: IDBTransactionMode,
   fn: (s: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T | null> {
@@ -339,4 +359,47 @@ export async function appendGenLog(
 export async function clearGenLog(): Promise<void> {
   await tx('genlog', 'readwrite', (s) => s.clear())
   memGenLog.length = 0
+}
+
+// ---------------- 用户长期记忆（上限 100，LRU 按更新时间裁剪） ----------------
+
+export async function listMemories(): Promise<MemoryEntry[]> {
+  const rows = await tx<MemoryEntry[]>('memory', 'readonly', (s) => s.getAll())
+  const list = rows ?? [...memMemory.values()]
+  return list.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+export async function putMemory(
+  input: Pick<MemoryEntry, 'content' | 'source'>,
+): Promise<MemoryEntry | null> {
+  const content = input.content.trim().slice(0, 500)
+  if (!content) return null
+  // 去重：同内容已存在则只刷新更新时间
+  const existing = (await listMemories()).find((m) => m.content === content)
+  const now = Date.now()
+  const row: MemoryEntry = existing
+    ? { ...existing, updatedAt: now }
+    : { id: `m-${crypto.randomUUID()}`, content, source: input.source, createdAt: now, updatedAt: now }
+  const ok = await tx('memory', 'readwrite', (s) => s.put(row))
+  if (ok === null) memMemory.set(row.id, row)
+  // LRU 裁剪
+  const all = await listMemories()
+  for (const stale of all.slice(MEMORY_LIMIT)) {
+    await tx('memory', 'readwrite', (s) => s.delete(stale.id))
+    memMemory.delete(stale.id)
+  }
+  return row
+}
+
+export async function updateMemory(id: string, content: string): Promise<void> {
+  const cur = (await listMemories()).find((m) => m.id === id)
+  if (!cur) return
+  const next = { ...cur, content: content.trim().slice(0, 500), updatedAt: Date.now() }
+  const ok = await tx('memory', 'readwrite', (s) => s.put(next))
+  if (ok === null) memMemory.set(id, next)
+}
+
+export async function removeMemory(id: string): Promise<void> {
+  await tx('memory', 'readwrite', (s) => s.delete(id))
+  memMemory.delete(id)
 }

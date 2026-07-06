@@ -19,6 +19,8 @@ type Body = {
   model?: string
   /** 联网搜索开关 */
   webSearch?: boolean
+  /** 用户长期记忆条目（前端 IndexedDB memory 库） */
+  memory?: string[]
   canvas?: {
     nodes?: {
       id: string
@@ -88,6 +90,7 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 - {"op":"clear_canvas"}（清空画布；前端执行前会向用户二次确认）
 - {"op":"derive_shot_images","id":"<分镜节点id>","indices":[0,1]}（分镜→批量派生分镜图，indices 省略 = 全部未派生镜头）
 - {"op":"derive_shot_videos","id":"<分镜节点id>","run":false}（分镜图→批量挂镜头视频并预填提示词；run:true 立即生成，涉及积分消耗请先确认用户意图）
+- {"op":"remember","content":"…"}（写入用户长期记忆：仅当用户表达了跨对话仍然有效的稳定信息——品牌/产品背景、风格与比例偏好、旁白音色、称呼习惯等；一次性指令不要记。记忆会出现在后续每轮的「用户长期记忆」里）
 
 ## 修改已有节点（含换模型）
 - 画布快照的每个节点带 params（当前模型/参数配置，缺省键 = 用默认模型/默认值）。
@@ -184,11 +187,25 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
     const edges = (body.canvas?.edges ?? []).slice(0, 120)
     const selection = (body.selection ?? []).slice(0, 10)
 
+    // 用户长期记忆：条数/单条/总量三重截断后拼进上下文
+    const memLines: string[] = []
+    let memTotal = 0
+    for (const m of (body.memory ?? []).slice(0, 30)) {
+      const item = String(m).slice(0, 500)
+      if (!item.trim()) continue
+      if (memTotal + item.length > 4000) break
+      memTotal += item.length
+      memLines.push(`- ${item}`)
+    }
+
     // 节点每行一条紧凑 JSON（带 params），LLM 能看到各节点当前模型/参数
     const nodeLines = nodes.length ? nodes.map((n) => JSON.stringify(n)).join('\n') : '（空画布）'
     const contextMsg =
       `当前画布快照：\n节点（每行一个）：\n${nodeLines}\n连线：${JSON.stringify(edges)}\n` +
-      `选中节点：${JSON.stringify(selection)}`
+      `选中节点：${JSON.stringify(selection)}` +
+      (memLines.length
+        ? `\n\n用户长期记忆（跨对话保留的偏好与设定，创作时主动运用）：\n${memLines.join('\n')}`
+        : '')
 
     const messages: ChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT },

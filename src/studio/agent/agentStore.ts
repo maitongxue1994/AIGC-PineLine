@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { agentChat } from '../api'
+import { listMemories } from '../assetdb'
 import { canvasSnapshot, executeOps } from './executeOps'
 import { guardedLocalStorage, useStudioStore } from '../store'
 import type { AttachedImage } from './imageAttach'
@@ -164,11 +165,16 @@ export const useAgentStore = create<AgentState>()(
               }
               return { role: m.role, content, ...(images ? { images } : {}) }
             })
+            // 用户长期记忆随请求注入（读失败不阻断对话）
+            const memory = await listMemories()
+              .then((rows) => rows.map((m) => m.content))
+              .catch(() => [] as string[])
             const res = await agentChat(
               {
                 messages: history,
                 model: get().model,
                 webSearch: get().webSearch,
+                ...(memory.length ? { memory: memory.slice(0, 30) } : {}),
                 canvas: canvasSnapshot(),
                 selection: useStudioStore.getState().selectedNodeId
                   ? [useStudioStore.getState().selectedNodeId as string]

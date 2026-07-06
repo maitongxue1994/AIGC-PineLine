@@ -15,8 +15,10 @@ export type AgentOp =
   /** 分镜两段式派生（单条 op 替代 N×add_node+connect）：id 为 storyboard 节点 */
   | { op: 'derive_shot_images'; id: string; indices?: number[] }
   | { op: 'derive_shot_videos'; id: string; run?: boolean }
+  /** 把用户的稳定偏好/项目设定写入本地长期记忆 */
+  | { op: 'remember'; content: string }
 
-const VALID_OPS = new Set(['add_node', 'set_prompt', 'set_params', 'rename', 'connect', 'delete_node', 'run', 'clear_canvas', 'derive_shot_images', 'derive_shot_videos'])
+const VALID_OPS = new Set(['add_node', 'set_prompt', 'set_params', 'rename', 'connect', 'delete_node', 'run', 'clear_canvas', 'derive_shot_images', 'derive_shot_videos', 'remember'])
 const VALID_KINDS = new Set(['text', 'image', 'video'])
 const VALID_PRESETS = new Set([
   'free', 'script', 'storyboard', 'ad-copy',
@@ -138,6 +140,10 @@ export function sanitizeOps(rawOps: unknown[]): { ops: AgentOp[]; dropped: numbe
       case 'derive_shot_videos':
         if (typeof o.id !== 'string') { dropped++; continue }
         ops.push({ op: 'derive_shot_videos', id: o.id, ...(o.run === true ? { run: true } : {}) })
+        break
+      case 'remember':
+        if (typeof o.content !== 'string' || !o.content.trim()) { dropped++; continue }
+        ops.push({ op: 'remember', content: o.content.trim().slice(0, 500) })
         break
     }
   }

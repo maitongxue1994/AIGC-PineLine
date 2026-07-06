@@ -1,4 +1,5 @@
 import { useStudioStore } from '../store'
+import { putMemory } from '../assetdb'
 import type { NodeParams, NodePreset } from '../types'
 import type { AgentOp } from './types'
 
@@ -143,6 +144,10 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
           ok++
           break
         }
+        case 'remember':
+          await putMemory({ content: op.content, source: 'agent' })
+          ok++
+          break
       }
     } catch (err) {
       fail(`${op.op}: ${err instanceof Error ? err.message : String(err)}`)
