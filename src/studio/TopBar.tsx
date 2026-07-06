@@ -199,8 +199,11 @@ function MoreMenu() {
   const resetProject = useStudioStore((s) => s.resetProject)
   const runPipeline = useStudioStore((s) => s.runPipeline)
   const pipelineRunning = useStudioStore((s) => s.pipelineRunning)
+  const addAssetNode = useStudioStore((s) => s.addAssetNode)
+  const addVideoNode = useStudioStore((s) => s.addVideoNode)
   const [open, setOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const mediaRef = useRef<HTMLInputElement | null>(null)
 
   const flash = (msg: string) =>
     window.dispatchEvent(new CustomEvent('pineline:flash', { detail: msg }))
@@ -234,6 +237,39 @@ function MoreMenu() {
     }
     reader.onerror = () => flash('读取文件失败')
     reader.readAsText(file)
+  }
+
+  // 批量导入本地图片/视频到画布（每个建节点）：找回的素材、外部图库都可一次拖回
+  const handleImportMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).sort((a, b) => a.name.localeCompare(b.name))
+    e.target.value = ''
+    if (!files.length) return
+    flash(`正在导入 ${files.length} 个文件…`)
+    const readAsDataUrl = (f: File) =>
+      new Promise<string>((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(String(r.result))
+        r.onerror = () => rej(r.error)
+        r.readAsDataURL(f)
+      })
+    let ix = 0
+    let iv = 0
+    for (const f of files) {
+      try {
+        const url = await readAsDataUrl(f)
+        if (f.type.startsWith('image/')) {
+          addAssetNode(url, { x: (ix % 5) * 340, y: Math.floor(ix / 5) * 300 })
+          ix++
+        } else if (f.type.startsWith('video/')) {
+          addVideoNode(url, { x: 1820 + (iv % 3) * 640, y: Math.floor(iv / 3) * 420 })
+          iv++
+        }
+      } catch {
+        /* 单个文件读失败跳过，不中断整批 */
+      }
+    }
+    useStudioStore.getState().requestFitView()
+    flash(`已导入 ${ix} 张图片 + ${iv} 段视频到画布`)
   }
 
   const item =
@@ -304,6 +340,16 @@ function MoreMenu() {
             >
               <Upload size={15} /> 导入工程…
             </button>
+            <button
+              onClick={() => {
+                setOpen(false)
+                mediaRef.current?.click()
+              }}
+              className={item}
+              style={{ color: TOKENS.textBody }}
+            >
+              <Upload size={15} /> 导入图片/视频到画布…
+            </button>
             <div className="mx-2 my-1 h-px bg-white/[0.07]" />
             <button
               onClick={() => {
@@ -330,6 +376,14 @@ function MoreMenu() {
         accept="application/json,.json"
         className="hidden"
         onChange={handleImportFile}
+      />
+      <input
+        ref={mediaRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        className="hidden"
+        onChange={(e) => void handleImportMedia(e)}
       />
     </div>
   )
