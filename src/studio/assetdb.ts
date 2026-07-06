@@ -132,44 +132,104 @@ export function isPersistent(): boolean {
   return persistent
 }
 
-function openDb(): Promise<IDBDatabase | null> {
-  if (dbPromise) return dbPromise
-  dbPromise = new Promise((resolve) => {
+function createStores(db: IDBDatabase): void {
+  if (!db.objectStoreNames.contains('assets')) {
+    const s = db.createObjectStore('assets', { keyPath: 'id' })
+    s.createIndex('folderId', 'folderId')
+  }
+  if (!db.objectStoreNames.contains('history')) {
+    const s = db.createObjectStore('history', { keyPath: 'id' })
+    s.createIndex('createdAt', 'createdAt')
+  }
+  if (!db.objectStoreNames.contains('projects')) {
+    const s = db.createObjectStore('projects', { keyPath: 'id' })
+    s.createIndex('updatedAt', 'updatedAt')
+  }
+  if (!db.objectStoreNames.contains('genlog')) {
+    const s = db.createObjectStore('genlog', { keyPath: 'id' })
+    s.createIndex('createdAt', 'createdAt')
+  }
+  if (!db.objectStoreNames.contains('memory')) {
+    const s = db.createObjectStore('memory', { keyPath: 'id' })
+    s.createIndex('updatedAt', 'updatedAt')
+  }
+}
+
+/**
+ * 底层打开：version 省略 = 连接现存版本（绝不触发升级/blocked）。
+ * blockedTimeoutMs：升级请求被其他标签页的旧连接阻塞时，提示用户并限时放弃
+ * （否则 open 请求永久 pending，v3→v4 升级曾把项目页卡成无限转圈——用户实测）。
+ */
+function openRaw(version?: number, blockedTimeoutMs?: number): Promise<IDBDatabase | null> {
+  return new Promise((resolve) => {
     try {
-      const req = indexedDB.open(DB_NAME, DB_VERSION)
-      req.onupgradeneeded = () => {
+      const req = version === undefined ? indexedDB.open(DB_NAME) : indexedDB.open(DB_NAME, version)
+      let settled = false
+      let blockedTimer: number | undefined
+      const settle = (db: IDBDatabase | null) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(blockedTimer)
+        resolve(db)
+      }
+      req.onblocked = () => {
+        console.warn('[pineline] IndexedDB 升级被其他标签页阻塞')
+        window.dispatchEvent(
+          new CustomEvent('pineline:flash', {
+            detail: '存储升级被其他 PineLine 标签页阻塞——请关闭或刷新其他标签页；本页先以兼容模式运行',
+          }),
+        )
+        if (blockedTimeoutMs) {
+          blockedTimer = window.setTimeout(() => settle(null), blockedTimeoutMs)
+        }
+      }
+      req.onupgradeneeded = () => createStores(req.result)
+      req.onsuccess = () => {
         const db = req.result
-        if (!db.objectStoreNames.contains('assets')) {
-          const s = db.createObjectStore('assets', { keyPath: 'id' })
-          s.createIndex('folderId', 'folderId')
+        // 其他标签页请求升级时主动让路（否则它们会被本连接 block）
+        db.onversionchange = () => {
+          try {
+            db.close()
+          } catch {
+            /* 已关闭 */
+          }
+          dbPromise = null
         }
-        if (!db.objectStoreNames.contains('history')) {
-          const s = db.createObjectStore('history', { keyPath: 'id' })
-          s.createIndex('createdAt', 'createdAt')
+        // 超时放弃后连接才姗姗来迟：直接关闭，避免反过来 block 别人
+        if (settled) {
+          try {
+            db.close()
+          } catch {
+            /* ignore */
+          }
+          return
         }
-        if (!db.objectStoreNames.contains('projects')) {
-          const s = db.createObjectStore('projects', { keyPath: 'id' })
-          s.createIndex('updatedAt', 'updatedAt')
-        }
-        if (!db.objectStoreNames.contains('genlog')) {
-          const s = db.createObjectStore('genlog', { keyPath: 'id' })
-          s.createIndex('createdAt', 'createdAt')
-        }
-        if (!db.objectStoreNames.contains('memory')) {
-          const s = db.createObjectStore('memory', { keyPath: 'id' })
-          s.createIndex('updatedAt', 'updatedAt')
-        }
+        settle(db)
       }
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => {
-        persistent = false
-        resolve(null)
-      }
+      req.onerror = () => settle(null)
     } catch {
-      persistent = false
       resolve(null)
     }
   })
+}
+
+/**
+ * 两段式打开：先无版本连接现存库（纯读场景永不被升级卡住），版本不足再升级；
+ * 升级被旧标签页阻塞时退回旧版本连接——新增库（如 memory）缺失的功能自动走
+ * 内存兜底（tx 的 try/catch），项目/素材/历史等既有功能不受影响。
+ */
+function openDb(): Promise<IDBDatabase | null> {
+  if (dbPromise) return dbPromise
+  dbPromise = (async () => {
+    let db = await openRaw()
+    if (db && db.version < DB_VERSION) {
+      db.close()
+      db = await openRaw(DB_VERSION, 8000)
+      if (!db) db = await openRaw()
+    }
+    if (!db) persistent = false
+    return db
+  })()
   return dbPromise
 }
 
