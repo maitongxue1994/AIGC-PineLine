@@ -16,6 +16,10 @@ Vite 5 + React 18 + TS 5 + Tailwind 3 + zustand v5(persist) + @xyflow/react v12�
 
 `push main` → GitHub Action `sync-deploy` → `deploy/cloudflare` 分支 → Cloudflare 自动构建 → https://aigcpineline0419.mys2388212.workers.dev 。**约 5 分钟生效**。**API 密钥只在线上 Worker（本地无 .dev.vars）**，本地 dev 调 `/api/*` 会走线上或失败——真实生成验证要在线上做。验证部署完成：探测新 bundle hash 变化或 `/api/generate/video-status {readiness:true}` 端点行为，不要靠本地 build hash 对比（CI 注入环境变量导致 hash 不同）。
 
+- **Worker 零 npm 依赖（硬约束）**：deploy 分支**没有 package.json**，Cloudflare 直接 bundle `src/worker/` 的 TS——任何 npm 包都进不了 Worker（MCP 处理器因此是手写 JSON-RPC）。
+- **wrangler.jsonc 双分支独立**：sync-deploy 不同步 wrangler.jsonc（两分支 assets.directory 不同）；改 DO binding / run_worker_first 等配置需**分别提交 main 与 deploy/cloudflare**。改 deploy 分支配置前确认 worker 代码已同步过去（否则 DO class 不存在会构建失败）。
+- sync-deploy 同步范围：`dist/assets/*` + `index.html` + `favicon.svg` + `dist/skills/`（Agent Skill 文档包）+ `src/worker/`。
+
 ## 架构要点
 
 ### 节点体系 v4（`src/studio/`）
@@ -32,14 +36,22 @@ Vite 5 + React 18 + TS 5 + Tailwind 3 + zustand v5(persist) + @xyflow/react v12�
 - 其他：`pineline-agent-v1`(Agent 会话)、`pineline-ui-v1`(小地图/网格吸附偏好)。
 
 ### 生成后端（`src/worker/`）
-- 文本：`minimax.ts`（MiniMax-M2.7，推理模型，长文超时 150s / max_tokens 4096-8192 防截断）+ `ark.ts`（豆包 Seed 2.0，OpenAI 兼容 chat completions）。路由按 `doubao-` 前缀分派。
-- 图像：`gemini.ts`（**`gemini-3.1-flash-image` 稳定版**，preview 版已弃用勿用）+ `ark.ts` 的 Seedream（同步 images/generations，比例→显式宽高映射）。
+- 文本：`minimax.ts`（MiniMax-M2.7，推理模型，长文超时 150s / max_tokens 4096-8192 防截断；`callMinimaxVisionChat` 走 OpenAI 兼容端点供 M3 多模态）+ `ark.ts`（豆包 Seed 2.0，OpenAI 兼容 chat completions，content 支持 image_url parts）。路由按 `doubao-` 前缀分派。
+- 图像：`gemini.ts`（**`gemini-3.1-flash-image` 稳定版**，preview 版已弃用勿用）+ `ark.ts` 的 Seedream（同步 images/generations，比例→显式宽高映射）。**Seedance 2.0 拒绝疑似真人人脸参考图**（仅信任 Seedream 产物等），含人物分镜图建议走 Seedream。
 - 视频（异步任务：创建→轮询→取件代理）：`video/` 目录 Provider 抽象。`seedance.ts`(方舟，主模型) + `minimax.ts`(海螺，与文本同 key) 完整实现；Wan/Kling/Veo 桩。路由 `/api/generate/video`、`video-status`、`video-file`(取件代理，各家临时 URL 有时效需现查现取)。
-- Agent：`routes/agentChat.ts`（MiniMax 编排 → `{reply, ops[]}`，容错解析链 + 白名单）；`ops` 含 add_node/set_prompt/connect/run/`clear_canvas`(新建管线前清空，前端强制确认)。
+- Agent：`routes/agentChat.ts`（编排 → `{reply, ops[]}`，容错解析链 + `agentOps.ts` 白名单）；ops 含 add_node/set_prompt/connect/run/clear_canvas(前端强制确认)/`derive_shot_images`/`derive_shot_videos`(派生自动化)/`remember`(写用户记忆)。系统提示词含 `PRODUCT_PROFILE` 产品档案（prompts.ts）。联网双路：豆包→`arkResponses.ts`(Responses API web_search，失败自动降级)；MiniMax→`tavily.ts` function calling 循环。
+- 提示词体系：Worker 侧集中在 `prompts.ts`（script/ad-copy/free/image-prompt/extract-entities + 分镜 + 产品档案）；视频提示词组装在前端 `src/studio/videoPrompt.ts`（Seedance 官方公式：画面→音色→纯净约束，幂等标记防回填翻倍，音色串挂分镜节点 params）。
+- MCP 桥：`bridge/CanvasBridgeDO.ts`（DO，WebSocket 中继）+ `routes/mcp.ts`（手写零依赖 JSON-RPC，`/mcp/<会话码>`）；浏览器侧 `src/studio/bridge/bridgeStore.ts` + 顶栏「外部 Agent」。画布真源在浏览器，桥只转发。
 
 ### 密钥与多模型
 - `MINIMAX_API_KEY`（文本，已配）、`GEMINI_API_KEY`（图像，已配）、`ARK_API_KEY`（方舟，**已配**——同一把钥匙覆盖 Seedance 视频 / Seedream 图片 / 豆包 Seed 文本）。
+- `TAVILY_API_KEY`（**可选，未配**）：聊天联网 MiniMax 通道；缺失时联网开关返回 501 指引。豆包联网走方舟 Responses API 官方插件，需在方舟控制台开通「联网内容插件」（月免 2 万次）。
 - `TEXT_MODELS`/`IMAGE_MODELS`/`VIDEO_MODELS`（`nodeCatalog.ts`）驱动模型选择器；`resolveApiModel` 把选择解析为 Worker 的 `model` 字段（默认通道返回 undefined）。模型就绪态复用 `readiness.seedance`（ark 系同一 key）。
+
+### 隐藏开关与开放生态
+- 管理员模式：`?admin=1` 开 / `?admin=0` 关（localStorage 持久，dev 恒开）——历史面板「日志」tab 只对管理员显示（`src/studio/adminMode.ts`）。
+- Agent Skill 文档包：`public/skills/pineline/`（SKILL.md + 工程 JSON schema / ops / MCP 文档），线上 `/skills/pineline/SKILL.md` 可被外部 agent fetch。
+- 用户记忆：IndexedDB `memory` 库（DB v4，LRU 100），助手 remember op 沉淀 + 记忆管理对话框（可导入 MEMORY.md）；每轮注入「用户长期记忆」。
 
 ## 文档
 
