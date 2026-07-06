@@ -203,6 +203,12 @@ type StudioState = {
     opts?: { imageModel?: string; quality?: ImageQuality },
   ) => Promise<void>
   /**
+   * 重新精确挂载资产参考：断开分镜节点下所有实体→分镜图的旧连线（含旧版子串匹配
+   * 的全连），用 shot-compose 逐镜精确重连。修复历史项目里资产乱连（每个角色/场景/
+   * 道具连到了所有镜头）的问题。
+   */
+  remountShotAssets: (storyboardId: string) => Promise<void>
+  /**
    * 分镜→一键成片：为每个已派生分镜图建下游视频节点（已有视频的跳过），
    * 按 Seedance 官方公式预填提示词（含音色/纯净约束）并连线；
    * opts.run 时立即整批运行。返回新建视频节点 id。
@@ -1979,6 +1985,88 @@ export const useStudioStore = create<StudioState>()(
           }
           flash(`开始生成 ${derived.length} 张分镜图…`)
           void get().runPipeline(derived.map((n) => n.id))
+        },
+
+        remountShotAssets: async (storyboardId) => {
+          const state = get()
+          const sb = state.nodes.find((n) => n.id === storyboardId)
+          const shots = sb?.data.shots ?? []
+          if (!sb) return
+          const flash = (msg: string) =>
+            window.dispatchEvent(new CustomEvent('pineline:flash', { detail: msg }))
+
+          // 分镜节点下已派生的分镜图
+          const shotNodes = state.edges
+            .filter((e) => e.source === storyboardId)
+            .map((e) => state.nodes.find((n) => n.id === e.target))
+            .filter(
+              (n): n is PineNode =>
+                !!n &&
+                n.data.kind === 'image' &&
+                n.data.preset === 'shot' &&
+                n.data.params.shotIndex != null,
+            )
+          if (!shotNodes.length) {
+            flash('没有已派生的分镜图，无需重挂')
+            return
+          }
+          // 有产出的实体参考节点（角色/场景/道具）
+          const GENERIC_TITLES = new Set(['角色三视图', '场景四宫格', '道具三视图', '图片', '新图片'])
+          const entityKindLabel = (p: string | null) =>
+            p === 'char-triview' ? '角色' : p === 'scene-grid' ? '场景' : '道具'
+          const entityList = state.nodes
+            .filter((n) => {
+              if (n.data.kind !== 'image' || !isEntityPreset(n.data.preset)) return false
+              if (!n.data.versions.some((v) => isImageContent(v.content))) return false
+              const name = n.data.title.trim()
+              return name.length >= 2 && !GENERIC_TITLES.has(name)
+            })
+            .map((n) => ({ node: n, tag: `${entityKindLabel(n.data.preset)}:${n.data.title.trim()}` }))
+          if (!entityList.length) {
+            flash('画布上没有角色/场景/道具参考节点')
+            return
+          }
+
+          // 断开所有 实体→分镜图 旧连线（保留 分镜→分镜图）
+          commit()
+          const entityIds = new Set(entityList.map((e) => e.node.id))
+          const shotIds = new Set(shotNodes.map((n) => n.id))
+          set((s) => ({
+            edges: s.edges.filter((e) => !(entityIds.has(e.source) && shotIds.has(e.target))),
+          }))
+
+          flash(`正在为 ${shotNodes.length} 个分镜图重新精确匹配资产…`)
+          let mounted = 0
+          await Promise.allSettled(
+            shotNodes.map(async (img) => {
+              const shot = shots[img.data.params.shotIndex!]
+              // 优先用镜头原始描述判断，回退分镜图生图提示词
+              const desc = shot ? `${shot.title}\n${shot.description}` : img.data.prompt
+              if (!desc.trim()) return
+              const brief =
+                `镜头：${desc}\n\n可用素材清单：\n` + entityList.map((e) => `- ${e.tag}`).join('\n')
+              const res = await generateScript({
+                brief,
+                tone: sb.data.params.tone,
+                preset: 'shot-compose',
+                model: resolveApiModel(TEXT_MODELS, sb.data.params.textModel),
+              })
+              const parsed = parseShotCompose(res.script)
+              if (!get().nodes.some((n) => n.id === img.id)) return
+              for (const tag of parsed.assets) {
+                const hit = entityList.find((e) => e.tag === tag)
+                if (!hit) continue
+                get().onConnect({
+                  source: hit.node.id,
+                  sourceHandle: null,
+                  target: img.id,
+                  targetHandle: null,
+                })
+                mounted++
+              }
+            }),
+          )
+          flash(`✓ 已重新精确挂载 ${mounted} 处角色/场景/道具参考（每镜只连真正用到的）`)
         },
 
         deriveShotVideoNodes: async (storyboardId, opts) => {

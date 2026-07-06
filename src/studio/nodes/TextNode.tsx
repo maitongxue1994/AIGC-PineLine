@@ -10,6 +10,7 @@ import {
   Mic,
   Play,
   UsersRound,
+  Wand2,
   X,
 } from 'lucide-react'
 import { useStudioStore } from '../store'
@@ -45,6 +46,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   const deriveShotImageNodes = useStudioStore((s) => s.deriveShotImageNodes)
   const generateAllShotImages = useStudioStore((s) => s.generateAllShotImages)
   const deriveShotVideoNodes = useStudioStore((s) => s.deriveShotVideoNodes)
+  const remountShotAssets = useStudioStore((s) => s.remountShotAssets)
   const pipelineRunning = useStudioStore((s) => s.pipelineRunning)
 
   // 已派生的镜头下标（沿连线找下游分镜图节点的 shotIndex；序列化避免选择器每次新引用）
@@ -97,6 +99,16 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
     setBusy(true)
     try {
       await deriveShotVideoNodes(id, { run: true, indices })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remount = async () => {
+    if (busy || pipelineRunning) return
+    setBusy(true)
+    try {
+      await remountShotAssets(id)
     } finally {
       setBusy(false)
     }
@@ -378,6 +390,19 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
             派生后会为每个分镜图节点生成生图提示词（可确认/编辑），再单独运行或用「全部生成图片」
           </div>
         </div>
+      )}
+      {/* 修复历史项目资产乱连：断开旧全连、按镜头精确重挂角色/场景/道具 */}
+      {derived.size > 0 && (
+        <button
+          onClick={() => void remount()}
+          disabled={busy || pipelineRunning}
+          title="断开现有资产连线，用 AI 逐镜精确重连（修复每个角色/场景/道具连到所有镜头的乱连）"
+          className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-[8px] px-3 py-2 text-[11px] transition hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-45"
+          style={{ background: 'rgba(255,255,255,0.03)', color: TOKENS.textMuted }}
+        >
+          <Wand2 size={12} />
+          {busy ? '重挂中…' : '重新精确挂载资产（修复乱连）'}
+        </button>
       )}
       {videoConfirmOpen && (
         <VideoGenConfirmDialog
