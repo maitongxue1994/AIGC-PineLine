@@ -118,6 +118,12 @@ type StudioState = {
   updateNodeTitle: (id: string, title: string) => void
   /** 编辑当前激活版本的正文（文本节点产出可改写） */
   updateActiveContent: (id: string, content: string) => void
+  /** 编辑分镜镜头（title/description）：写回 shots 并同步版本拼接文本，派生分镜图/视频用新内容 */
+  updateShot: (
+    id: string,
+    shotIndex: number,
+    patch: Partial<Pick<ShotItem, 'title' | 'description'>>,
+  ) => void
   setActiveVersion: (id: string, index: number) => void
   setPin: (id: string, pin: PinColor | null) => void
   clearNodeError: (id: string) => void
@@ -902,6 +908,26 @@ export const useStudioStore = create<StudioState>()(
                   )
                 : [newVersion(content)]
               return { ...n, data: { ...n.data, versions, status: 'done' as const } }
+            }),
+          })),
+
+        updateShot: (id, shotIndex, patch) =>
+          set((s) => ({
+            nodes: s.nodes.map((n) => {
+              if (n.id !== id || !n.data.shots?.length) return n
+              const shots = n.data.shots.map((sh, i) =>
+                i === shotIndex ? { ...sh, ...patch } : sh,
+              )
+              // 版本拼接文本与结构化 shots 保持同步（下游文本消费/展示用同一格式）
+              const text = shots
+                .map((sh, i) => `#${i + 1} ${sh.title}\n${sh.description}`)
+                .join('\n\n')
+              const versions = n.data.versions.length
+                ? n.data.versions.map((v, i) =>
+                    i === n.data.activeVersion ? { ...v, content: text } : v,
+                  )
+                : [newVersion(text)]
+              return { ...n, data: { ...n.data, shots, versions } }
             }),
           })),
 

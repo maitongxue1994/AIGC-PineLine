@@ -379,6 +379,7 @@ function VoicePanel({ id, data }: { id: string; data: PineNodeData }) {
  */
 function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
   const updateActiveContent = useStudioStore((s) => s.updateActiveContent)
+  const updateShot = useStudioStore((s) => s.updateShot)
   const [editorOpen, setEditorOpen] = useState(false)
   const [extractOpen, setExtractOpen] = useState(false)
 
@@ -421,14 +422,34 @@ function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
         ) : shots.length > 0 ? (
           <>
             <div className="nowheel max-h-[280px] space-y-2 overflow-y-auto p-4">
+              {/* 镜头可编辑（半受控 SyncInput/SyncTextarea，IME 安全）：改动写回 shots，
+                  派生分镜图/视频将使用编辑后的内容 */}
               {shots.map((s, i) => (
-                <div key={s.id} className="rounded-[8px] bg-white/[0.04] p-2.5">
-                  <div className="text-[12px] font-semibold" style={{ color: TOKENS.textBody }}>
-                    #{i + 1} {s.title}
+                <div key={s.id} className="group/shot rounded-[8px] bg-white/[0.04] p-2.5 transition focus-within:bg-white/[0.06]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="shrink-0 text-[12px] font-semibold" style={{ color: TOKENS.textMuted }}>
+                      #{i + 1}
+                    </span>
+                    <SyncInput
+                      value={s.title}
+                      onValueChange={(v) => updateShot(id, i, { title: v })}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      placeholder="镜头标题"
+                      className="nodrag w-full bg-transparent text-[12px] font-semibold outline-none placeholder:text-white/25"
+                      style={{ color: TOKENS.textBody }}
+                    />
                   </div>
-                  <div className="mt-0.5 text-[11px] leading-relaxed" style={{ color: TOKENS.textSecondary }}>
-                    {s.description}
-                  </div>
+                  <SyncTextarea
+                    value={s.description}
+                    onValueChange={(v) => updateShot(id, i, { description: v })}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    rows={3}
+                    placeholder="镜头描述（景别/主体/环境/光线/氛围）"
+                    className="nodrag nowheel mt-0.5 block w-full resize-none bg-transparent text-[11px] leading-relaxed outline-none placeholder:text-white/25"
+                    style={{ color: TOKENS.textSecondary }}
+                  />
                 </div>
               ))}
             </div>
