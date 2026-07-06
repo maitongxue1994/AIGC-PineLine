@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, Coins, Building2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import CTA from '../sections/CTA'
 import FAQ from '../sections/FAQ'
 import { CONTACT, PAYMENTS, PRICING } from '../siteConfig'
@@ -12,7 +11,14 @@ import { CONTACT, PAYMENTS, PRICING } from '../siteConfig'
  */
 export default function Pricing() {
   const [tab, setTab] = useState<'credits' | 'subscription'>('credits')
+  // Paddle 未接入时统一「联系购买」（走邮件/私域）；接入后海外自助、国内仍联系
   const buyLabel = PAYMENTS.paddleEnabled ? '立即购买' : '联系购买'
+  const onBuy = () => {
+    if (!PAYMENTS.paddleEnabled) {
+      window.location.href = `mailto:${CONTACT.email}?subject=${encodeURIComponent('PineLine 积分购买')}`
+    }
+    // Paddle 接入后此处挂 Paddle.js overlay checkout（geo 分流在 T10 运维手册说明）
+  }
 
   return (
     <motion.main
@@ -67,6 +73,7 @@ export default function Pricing() {
                   highlight={'highlight' in p && p.highlight}
                   lines={[`${p.credits.toLocaleString()} 积分`, p.tag, '永不过期', '全模型可用']}
                   cta={buyLabel}
+                  onBuy={onBuy}
                 />
               ))
             : PRICING.subscriptions.map((p) => (
@@ -79,6 +86,7 @@ export default function Pricing() {
                   highlight={'highlight' in p && p.highlight}
                   lines={[...p.features]}
                   cta={buyLabel}
+                  onBuy={onBuy}
                 />
               ))}
         </div>
@@ -128,6 +136,7 @@ function PlanCard({
   highlight,
   lines,
   cta,
+  onBuy,
 }: {
   name: string
   priceCny: number
@@ -136,6 +145,7 @@ function PlanCard({
   highlight?: boolean
   lines: string[]
   cta: string
+  onBuy: () => void
 }) {
   return (
     <div
@@ -166,14 +176,14 @@ function PlanCard({
           </li>
         ))}
       </ul>
-      <Link
-        to="/studio"
+      <button
+        onClick={onBuy}
         className={`mt-8 inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition ${
           highlight ? 'btn-primary' : 'btn-ghost'
         }`}
       >
         {cta}
-      </Link>
+      </button>
     </div>
   )
 }

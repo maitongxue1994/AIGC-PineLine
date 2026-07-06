@@ -10,6 +10,7 @@ import videoTasks from './routes/videoTasks'
 import debugLogs from './routes/debugLogs'
 import { handleBridgeWs, handleMcp } from './routes/mcp'
 import { deliveryError, deliveryUpload, deliveryView } from './routes/delivery'
+import { paddleWebhook } from './routes/paddleWebhook'
 import {
   assertAccess,
   assertBodySize,
@@ -46,6 +47,9 @@ export interface Env extends CoreEnv {
   CREDIT_LEDGER: DurableObjectNamespace
   /** 客户交付页 R2 桶（可选；未配置时交付上传返回 501） */
   DELIVERY_BUCKET?: R2Bucket
+  /** Paddle 支付（海外自助购买）：webhook 验签密钥 + 套餐 price_id→积分映射 */
+  PADDLE_WEBHOOK_SECRET?: string
+  PADDLE_PRICE_MAP?: string
 }
 
 // Durable Object 类导出（wrangler durable_objects.bindings 引用）
@@ -93,6 +97,21 @@ function isApiPath(p: string): boolean {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
+
+    // 健康检查（探活用，不上锁不限流不探上游——避免探测流量烧钱）
+    if (url.pathname === '/api/health') {
+      return jsonOk({ ok: true, ts: Date.now() })
+    }
+    // Paddle 支付 webhook（外部回调，无浏览器 Origin，靠 HMAC 验签）
+    if (url.pathname === '/api/paddle/webhook' && req.method === 'POST') {
+      try {
+        assertBodySize(req)
+        return await paddleWebhook(req, env)
+      } catch (err) {
+        if (err instanceof PineHttpError) return jsonError(err.message, err.status)
+        throw err
+      }
+    }
 
     // MCP 桥（外部 agent 直连）：无浏览器 Origin，不做 assertOrigin/assertAuth——会话码即凭证
     if (url.pathname.startsWith('/mcp/')) {
