@@ -21,8 +21,10 @@
     { "tag": "v1", "new_sqlite_classes": ["CanvasBridge"] },
     { "tag": "v2", "new_sqlite_classes": ["CreditLedger"] }
   ],
-  // 客户交付页 R2 桶（需先在 CF 控制台创建名为 pineline-delivery 的 R2 桶；双分支同步）。
-  "r2_buckets": [{ "binding": "DELIVERY_BUCKET", "bucket_name": "pineline-delivery" }],
+  // 客户交付页 R2 桶：桶不存在时加此 binding 会导致部署失败，故默认注释。
+  // 启用步骤：① CF 控制台建名为 pineline-delivery 的 R2 桶 ② 取消下一行注释 ③ 双分支同步提交。
+  // 未启用时交付上传返回 501（代码已优雅降级，不影响其他功能）。
+  // "r2_buckets": [{ "binding": "DELIVERY_BUCKET", "bucket_name": "pineline-delivery" }],
   "observability": {
     "enabled": true
   }
