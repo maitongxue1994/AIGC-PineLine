@@ -20,8 +20,8 @@ export type AgentOp =
   | { op: 'run'; ids: string[] }
   /** 清空画布再新建管线：前端执行前必弹确认（无论手动/自动模式） */
   | { op: 'clear_canvas' }
-  /** 分镜派生自动化（单条 op 替代 N×add_node+connect）：id 为 storyboard 节点 */
-  | { op: 'derive_shot_images'; id: string; indices?: number[] }
+  /** 分镜派生自动化（支持等待上游产出后接续）：id 为 storyboard 节点；generate=派生后自动批量生图 */
+  | { op: 'derive_shot_images'; id: string; indices?: number[]; generate?: boolean }
   | { op: 'derive_shot_videos'; id: string; run?: boolean }
   /** 把用户的稳定偏好/项目设定写入本地长期记忆（IndexedDB memory 库） */
   | { op: 'remember'; content: string }
@@ -115,7 +115,7 @@ export function describeOp(op: AgentOp): string {
     case 'clear_canvas':
       return '⚠ 清空当前画布（执行前会再次确认，⌘Z 可撤销）'
     case 'derive_shot_images':
-      return `派生分镜图${op.indices?.length ? `（镜头 ${op.indices.map((i) => i + 1).join('、')}）` : '（全部未派生镜头）'}`
+      return `派生分镜图${op.indices?.length ? `（镜头 ${op.indices.map((i) => i + 1).join('、')}）` : '（全部镜头）'}${op.generate ? ' 并自动批量生成' : ''}`
     case 'derive_shot_videos':
       return `一键成片：派生镜头视频${op.run ? '并立即生成' : '（预填提示词，确认后生成）'}`
     case 'remember':

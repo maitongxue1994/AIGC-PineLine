@@ -1,7 +1,58 @@
 import { useStudioStore } from '../store'
 import { putMemory } from '../assetdb'
-import type { NodeParams, NodePreset } from '../types'
+import { isImageContent, type NodeParams, type NodePreset } from '../types'
 import type { AgentOp } from './types'
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * 确保分镜节点已产出 shots（自动执行链用）：已有直接返回；正在跑则轮询等待；
+ * 否则主动把「上游文本节点 + 分镜」一起 runPipeline 跑出来。最长约 3 分钟。
+ */
+async function ensureStoryboardShots(sbId: string): Promise<import('../types').ShotItem[]> {
+  const getSb = () => useStudioStore.getState().nodes.find((n) => n.id === sbId)
+  if (getSb()?.data.shots?.length) return getSb()!.data.shots!
+
+  const store = useStudioStore.getState()
+  const running = store.pipelineRunning || getSb()?.data.status === 'running'
+  if (!running) {
+    // 收集分镜及其上游文本节点一起跑（否则剧本没产出会被级联跳过）
+    const runIds = [sbId]
+    for (const e of store.edges) {
+      if (e.target !== sbId) continue
+      const up = store.nodes.find((n) => n.id === e.source)
+      if (up?.data.kind === 'text') runIds.unshift(e.source)
+    }
+    await store.runPipeline(runIds)
+  }
+  // 轮询等待 shots 出现（并发 run 场景 / runPipeline 已返回但状态未落）
+  for (let i = 0; i < 90; i++) {
+    const sb = getSb()
+    if (sb?.data.shots?.length) return sb.data.shots
+    if (sb?.data.status === 'error' && !useStudioStore.getState().pipelineRunning) break
+    await sleep(2000)
+  }
+  return getSb()?.data.shots ?? []
+}
+
+/** 等派生的分镜图节点出图（一键成片前置）：最长约 5 分钟 */
+async function waitShotImages(sbId: string): Promise<boolean> {
+  for (let i = 0; i < 150; i++) {
+    const s = useStudioStore.getState()
+    const shotNodes = s.edges
+      .filter((e) => e.source === sbId)
+      .map((e) => s.nodes.find((n) => n.id === e.target))
+      .filter((n) => n?.data.kind === 'image' && n.data.preset === 'shot')
+    if (shotNodes.length && shotNodes.some((n) => n!.data.versions.some((v) => isImageContent(v.content))))
+      return true
+    if (!s.pipelineRunning && !shotNodes.some((n) => n?.data.status === 'running')) {
+      // 都不在跑了：有图返回 true，全无图返回 false
+      return shotNodes.some((n) => n!.data.versions.some((v) => isImageContent(v.content)))
+    }
+    await sleep(2000)
+  }
+  return true
+}
 
 /**
  * Agent 操作执行器：ref → 真实节点 id 映射后逐条调 store actions。
@@ -105,27 +156,26 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
             fail(`derive_shot_images: ${op.id} 不是分镜节点`)
             break
           }
-          const shots = sb.data.shots ?? []
+          // 自动执行链：分镜还没产出就先等/跑上游剧本+分镜，无需用户手动
+          const shots = await ensureStoryboardShots(id)
           if (!shots.length) {
-            fail('derive_shot_images: 分镜节点还没有镜头，请先运行分镜')
+            fail('derive_shot_images: 分镜生成失败或超时，请检查剧本/分镜节点')
             break
           }
           // 缺省 = 全部未派生镜头；已派生的剔除（防重复叠加）
           const derivedSet = new Set<number>()
-          for (const e of s.edges) {
+          for (const e of useStudioStore.getState().edges) {
             if (e.source !== id) continue
-            const t = s.nodes.find((n) => n.id === e.target)
+            const t = useStudioStore.getState().nodes.find((n) => n.id === e.target)
             if (t?.data.kind === 'image' && t.data.preset === 'shot' && t.data.params.shotIndex != null)
               derivedSet.add(t.data.params.shotIndex)
           }
           const indices = (op.indices ?? shots.map((_, i) => i)).filter(
             (i) => i < shots.length && !derivedSet.has(i),
           )
-          if (!indices.length) {
-            fail('derive_shot_images: 所选镜头均已派生')
-            break
-          }
-          await s.deriveShotImageNodes(id, indices)
+          if (indices.length) await useStudioStore.getState().deriveShotImageNodes(id, indices)
+          // generate=true：派生后直接批量生图（不等用户手动点「生成分镜图」）
+          if (op.generate) await useStudioStore.getState().generateAllShotImages(id)
           ok++
           break
         }
@@ -136,7 +186,9 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
             fail(`derive_shot_videos: ${op.id} 不是分镜节点`)
             break
           }
-          const made = await s.deriveShotVideoNodes(id, { run: op.run })
+          // run 且分镜图还在生成：等其出图再派生视频（自动成片链）
+          if (op.run) await waitShotImages(id)
+          const made = await useStudioStore.getState().deriveShotVideoNodes(id, { run: op.run })
           if (!made.length) {
             fail('derive_shot_videos: 没有可挂视频的分镜图，请先派生并生成分镜图')
             break

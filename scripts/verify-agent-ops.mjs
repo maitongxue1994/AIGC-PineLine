@@ -144,6 +144,14 @@ check('derive_shot_images 省略 indices（全部未派生）', () => {
   const r = sanitizeOps([{ op: 'derive_shot_images', id: 'sb1' }])
   assert.deepEqual(r.ops[0], { op: 'derive_shot_images', id: 'sb1' })
 })
+check('derive_shot_images generate 透传（仅 true）', () => {
+  const r = sanitizeOps([
+    { op: 'derive_shot_images', id: 'sb1', generate: true },
+    { op: 'derive_shot_images', id: 'sb2', generate: 'yes' },
+  ])
+  assert.deepEqual(r.ops[0], { op: 'derive_shot_images', id: 'sb1', generate: true })
+  assert.deepEqual(r.ops[1], { op: 'derive_shot_images', id: 'sb2' })
+})
 check('derive_shot_videos 透传（run 仅接受 true）', () => {
   const r = sanitizeOps([
     { op: 'derive_shot_videos', id: 'sb1', run: true },
