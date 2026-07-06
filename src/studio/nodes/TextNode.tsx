@@ -83,11 +83,12 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   })
   const [withImage, withVideo, videoPending] = videoStageKey.split(',').map(Number)
 
+  // 真·一键成片：派生镜头视频节点（预填官方公式提示词）后直接整批生成，不再需要二次点击
   const deriveVideos = async () => {
     if (busy || pipelineRunning) return
     setBusy(true)
     try {
-      await deriveShotVideoNodes(id)
+      await deriveShotVideoNodes(id, { run: true })
     } finally {
       setBusy(false)
     }
@@ -211,7 +212,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
           )}
           {busy || pipelineRunning ? '生成中…' : `全部生成图片（${shots.length} 张）`}
         </button>
-        {/* 一键成片：分镜图出图后派生镜头视频节点（预填官方公式提示词），再整批生成 */}
+        {/* 一键成片：出图的分镜图派生镜头视频节点（官方公式提示词）并**直接整批生成** */}
         {withImage > 0 && withVideo < derived.size && (
           <button
             onClick={() => void deriveVideos()}
@@ -219,11 +220,14 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
             className={`${btn} w-full`}
             style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
           >
-            <Film size={12} />
-            一键成片（{derived.size - withVideo} 镜头 → 视频）
+            {busy || pipelineRunning ? <Loader2 size={12} className="animate-spin" /> : <Film size={12} />}
+            {busy || pipelineRunning
+              ? '生成中…'
+              : `一键成片（${derived.size - withVideo} 镜头 → 视频）`}
           </button>
         )}
-        {videoPending > 0 && (
+        {/* 补跑：派生过但未生成/失败的视频节点（如上次中断） */}
+        {videoPending > 0 && withVideo >= derived.size && (
           <button
             onClick={runAllShotVideos}
             disabled={pipelineRunning}
@@ -231,19 +235,44 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
             style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
           >
             {pipelineRunning ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-            {pipelineRunning ? '生成中…' : `生成全部镜头视频（${videoPending}）`}
+            {pipelineRunning ? '生成中…' : `生成剩余镜头视频（${videoPending}）`}
           </button>
         )}
         </div>
       ) : !open ? (
-        <button
-          onClick={openPanel}
-          className={`${btn} w-full`}
-          style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
-        >
-          <Clapperboard size={13} />
-          {derived.size ? `继续派生分镜图（剩 ${undived.length}）` : '生成分镜图（全部或单选）'}
-        </button>
+        <div className="space-y-1.5">
+          <button
+            onClick={openPanel}
+            className={`${btn} w-full`}
+            style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
+          >
+            <Clapperboard size={13} />
+            {derived.size ? `继续派生分镜图（剩 ${undived.length}）` : '生成分镜图（全部或单选）'}
+          </button>
+          {/* 部分镜头已出图也能先成片（不必等全部派生）：解放批量生视频入口 */}
+          {withImage > 0 && withVideo < derived.size && (
+            <button
+              onClick={() => void deriveVideos()}
+              disabled={busy || pipelineRunning}
+              className={`${btn} w-full`}
+              style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
+            >
+              {busy || pipelineRunning ? <Loader2 size={12} className="animate-spin" /> : <Film size={12} />}
+              {busy || pipelineRunning ? '生成中…' : `已出图镜头一键成片（${withImage - withVideo}）`}
+            </button>
+          )}
+          {videoPending > 0 && (
+            <button
+              onClick={runAllShotVideos}
+              disabled={pipelineRunning}
+              className={`${btn} w-full`}
+              style={{ background: 'rgba(255,255,255,0.07)', color: TOKENS.textBody }}
+            >
+              {pipelineRunning ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+              {pipelineRunning ? '生成中…' : `生成剩余镜头视频（${videoPending}）`}
+            </button>
+          )}
+        </div>
       ) : (
         <div className="space-y-2">
           <div className="flex items-center justify-between px-0.5">
