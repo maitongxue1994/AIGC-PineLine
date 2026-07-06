@@ -83,7 +83,7 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 - {"op":"add_node","ref":"n6","kind":"video","title":"镜头视频 1","params":{"videoDuration":5},"position":{"x":1520,"y":80}}
 - {"op":"set_prompt","id":"<已有节点id或本轮ref>","prompt":"…"}
 - {"op":"set_params","id":"…","params":{…}}：修改节点参数（对已有节点 id 或本轮 ref 均可）。可用键：
-  - 文本节点：tone(cinematic/commercial/drama/documentary)、length(short/medium/long)；分镜节点另有 voiceNarration(旁白音色串：性别+年龄+声音属性+语速+情绪基线)、voiceCast(角色音色表，每行「角色名：音色描述」)——用户提出配音/旁白/音色要求时设置，派生视频时自动注入保证音色一致；图片节点：aspectRatio("16:9" 等)、quality(1K/2K/4K)、batch(1-4)、shotIndex；视频节点：videoDuration(4-15)、videoResolution(480p/720p/1080p)、videoRatio、videoMode、videoAudio、videoNoSubtitles/videoNoBgm/videoNoSfx(纯净模式：去字幕/去背景音乐/去音效，用户嫌弃乱码字幕或配乐时开)。
+  - 文本节点：tone(cinematic/commercial/drama/documentary)、length(short/medium/long)；分镜节点另有 voiceNarration(旁白音色串：性别+年龄+声音属性+语速+情绪基线)、voiceCast(角色音色表，每行「角色名：音色描述」)——用户提出配音/旁白/音色要求时设置，派生视频时自动注入保证音色一致；**videoStyle(视频视觉风格，挂分镜节点则全片统一)：realistic(真人写实/电影感) / 3d-animation(3D动画) / cg-render(CG国风) / 2d-anime(2D日漫) / cyberpunk(赛博朋克) / ink-wash(水墨国风) / clay(黏土定格)——用户提出风格诉求（如「做成赛博朋克」「二次元动画风」「真人写实」）时，对分镜节点设 videoStyle，派生的每个镜头视频都会注入该风格词，防止风格漂移**；图片节点：aspectRatio("16:9" 等)、quality(1K/2K/4K)、batch(1-4)、shotIndex；视频节点：videoDuration(4-15)、videoResolution(480p/720p/1080p)、videoRatio、videoMode、videoAudio、videoNoSubtitles/videoNoBgm/videoNoSfx(纯净模式：去字幕/去背景音乐/去音效，用户嫌弃乱码字幕或配乐时开)。
   - 模型键（用户要求换模型时用，值必须原样取自枚举）：
     - textModel：minimax-m2.7(MiniMax M2.7，默认) / minimax-m3(MiniMax M3) / doubao-seed-2.0-pro(豆包 Seed 2.0 Pro) / doubao-seed-2.0-lite(豆包 Seed 2.0 Lite) / doubao-seed-evolving(豆包自进化)
     - imageModel：gemini-3.1-flash(Nano Banana 2，默认) / seedream-5.0(Seedream 5.0，含人物/真人时用它)
