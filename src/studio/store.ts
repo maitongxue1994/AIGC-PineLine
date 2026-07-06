@@ -1704,7 +1704,7 @@ export const useStudioStore = create<StudioState>()(
             const t = state.nodes.find((n) => n.id === e.target)
             return t?.data.kind === 'image' && t.data.preset === 'shot'
           }).length
-          // 一致性自动挂载候选：画布上有产出的实体参考节点（角色三视图/场景宫格/道具三视图）
+          // 一致性挂载候选：画布上有产出的实体参考节点（角色三视图/场景宫格/道具三视图）
           const GENERIC_TITLES = new Set(['角色三视图', '场景四宫格', '道具三视图', '图片', '新图片'])
           const entityNodes = state.nodes.filter((n) => {
             if (n.data.kind !== 'image') return false
@@ -1713,9 +1713,15 @@ export const useStudioStore = create<StudioState>()(
             const name = n.data.title.trim()
             return name.length >= 2 && !GENERIC_TITLES.has(name)
           })
+          // 实体清单（供 shot-compose 精确判断每镜用到哪些素材）：「kind:name」形式
+          const entityKindLabel = (p: string | null) =>
+            p === 'char-triview' ? '角色' : p === 'scene-grid' ? '场景' : '道具'
+          const entityList = entityNodes.map((n) => ({
+            node: n,
+            tag: `${entityKindLabel(n.data.preset)}:${n.data.title.trim()}`,
+          }))
 
           const ids: string[] = []
-          let mounted = 0
           chosen.forEach((shotIdx, k) => {
             const slot = existing + k
             const shot = shots[shotIdx]
@@ -1725,7 +1731,6 @@ export const useStudioStore = create<StudioState>()(
               { x: baseX + (slot % 3) * 420, y: baseY + Math.floor(slot / 3) * 560 },
               {
                 title: `#${shotIdx + 1} ${shot.title}`.slice(0, 24),
-                // 用户在派生面板选了生图模型则批量写入（缺省走各节点默认 Gemini）
                 params: {
                   shotIndex: shotIdx,
                   ...(opts?.imageModel ? { imageModel: opts.imageModel } : {}),
@@ -1733,37 +1738,52 @@ export const useStudioStore = create<StudioState>()(
               },
             )
             get().onConnect({ source: storyboardId, sourceHandle: null, target: id, targetHandle: null })
-            // 实体名出现在镜头文本 → 自动连作参考图（collectUpstreamImages ≤6 天然限流）
-            const shotText = `${shot.title} ${shot.description}`
-            for (const en of entityNodes) {
-              if (!shotText.includes(en.data.title.trim())) continue
-              get().onConnect({ source: en.id, sourceHandle: null, target: id, targetHandle: null })
-              mounted++
-            }
             ids.push(id)
           })
           get().requestFitView()
-          if (mounted) flash(`已自动连接 ${mounted} 处角色/场景/道具参考（不需要的可手动断开连线）`)
 
-          // 第二步：逐镜生成生图提示词回填（节点保持 idle，等用户确认后再生图）
+          // 第二步：逐镜生成生图提示词 + 实体感知挂载。
+          // 有实体节点 → shot-compose（返回 {prompt, assets}，按 assets 精确连参考图，
+          // 替代脆弱的文本子串匹配）；无实体 → 退回纯 image-prompt。
           flash(`正在为 ${chosen.length} 个镜头生成生图提示词…`)
+          let mounted = 0
           const results = await Promise.allSettled(
             chosen.map(async (shotIdx, k) => {
               const shot = shots[shotIdx]
-              const res = await generateScript({
-                brief: `${shot.title}\n${shot.description}`,
-                tone: sb.data.params.tone,
-                preset: 'image-prompt',
-                model: resolveApiModel(TEXT_MODELS, sb.data.params.textModel),
-              })
               const nid = ids[k]
-              // 期间用户可能删了节点/清了画布
-              if (get().nodes.some((n) => n.id === nid)) {
-                get().setPrompt(nid, res.script.trim())
+              if (entityList.length) {
+                const brief =
+                  `镜头：${shot.title}\n${shot.description}\n\n可用素材清单：\n` +
+                  entityList.map((e) => `- ${e.tag}`).join('\n')
+                const res = await generateScript({
+                  brief,
+                  tone: sb.data.params.tone,
+                  preset: 'shot-compose',
+                  model: resolveApiModel(TEXT_MODELS, sb.data.params.textModel),
+                })
+                const parsed = parseShotCompose(res.script)
+                if (!get().nodes.some((n) => n.id === nid)) return
+                if (parsed.prompt) get().setPrompt(nid, parsed.prompt)
+                // 按 assets 精确匹配实体节点（tag 完全一致）→ 连参考图
+                for (const tag of parsed.assets) {
+                  const hit = entityList.find((e) => e.tag === tag)
+                  if (!hit) continue
+                  get().onConnect({ source: hit.node.id, sourceHandle: null, target: nid, targetHandle: null })
+                  mounted++
+                }
+              } else {
+                const res = await generateScript({
+                  brief: `${shot.title}\n${shot.description}`,
+                  tone: sb.data.params.tone,
+                  preset: 'image-prompt',
+                  model: resolveApiModel(TEXT_MODELS, sb.data.params.textModel),
+                })
+                if (get().nodes.some((n) => n.id === nid)) get().setPrompt(nid, res.script.trim())
               }
             }),
           )
           const ok = results.filter((r) => r.status === 'fulfilled').length
+          if (mounted) flash(`已按镜头内容精确连接 ${mounted} 处角色/场景/道具参考（可手动增删连线）`)
           flash(
             ok
               ? `✓ 已生成 ${ok}/${chosen.length} 条生图提示词，确认或编辑后可生成图片`
@@ -2266,6 +2286,36 @@ async function recordVideoHistory(nodeId: string, prompt: string, versions: Node
     })
   }
   if (entries.length) void appendHistory(entries)
+}
+
+/**
+ * 解析 shot-compose 返回：{prompt, assets}。容错链同 agentChat/extract-entities：
+ * 剥 think/围栏 → 截首个 {…} → parse。失败时降级为「整段作 prompt、无 assets」。
+ */
+function parseShotCompose(raw: string): { prompt: string; assets: string[] } {
+  const cleaned = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+  const attempts = [cleaned]
+  const first = cleaned.indexOf('{')
+  const last = cleaned.lastIndexOf('}')
+  if (first >= 0 && last > first) attempts.push(cleaned.slice(first, last + 1))
+  for (const text of attempts) {
+    try {
+      const obj = JSON.parse(text) as { prompt?: unknown; assets?: unknown }
+      const prompt = typeof obj.prompt === 'string' ? obj.prompt.trim() : ''
+      const assets = Array.isArray(obj.assets)
+        ? obj.assets.filter((x): x is string => typeof x === 'string').map((s) => s.trim())
+        : []
+      if (prompt) return { prompt, assets }
+    } catch {
+      /* 尝试下一种 */
+    }
+  }
+  // 解析失败：整段当提示词（去掉可能的 JSON 残骸），不挂载
+  return { prompt: cleaned.replace(/[{}[\]"]/g, '').slice(0, 400), assets: [] }
 }
 
 function firstShotDescription(text: string | null): string {

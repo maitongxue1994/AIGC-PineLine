@@ -173,7 +173,7 @@ export type ScriptRequest = {
   tone?: NodeParams['tone']
   length?: NodeParams['length']
   /** 文本预设：script=剧本（默认）/ ad-copy=广告词 / free=自由文本 / image-prompt=镜头描述→生图提示词 / extract-entities=提取角色场景道具 JSON */
-  preset?: 'script' | 'ad-copy' | 'free' | 'image-prompt' | 'extract-entities'
+  preset?: 'script' | 'ad-copy' | 'free' | 'image-prompt' | 'extract-entities' | 'shot-compose'
   /** 缺省 MiniMax；doubao-seed-* 走方舟 */
   model?: string
 }
