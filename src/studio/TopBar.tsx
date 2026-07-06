@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Download, MoreHorizontal, RotateCcw, Share2, Sparkles, Upload, Zap } from 'lucide-react'
+import { Cable, Download, MoreHorizontal, RotateCcw, Share2, Sparkles, Upload, Zap } from 'lucide-react'
 import { useStudioStore } from './store'
+import { useBridgeStore } from './bridge/bridgeStore'
+import BridgeDialog from './dialogs/BridgeDialog'
 import { TOKENS } from './designTokens'
 import { useDismissable } from './hooks/useDismissable'
 
@@ -35,10 +37,36 @@ export default function TopBar() {
           <Sparkles size={15} />
           社区
         </Link>
+        <BridgeButton />
         <ShareButton />
         <MoreMenu />
       </div>
     </div>
+  )
+}
+
+/** 「外部 Agent」入口：MCP 桥开关（状态灯随连接态变色） */
+function BridgeButton() {
+  const status = useBridgeStore((s) => s.status)
+  const [open, setOpen] = useState(false)
+  const dotColor =
+    status === 'on' ? '#4BBF6B' : status === 'connecting' ? '#E8A33D' : 'rgba(255,255,255,0.28)'
+  return (
+    <>
+      <button
+        title="外部 Agent（MCP 桥）：让 Claude Code / Codex 等 AI 助手操控本画布"
+        onClick={() => setOpen(true)}
+        className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white/[0.07] transition hover:bg-white/[0.12]"
+        style={{ color: TOKENS.textBody }}
+      >
+        <Cable size={15} />
+        <span
+          className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
+          style={{ background: dotColor }}
+        />
+      </button>
+      {open && <BridgeDialog onClose={() => setOpen(false)} />}
+    </>
   )
 }
 
