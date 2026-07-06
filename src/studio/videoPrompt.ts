@@ -40,6 +40,11 @@ export type VideoPromptInput = {
    * 否则 2D/3D 画面会漂成真人写实。注入提示词「视觉风格」位，全片统一。
    */
   style?: string
+  /**
+   * 上游有分镜图（首帧/参考）但没提取角色/场景/道具实体时置真：注入自然语言引用，
+   * 让视频严格以分镜图画面为准（保持构图/主体/场景一致）。有 refBindings 时不注入。
+   */
+  frameRef?: boolean
   purity?: PurityOpts
   /** generate_audio 关闭时不注入音色/音频类约束（默认 true） */
   audioOn?: boolean
@@ -57,6 +62,10 @@ function assemble(base: string, input: VideoPromptInput): string {
       .map((b, i) => `将<图片${i + 1}>中的${b.kind}[${b.name}]定义为<主体${i + 1}>`)
       .join('；')
     segs.push(`${defs}。以下画面中提到对应${binds.map((_, i) => `<主体${i + 1}>`).join('、')}时，保持其形象与参考素材完全一致。`)
+  }
+  // 无实体参考但有分镜图：让视频严格以分镜图画面为准（首帧模式下分镜图即首帧，用自然语言引用而非 @图片N）
+  if (input.frameRef && !binds.length && !base.includes('参考所提供的分镜图')) {
+    segs.push('本镜画面严格参考所提供的分镜图，保持主体外形、构图与场景布置与之一致。')
   }
   if (base) segs.push(base)
 

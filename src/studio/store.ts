@@ -1415,7 +1415,9 @@ export const useStudioStore = create<StudioState>()(
                   : {}),
                 ...(entityRefs.length
                   ? { refBindings: entityRefs.map((e) => ({ kind: e.kind, name: e.name })) }
-                  : {}),
+                  : vctx.hasShotFrame
+                    ? { frameRef: true }
+                    : {}),
                 purity,
                 audioOn: generateAudio,
               })
@@ -1555,6 +1557,7 @@ export const useStudioStore = create<StudioState>()(
             ...(styleKeywords(params.videoStyle ?? vctx.style)
               ? { style: styleKeywords(params.videoStyle ?? vctx.style) }
               : {}),
+            ...(vctx.hasShotFrame ? { frameRef: true } : {}),
             purity,
             audioOn: resolveGenerateAudio(params.videoAudio, purity, hasVoice),
           })
@@ -2500,6 +2503,8 @@ type VideoUpstreamContext = {
   voiceCast?: string
   /** 分镜节点上的全片统一视觉风格 id（VIDEO_STYLES） */
   style?: string
+  /** 上游连着分镜图（可作首帧/参考）：无实体资产时提示词引用分镜图画面保持一致 */
+  hasShotFrame?: boolean
   /** 该镜头用到的角色/场景/道具实体（沿分镜图上游收集，供 Seedance @图片N 引用） */
   entityRefs?: EntityRef[]
 }
@@ -2559,6 +2564,7 @@ function videoContextFor(
     if (!src) continue
     const d = src.data
     if (d.kind === 'image' && d.preset === 'shot') {
+      if (d.versions.some((v) => isImageContent(v.content))) ctx.hasShotFrame = true
       if (!ctx.shotText) {
         ctx.shotText =
           d.prompt.trim() ||

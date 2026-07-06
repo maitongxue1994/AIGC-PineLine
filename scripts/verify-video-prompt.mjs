@@ -126,4 +126,18 @@ check('无参考时不注入防双胞胎', () => {
   assert.ok(!out.includes('禁止分身'))
 })
 
+// ---- 8. frameRef 分镜图引用 ----
+check('frameRef 注入分镜图引用（无实体资产时）', () => {
+  const out = buildVideoPrompt({ shotText: '男人走过街道', frameRef: true })
+  assert.ok(out.includes('参考所提供的分镜图'))
+})
+check('有 refBindings 时 frameRef 不注入（实体参考优先）', () => {
+  const out = buildVideoPrompt({
+    shotText: '男人',
+    frameRef: true,
+    refBindings: [{ kind: '角色', name: '小明' }],
+  })
+  assert.ok(!out.includes('参考所提供的分镜图'))
+})
+
 console.log(`\nverify-video-prompt: ${pass} checks passed`)
