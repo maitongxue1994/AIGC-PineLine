@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Cable, Download, FileText, MoreHorizontal, Package, RotateCcw, Share2, Sparkles, Upload, Zap } from 'lucide-react'
+import { Cable, Download, FileText, Film, MoreHorizontal, Package, RotateCcw, Share2, Sparkles, Upload, Zap } from 'lucide-react'
 import { useStudioStore } from './store'
 import { useBridgeStore } from './bridge/bridgeStore'
 import BridgeDialog from './dialogs/BridgeDialog'
 import { fetchAccount } from './api'
 import { exportDeliveryZip, exportReportOnly } from './exportZip'
+import VideoTimelineDialog from './dialogs/VideoTimelineDialog'
 import { getAccessCode, requestAccessCode } from './accessCode'
 import { TOKENS } from './designTokens'
 import { useDismissable } from './hooks/useDismissable'
@@ -202,6 +203,7 @@ function MoreMenu() {
   const addAssetNode = useStudioStore((s) => s.addAssetNode)
   const addVideoNode = useStudioStore((s) => s.addVideoNode)
   const [open, setOpen] = useState(false)
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const mediaRef = useRef<HTMLInputElement | null>(null)
 
@@ -308,6 +310,16 @@ function MoreMenu() {
             <button
               onClick={() => {
                 setOpen(false)
+                setTimelineOpen(true)
+              }}
+              className={item}
+              style={{ color: TOKENS.textBody }}
+            >
+              <Film size={15} /> 拼接完整视频…
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false)
                 const s = useStudioStore.getState()
                 void exportDeliveryZip(s.projectName, s.nodes)
               }}
@@ -385,6 +397,7 @@ function MoreMenu() {
         className="hidden"
         onChange={(e) => void handleImportMedia(e)}
       />
+      {timelineOpen && <VideoTimelineDialog onClose={() => setTimelineOpen(false)} />}
     </div>
   )
 }
