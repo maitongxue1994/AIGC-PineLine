@@ -5,6 +5,9 @@
  * 隐私模式等打不开 IndexedDB 时静默降级为会话内存（persistent=false，面板给黄条提示）。
  */
 
+/** 资产类型：驱动一致性自动挂载（派生分镜图/视频时按类型匹配参考），与文件夹组织解耦 */
+export type AssetType = 'character' | 'scene' | 'prop' | 'style' | 'other'
+
 export type LibraryAsset = {
   id: string
   folderId: string
@@ -13,7 +16,28 @@ export type LibraryAsset = {
   favorite: boolean
   createdAt: number
   sourceNodeId?: string
+  /** 旧资产缺省时按 folderId 推断（inferAssetType），读出时已归一 */
+  type?: AssetType
 }
+
+const FOLDER_TYPE: Record<string, AssetType> = {
+  character: 'character',
+  scene: 'scene',
+  prop: 'prop',
+  style: 'style',
+}
+
+export function inferAssetType(a: Pick<LibraryAsset, 'type' | 'folderId'>): AssetType {
+  return a.type ?? FOLDER_TYPE[a.folderId] ?? 'other'
+}
+
+export const ASSET_TYPE_OPTIONS: { id: AssetType; label: string }[] = [
+  { id: 'character', label: '角色' },
+  { id: 'scene', label: '场景' },
+  { id: 'prop', label: '道具' },
+  { id: 'style', label: '风格' },
+  { id: 'other', label: '其他' },
+]
 
 export type HistoryEntry = {
   id: string
@@ -178,8 +202,11 @@ export function addFolder(name: string): LibraryFolder[] {
 
 export async function listAssets(): Promise<LibraryAsset[]> {
   const rows = await tx<LibraryAsset[]>('assets', 'readonly', (s) => s.getAll())
-  if (rows) return rows.sort((a, b) => b.createdAt - a.createdAt)
-  return [...memAssets.values()].sort((a, b) => b.createdAt - a.createdAt)
+  const list = rows ?? [...memAssets.values()]
+  // 类型归一：旧资产按 folderId 推断，下游（自动挂载/筛选）无需再判空
+  return list
+    .map((a) => ({ ...a, type: inferAssetType(a) }))
+    .sort((a, b) => b.createdAt - a.createdAt)
 }
 
 export async function saveAsset(

@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronRight, Folder, FolderPlus, Star } from 'lucide-react'
-import { addFolder, listFolders, saveAsset } from '../assetdb'
+import {
+  addFolder,
+  ASSET_TYPE_OPTIONS,
+  inferAssetType,
+  listFolders,
+  saveAsset,
+  type AssetType,
+} from '../assetdb'
 import { SHADOWS, TOKENS } from '../designTokens'
 
 /**
@@ -21,7 +28,10 @@ export default function SaveToLibraryDialog({
 }) {
   const [folders, setFolders] = useState(listFolders())
   const [picked, setPicked] = useState(folders[0]?.id ?? 'others')
+  // 资产类型（驱动一致性自动挂载）：未手选时跟随所选文件夹推断
+  const [pickedType, setPickedType] = useState<AssetType | null>(null)
   const [saving, setSaving] = useState(false)
+  const effectiveType = pickedType ?? inferAssetType({ folderId: picked })
 
   const handleSave = async () => {
     setSaving(true)
@@ -30,6 +40,7 @@ export default function SaveToLibraryDialog({
       name: defaultName,
       dataUrl,
       favorite: false,
+      type: effectiveType,
       ...(sourceNodeId ? { sourceNodeId } : {}),
     })
     window.dispatchEvent(new CustomEvent('pineline:library-changed'))
@@ -100,6 +111,31 @@ export default function SaveToLibraryDialog({
                 <span className="min-w-0 flex-1 truncate text-[15px]" style={{ color: TOKENS.textBody }}>
                   {f.name}
                 </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 资产类型（默认随文件夹推断；派生分镜图/视频时按类型自动挂参考） */}
+        <div className="mb-4">
+          <div className="mb-1.5 text-[12px]" style={{ color: TOKENS.textFaint }}>
+            资产类型（用于管线自动挂载参考）
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {ASSET_TYPE_OPTIONS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setPickedType(t.id)}
+                className="rounded-full px-3 py-1.5 text-[13px] transition"
+                style={{
+                  background:
+                    effectiveType === t.id ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+                  color: effectiveType === t.id ? TOKENS.textTitle : TOKENS.textMuted,
+                  boxShadow:
+                    effectiveType === t.id ? '0 0 0 1.5px rgba(255,255,255,0.5)' : undefined,
+                }}
+              >
+                {t.label}
               </button>
             ))}
           </div>
