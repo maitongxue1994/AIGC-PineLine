@@ -68,6 +68,10 @@ async function postJson<TReq, TRes>(
       log(false, { error: msg })
       // 无访问码/码失效 → 弹输码层（画布仍可浏览，仅生成受限）
       if (err.code === 'ACCESS_REQUIRED') requestAccessCode()
+      // 积分不足 → flash 引导充值（错误消息本身含余额与指引）
+      if (err.code === 'CREDITS_REQUIRED') {
+        window.dispatchEvent(new CustomEvent('pineline:flash', { detail: msg }))
+      }
       throw new Error(msg)
     }
     const data = (await res.json()) as TRes
@@ -192,4 +196,18 @@ export async function fetchVideoFile(req: {
   const blob = await res.blob()
   log(true)
   return blob
+}
+
+// ---------------- 积分账户（服务端 CreditLedger DO 账本） ----------------
+
+export type AccountInfo = {
+  /** admin 码为 null（不记账） */
+  balance: number | null
+  admin?: boolean
+  ledger: { ts: number; delta: number; balance: number; note: string }[]
+}
+
+/** 查询当前访问码的积分余额与最近流水 */
+export function fetchAccount(): Promise<AccountInfo> {
+  return postJson<Record<string, never>, AccountInfo>('/api/account', {})
 }

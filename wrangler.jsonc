@@ -9,12 +9,18 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/mcp/*"]
   },
-  // 画布桥（外部 Agent MCP ↔ 浏览器 WebSocket 中继）；免费计划要求 SQLite-backed DO。
-  // 注意：deploy/cloudflare 分支的 wrangler.jsonc 独立维护，需同步等价配置。
+  // 画布桥（外部 Agent MCP ↔ 浏览器 WebSocket 中继）+ 积分账本（预扣制计费）；
+  // 免费计划要求 SQLite-backed DO。deploy/cloudflare 分支的 wrangler.jsonc 独立维护，需同步等价配置。
   "durable_objects": {
-    "bindings": [{ "name": "CANVAS_BRIDGE", "class_name": "CanvasBridge" }]
+    "bindings": [
+      { "name": "CANVAS_BRIDGE", "class_name": "CanvasBridge" },
+      { "name": "CREDIT_LEDGER", "class_name": "CreditLedger" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CanvasBridge"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["CanvasBridge"] },
+    { "tag": "v2", "new_sqlite_classes": ["CreditLedger"] }
+  ],
   "observability": {
     "enabled": true
   }

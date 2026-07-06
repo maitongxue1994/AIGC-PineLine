@@ -318,15 +318,25 @@ export const VIDEO_MODELS: VideoModelInfo[] = [
 /** Seedance 2.0 为主模型（用户指定）；未配 ARK_API_KEY 时选择器与错误信息给接入指引 */
 export const DEFAULT_VIDEO_MODEL = 'seedance-2.0'
 
-// ---------------- 假积分定价（本地模拟，无真实计费） ----------------
+// ---------------- 积分定价（与服务端 src/worker/pricing.ts 对齐；verify-billing 交叉断言防漂移） ----------------
+// 锚：1 积分 = ¥0.01 成本口径，档位积分 = 官方模型成本 × ~2.0-2.5 毛利加成（官方价 2026-07 核实）。
 
-const IMAGE_COST: Record<ImageQuality, number> = { '1K': 6, '2K': 9, '4K': 15 }
-const TEXT_COST = 2
-/** 视频估价：720p 基准每秒 20 积分（设计稿 5s→100 / 10s→200），分辨率越高越贵 */
-const VIDEO_PER_SEC = 20
-const VIDEO_RES_MULT: Record<VideoResolution, number> = { '480p': 0.5, '720p': 1, '1080p': 2, '4k': 4 }
+/** 图像每张积分：Gemini 分档 / Seedream 官方不分档统一 50 */
+const IMAGE_COST_GEMINI: Record<ImageQuality, number> = { '1K': 100, '2K': 150, '4K': 250 }
+const IMAGE_COST_SEEDREAM = 50
+/** 文本/编排类每次调用积分 */
+const TEXT_COST = 5
+/** 视频每秒积分（按模型 id × 分辨率；与 worker/pricing.ts 的 VIDEO_PER_SEC 同源数值） */
+const VIDEO_COST_PER_SEC: Record<string, Partial<Record<VideoResolution, number>>> = {
+  'seedance-2.0': { '480p': 100, '720p': 200, '1080p': 500, '4k': 1200 },
+  'seedance-2.0-fast': { '480p': 80, '720p': 180 },
+  'seedance-2.0-mini': { '480p': 50, '720p': 110 },
+  'hailuo-2.3': { '480p': 75, '720p': 75, '1080p': 130 },
+  'hailuo-02': { '480p': 25, '720p': 75, '1080p': 130 },
+}
+const VIDEO_COST_DEFAULT: Partial<Record<VideoResolution, number>> = VIDEO_COST_PER_SEC['seedance-2.0']
 
-/** 估算一次运行的积分消耗（设计稿：积分随时长/分辨率/倍数即时换算） */
+/** 估算一次运行的积分消耗（生成前展示；服务端按同表预扣） */
 export function estimateCost(
   kind: NodeKind,
   preset: NodePreset | null,
@@ -335,18 +345,20 @@ export function estimateCost(
   if (kind === 'asset') return 0
   if (kind === 'text') return TEXT_COST
   if (kind === 'video') {
-    const dur = Math.max(0, params.videoDuration ?? 5)
-    const resMult = VIDEO_RES_MULT[params.videoResolution ?? '720p'] ?? 1
-    return Math.round(VIDEO_PER_SEC * dur * resMult) * (params.videoMultiplier ?? 1)
+    const dur = Math.max(0, params.videoDuration === -1 ? 15 : (params.videoDuration ?? 5))
+    const table = VIDEO_COST_PER_SEC[params.videoModel ?? DEFAULT_VIDEO_MODEL] ?? VIDEO_COST_DEFAULT
+    const perSec = table[params.videoResolution ?? '720p'] ?? table['720p'] ?? 200
+    return Math.round(perSec * dur) * (params.videoMultiplier ?? 1)
   }
-  const per = IMAGE_COST[params.quality ?? '1K']
+  const isSeedream = !!params.imageModel?.startsWith('seedream')
+  const per = isSeedream ? IMAGE_COST_SEEDREAM : IMAGE_COST_GEMINI[params.quality ?? '1K']
   // 实体参考两段式：主视图 + 多视角融合图共 2 张
   if (isEntityPreset(preset)) return per * 2
   const batch: BatchCount = params.batch ?? 1
   return per * batch
 }
 
-/** 新账户初始积分（纯前端模拟；帮助面板注明「积分为本地模拟」） */
+/** 本地模拟余额初始值（仅无访问码的离线展示用；真实余额以服务端 /api/account 为准） */
 export const INITIAL_CREDITS = 1000
 
 // ---------------- 节点构造 ----------------

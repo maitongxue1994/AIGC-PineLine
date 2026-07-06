@@ -4,6 +4,8 @@ import { Cable, Download, MoreHorizontal, RotateCcw, Share2, Sparkles, Upload, Z
 import { useStudioStore } from './store'
 import { useBridgeStore } from './bridge/bridgeStore'
 import BridgeDialog from './dialogs/BridgeDialog'
+import { fetchAccount } from './api'
+import { getAccessCode, requestAccessCode } from './accessCode'
 import { TOKENS } from './designTokens'
 import { useDismissable } from './hooks/useDismissable'
 
@@ -111,21 +113,56 @@ function SaveStatus() {
   )
 }
 
-/** 假积分胶囊（本地模拟；点击可重置） */
+/**
+ * 积分胶囊：有访问码时显示服务端真实余额（/api/account，预扣制账本）；
+ * admin 码显示 ∞；无码显示「未激活」并引导输码。点击刷新余额。
+ */
 function CreditsPill() {
-  const credits = useStudioStore((s) => s.credits)
-  const resetCredits = useStudioStore((s) => s.resetCredits)
+  // 初始态惰性判定（无码直接 none，有码先 loading），避免 effect 内同步 setState
+  const [state, setState] = useState<{ balance: number | null; admin: boolean } | 'none' | 'loading'>(
+    () => (getAccessCode() ? 'loading' : 'none'),
+  )
+  const [tick, setTick] = useState(0)
+
+  // tick 驱动刷新（点击/定时器都 setTick）；effect 内只做异步拉取，不同步 setState
+  useEffect(() => {
+    let alive = true
+    if (getAccessCode()) {
+      fetchAccount()
+        .then((a) => {
+          if (alive) setState({ balance: a.balance, admin: !!a.admin })
+        })
+        .catch(() => {
+          if (alive) setState('none')
+        })
+    }
+    const t = window.setInterval(() => setTick((v) => v + 1), 120_000)
+    return () => {
+      alive = false
+      window.clearInterval(t)
+    }
+  }, [tick])
+
+  const label =
+    state === 'loading' ? '…' : state === 'none' ? '未激活' : state.admin ? '∞' : `${state.balance ?? 0}`
+  const title =
+    state === 'none'
+      ? '生成能力需访问码/积分：点击输入访问码或查看套餐'
+      : '积分余额（服务端账本，生成按模型用量预扣）；点击刷新'
+
   return (
     <button
-      title="积分为本地模拟，仅作演示；点击重置为 1000"
+      title={title}
       onClick={() => {
-        if (window.confirm('积分为本地模拟。重置为 1000？')) resetCredits()
+        // 有码 → 刷新余额（含刚输码后的首刷）；无码 → 弹输码层
+        if (getAccessCode()) setTick((v) => v + 1)
+        else requestAccessCode()
       }}
       className="flex items-center gap-1.5 rounded-full bg-white/[0.07] px-3.5 py-2 text-[14px] font-semibold transition hover:bg-white/[0.12]"
       style={{ color: TOKENS.textBody }}
     >
       <Zap size={15} style={{ color: TOKENS.textMuted }} />
-      {credits}
+      {label}
     </button>
   )
 }

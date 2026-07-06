@@ -13,11 +13,15 @@ import {
   assertAccess,
   assertBodySize,
   assertOrigin,
+  isAdminCode,
   jsonError,
+  jsonOk,
   PineHttpError,
+  readJson,
   type CoreEnv,
 } from './utils'
 import { checkRateLimit } from './rateLimit'
+import { chargeFor } from './pricing'
 
 export interface Env extends CoreEnv {
   ASSETS: Fetcher
@@ -37,10 +41,17 @@ export interface Env extends CoreEnv {
   PINELINE_RATE_TEXT?: string
   /** 画布桥 DO（外部 Agent MCP ↔ 浏览器 WebSocket 中继） */
   CANVAS_BRIDGE: DurableObjectNamespace
+  /** 积分账本 DO（每访问码一实例，预扣制计费） */
+  CREDIT_LEDGER: DurableObjectNamespace
 }
 
 // Durable Object 类导出（wrangler durable_objects.bindings 引用）
 export { CanvasBridge } from './bridge/CanvasBridgeDO'
+export { CreditLedger } from './creditLedgerDO'
+
+function ledgerStub(env: Env, code: string) {
+  return env.CREDIT_LEDGER.get(env.CREDIT_LEDGER.idFromName(code))
+}
 
 const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
   '/api/generate/script': generateScript,
@@ -98,20 +109,88 @@ export default {
       return handleBridgeWs(req, env, url)
     }
 
+    // 积分账户：余额与流水（需访问码；admin 码不记账返回 admin 标记）
+    if (url.pathname === '/api/account' && req.method === 'POST') {
+      try {
+        assertOrigin(req, env)
+        const code = assertAccess(req, env)
+        if (isAdminCode(code)) return jsonOk({ balance: null, admin: true, ledger: [] })
+        const r = await ledgerStub(env, code).fetch('https://ledger/account', {
+          method: 'POST',
+          body: '{}',
+        })
+        return new Response(r.body, {
+          status: r.status,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      } catch (err) {
+        if (err instanceof PineHttpError) {
+          const code = err.message === 'ACCESS_REQUIRED' ? 'ACCESS_REQUIRED' : undefined
+          return jsonError(code ? '请先输入访问码' : err.message, err.status, code)
+        }
+        throw err
+      }
+    }
+
+    // 管理员充值：给客户码充/扣积分（收款确认后手动调用；Paddle webhook 亦走此逻辑）
+    if (url.pathname === '/api/admin/credit' && req.method === 'POST') {
+      try {
+        assertOrigin(req, env)
+        const caller = assertAccess(req, env)
+        if (!isAdminCode(caller)) return jsonError('仅管理员可操作', 403)
+        const body = await readJson<{ code?: string; amount?: number; note?: string }>(req)
+        if (!body.code?.trim() || !Number.isFinite(body.amount)) {
+          return jsonError('缺少 code 或 amount')
+        }
+        const r = await ledgerStub(env, body.code.trim()).fetch('https://ledger/credit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: body.amount, note: body.note ?? 'admin-credit' }),
+        })
+        return new Response(r.body, {
+          status: r.status,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      } catch (err) {
+        if (err instanceof PineHttpError) return jsonError(err.message, err.status)
+        throw err
+      }
+    }
+
     const handler = ROUTES[url.pathname]
 
     if (handler) {
       if (req.method !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 })
       }
+      let accessCode = ''
+      let charged = 0
       try {
         assertOrigin(req, env)
-        // 生成/编排类端点过访问门（ACCESS_REQUIRED → 前端弹输码/购买层）+ 限流
-        if (GATED_ROUTES.has(url.pathname)) {
-          const code = assertAccess(req, env)
-          checkRateLimit(code, url.pathname, env as unknown as Record<string, string | undefined>, Date.now())
-        }
         assertBodySize(req)
+        // 生成/编排类端点：访问门（ACCESS_REQUIRED → 前端弹输码层）→ 限流 → 预扣积分
+        if (GATED_ROUTES.has(url.pathname)) {
+          accessCode = assertAccess(req, env)
+          checkRateLimit(accessCode, url.pathname, env as unknown as Record<string, string | undefined>, Date.now())
+          // 预扣制：按请求参数估费先扣（admin 码免）；HTTP 层失败自动退款（下方）
+          if (!isAdminCode(accessCode)) {
+            const body = (await req.clone().json().catch(() => ({}))) as Record<string, unknown>
+            const cost = chargeFor(url.pathname, body)
+            if (cost > 0) {
+              const r = await ledgerStub(env, accessCode).fetch('https://ledger/debit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cost, note: url.pathname }),
+              })
+              if (r.status === 402) {
+                const p = (await r.json().catch(() => ({}))) as { error?: string }
+                return jsonError(p.error ?? '积分不足，请充值', 402, 'CREDITS_REQUIRED')
+              }
+              if (!r.ok) return jsonError('计费服务暂不可用，请稍后再试', 503)
+              charged = cost
+            }
+          }
+        }
       } catch (err) {
         if (err instanceof PineHttpError) {
           // 403 ACCESS_REQUIRED 透出 code，前端据此弹访问码弹层
@@ -124,7 +203,20 @@ export default {
         }
         throw err
       }
-      return handler(req, env)
+      const res = await handler(req, env)
+      // HTTP 层失败（参数错/上游拒单等）自动退款；异步任务后续失败不退（上游失败不计费、概率低）
+      if (charged > 0 && !res.ok) {
+        await ledgerStub(env, accessCode)
+          .fetch('https://ledger/credit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: charged, note: `refund:${url.pathname}` }),
+          })
+          .catch(() => {
+            /* 退款失败留待管理员对账补偿（ledger 有扣费记录） */
+          })
+      }
+      return res
     }
 
     if (isApiPath(url.pathname)) {

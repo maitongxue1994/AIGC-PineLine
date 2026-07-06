@@ -10,6 +10,7 @@
     "test:tapnow": "node scripts/verify-tapnow-redesign.mjs",
     "test:seedance": "node scripts/verify-seedance-body.mjs",
     "test:agent-ops": "node scripts/verify-agent-ops.mjs",
+    "test:billing": "node scripts/verify-billing.mjs",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0"
   },
