@@ -18,7 +18,7 @@ export default function CTA() {
             准备好把<span className="text-gradient">剧本</span>变成<span className="text-gradient">电影</span>了吗？
           </h2>
           <p className="relative mx-auto mt-5 max-w-xl text-ink-1">
-            14 天免费试用完整 Studio 权限。无需信用卡，打开浏览器就能开始。
+            打开浏览器就能进画布搭管线；充值积分后按用量生成，企业批量制作可走定制服务。
           </p>
           <div className="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link to="/studio" className="btn-primary">

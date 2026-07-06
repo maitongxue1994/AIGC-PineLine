@@ -8,6 +8,8 @@ import Landing from './pages/Landing'
 import Templates from './pages/Templates'
 import Showcase from './pages/Showcase'
 import Pricing from './pages/Pricing'
+import Terms from './pages/Terms'
+import Privacy from './pages/Privacy'
 
 const Studio = lazy(() => import('./pages/Studio'))
 const Projects = lazy(() => import('./pages/Projects'))
@@ -58,6 +60,8 @@ export default function App() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/showcase" element={<Showcase />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
         </Routes>
       </AnimatePresence>
       {!isStudio && <Footer />}

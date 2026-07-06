@@ -22,3 +22,32 @@ export const CONTACT = {
 export const PAYMENTS = {
   paddleEnabled: false,
 } as const
+
+/**
+ * 定价（上线前按真实成本与市场调整这里即全站生效）。
+ * 积分口径：1 积分 ≈ ¥0.1 成本对齐，毛利含在售价里（对齐 TapNow/LibTV 结构）。
+ * 成本参考：Seedance 720p·5s≈100 积分、Mini≈60、Seedream/Gemini 图≈5、文本≈2。
+ * 占位数字——上线前务必用真实模型成本核算后替换。
+ */
+export const PRICING = {
+  /** 积分包（一次性充值，永不过期） */
+  creditPacks: [
+    { id: 'starter', name: '体验包', credits: 1000, priceCny: 29, priceUsd: 5, tag: '约 10 条短视频' },
+    { id: 'creator', name: '创作包', credits: 6000, priceCny: 149, priceUsd: 22, tag: '约 60 条 · 更划算', highlight: true },
+    { id: 'pro', name: '专业包', credits: 20000, priceCny: 449, priceUsd: 68, tag: '约 200 条' },
+  ],
+  /** 月订阅（含每月积分，适合稳定产能） */
+  subscriptions: [
+    { id: 'lite', name: '轻享版', credits: 3000, priceCnyM: 79, priceUsdM: 12, features: ['每月 3000 积分', '全模型可用', '标准队列'] },
+    { id: 'plus', name: '进阶版', credits: 12000, priceCnyM: 279, priceUsdM: 42, features: ['每月 12000 积分', '全模型可用', '优先队列', '批量交付导出'], highlight: true },
+  ],
+  /** 企业定制服务（面议，to B 服务式交付） */
+  service: {
+    items: [
+      '批量科普/产品短视频代制作（按月产能包）',
+      '定制画布工作流与模型调优',
+      '交付含 AI 生成标识 + 创作过程存证报告',
+      '专属对接与优先排期',
+    ],
+  },
+} as const

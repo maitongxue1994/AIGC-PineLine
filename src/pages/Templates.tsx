@@ -1,20 +1,20 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { Search, Sparkles, Clock, Users2 } from 'lucide-react'
+import { Search, Sparkles, Clock } from 'lucide-react'
 
 const CATS = ['全部', '短片', '广告 / TVC', '短剧', 'MV', '电商', '预告片', '社交媒体']
 
 const TEMPLATES = [
-  { title: '电影级品牌 TVC · 30s',  cat: '广告 / TVC', stages: 6, est: '12 分钟', uses: 2148, tone: 'from-[#1a0a14] to-[#ff3d7f]' },
-  { title: '雨夜都市独白短片',       cat: '短片',      stages: 8, est: '18 分钟', uses: 1320, tone: 'from-[#061127] to-[#22d3ee]' },
-  { title: '古风短剧 · 1 集 3 分钟',  cat: '短剧',      stages: 9, est: '25 分钟', uses: 876,  tone: 'from-[#1a0f0a] to-[#ff6a3d]' },
-  { title: '电子 MV · 节奏卡点',      cat: 'MV',        stages: 7, est: '15 分钟', uses: 542,  tone: 'from-[#10081f] to-[#7c5cff]' },
-  { title: '电商主图视频 · 15s',      cat: '电商',      stages: 4, est: '5 分钟',  uses: 4210, tone: 'from-[#0a1f0a] to-[#b6ff5f]' },
-  { title: '院线预告片节奏',          cat: '预告片',    stages: 8, est: '20 分钟', uses: 312,  tone: 'from-[#0a0a0a] to-[#ff6a3d]' },
-  { title: '小红书竖屏种草',          cat: '社交媒体',  stages: 5, est: '8 分钟',  uses: 3180, tone: 'from-[#1a0a20] to-[#ff3d7f]' },
-  { title: '科幻世界观预告',          cat: '预告片',    stages: 9, est: '30 分钟', uses: 198,  tone: 'from-[#04131a] to-[#22d3ee]' },
-  { title: '悬疑短剧 · 开场钩子',     cat: '短剧',      stages: 7, est: '14 分钟', uses: 624,  tone: 'from-[#0a0a0a] to-[#5a5a66]' },
+  { title: '电影级品牌 TVC · 30s',  cat: '广告 / TVC', stages: 6, tone: 'from-[#1a0a14] to-[#ff3d7f]' },
+  { title: '雨夜都市独白短片',       cat: '短片',      stages: 8, tone: 'from-[#061127] to-[#22d3ee]' },
+  { title: '古风短剧 · 1 集 3 分钟',  cat: '短剧',      stages: 9, tone: 'from-[#1a0f0a] to-[#ff6a3d]' },
+  { title: '电子 MV · 节奏卡点',      cat: 'MV',        stages: 7, tone: 'from-[#10081f] to-[#7c5cff]' },
+  { title: '电商主图视频 · 15s',      cat: '电商',      stages: 4, tone: 'from-[#0a1f0a] to-[#b6ff5f]' },
+  { title: '院线预告片节奏',          cat: '预告片',    stages: 8, tone: 'from-[#0a0a0a] to-[#ff6a3d]' },
+  { title: '小红书竖屏种草',          cat: '社交媒体',  stages: 5, tone: 'from-[#1a0a20] to-[#ff3d7f]' },
+  { title: '科幻世界观预告',          cat: '预告片',    stages: 9, tone: 'from-[#04131a] to-[#22d3ee]' },
+  { title: '悬疑短剧 · 开场钩子',     cat: '短剧',      stages: 7, tone: 'from-[#0a0a0a] to-[#5a5a66]' },
 ]
 
 export default function Templates() {
@@ -39,7 +39,7 @@ export default function Templates() {
             从一个<span className="text-gradient">模板</span>，到一部成片
           </h1>
           <p className="mt-4 text-ink-1">
-            官方与社区共建的工作流模板。加载即用，画布上所有节点、参数与资产都已预配置。
+            常见视频类型的工作流示例，帮你快速上手管线搭建思路；进入 Studio 即可动手。
           </p>
         </div>
 
@@ -86,21 +86,18 @@ export default function Templates() {
               <div className="mt-4 flex items-center justify-between">
                 <span className="chip">{t.cat}</span>
                 <span className="flex items-center gap-1 text-[11px] text-ink-2">
-                  <Users2 size={11} /> {t.uses.toLocaleString()}
+                  <Clock size={11} /> {t.stages} 步管线
                 </span>
               </div>
               <h3 className="mt-3 font-display text-base font-semibold text-white">
                 {t.title}
               </h3>
-              <div className="mt-2 flex items-center justify-between text-[11px] text-ink-2">
-                <span className="flex items-center gap-1">
-                  <Clock size={11} /> 首稿约 {t.est}
-                </span>
+              <div className="mt-2 flex items-center justify-end text-[11px]">
                 <Link
                   to="/studio"
                   className="flex items-center gap-1 text-brand transition hover:text-white"
                 >
-                  <Sparkles size={11} /> 加载到 Studio
+                  <Sparkles size={11} /> 进入 Studio
                 </Link>
               </div>
             </motion.article>

@@ -38,7 +38,7 @@ export default function Hero() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link to="/studio" className="btn-light">
               <Sparkles size={14} />
-              免费开始创作
+              进入画布体验
               <ArrowRight size={14} />
             </Link>
             <Link to="/templates" className="btn-ghost">

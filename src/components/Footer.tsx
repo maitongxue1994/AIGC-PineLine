@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Github, Twitter, Youtube, Linkedin } from 'lucide-react'
 import Logo from './Logo'
+import { CONTACT } from '../siteConfig'
 
 const COLS = [
   {
@@ -13,30 +13,19 @@ const COLS = [
     ],
   },
   {
-    title: '管线',
+    title: '能力',
     links: [
       { label: '剧本到分镜', to: '/studio' },
       { label: '多模型视频生成', to: '/studio' },
-      { label: '虚拟演员 / 数字人', to: '/studio' },
-      { label: '镜头剪辑与声效', to: '/studio' },
+      { label: '角色/场景一致性', to: '/studio' },
+      { label: '分镜一键成片', to: '/studio' },
     ],
   },
   {
-    title: '资源',
+    title: '条款',
     links: [
-      { label: '更新日志', to: '/' },
-      { label: '教程与指南', to: '/' },
-      { label: 'API 文档', to: '/' },
-      { label: '创作者社区', to: '/' },
-    ],
-  },
-  {
-    title: '公司',
-    links: [
-      { label: '关于 PineLine', to: '/' },
-      { label: '合作伙伴', to: '/' },
-      { label: '加入我们', to: '/' },
-      { label: '联系商务', to: '/' },
+      { label: '服务条款', to: '/terms' },
+      { label: '隐私政策', to: '/privacy' },
     ],
   },
 ]
@@ -45,24 +34,19 @@ export default function Footer() {
   return (
     <footer className="relative mt-24 border-t border-white/[0.06] bg-bg-0">
       <div className="container-x py-16">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(4,1fr)]">
+        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
           <div>
             <Logo />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink-2">
-              PineLine 是面向专业影视与品牌创意的 AIGC 创作管线。从一段文本到一条成片，
-              由 AI 自动贯通分镜、角色、镜头、生成、剪辑、调色与声效。
+              PineLine 是节点画布式 AIGC 视频创作管线：从剧本到分镜、分镜图、镜头视频，
+              连线即上游产出自动喂下游，一键搭建完整生成链。
             </p>
-            <div className="mt-5 flex gap-2">
-              {[Github, Twitter, Youtube, Linkedin].map((Icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  className="rounded-full border border-white/10 p-2 text-ink-1 transition hover:border-white/25 hover:text-white"
-                >
-                  <Icon size={16} />
-                </a>
-              ))}
-            </div>
+            <a
+              href={`mailto:${CONTACT.email}`}
+              className="mt-5 inline-block text-sm text-ink-1 transition hover:text-white"
+            >
+              {CONTACT.email}
+            </a>
           </div>
           {COLS.map((col) => (
             <div key={col.title}>
@@ -90,9 +74,8 @@ export default function Footer() {
         <div className="flex flex-col items-start justify-between gap-3 text-xs text-ink-2 md:flex-row md:items-center">
           <div>© {new Date().getFullYear()} PineLine Studio. All rights reserved.</div>
           <div className="flex flex-wrap items-center gap-4">
-            <span>隐私政策</span>
-            <span>服务条款</span>
-            <span>内容合规</span>
+            <Link to="/privacy" className="transition hover:text-white">隐私政策</Link>
+            <Link to="/terms" className="transition hover:text-white">服务条款</Link>
             <span className="text-ink-3">v0.1 · Cinematic Pipeline</span>
           </div>
         </div>
