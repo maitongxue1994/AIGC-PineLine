@@ -19,6 +19,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useStudioStore } from '../../store'
+import { readFileAsDataUrl } from '../../mediaUpload'
 import { estimateCost, VIDEO_MODELS, VIDEO_PROMPT_MAX_CHARS } from '../../nodeCatalog'
 import { SHADOWS, TOKENS } from '../../designTokens'
 import { Chip, CopyButton, Popover, SyncTextarea, VDivider } from '../composerKit'
@@ -44,14 +45,6 @@ type OmniField = (typeof OMNI_KINDS)[number]['field']
 
 /** data URL 的近似字节数（base64 段 × 3/4） */
 const dataUrlBytes = (u: string) => Math.ceil((u.length - (u.indexOf(',') + 1)) * 0.75)
-
-const readFileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('read'))
-    reader.readAsDataURL(file)
-  })
 
 /** 读取图片像素尺寸（官方要求宽高 (300,6000)px、宽高比 (0.4,2.5)） */
 const loadImageSize = (url: string) =>

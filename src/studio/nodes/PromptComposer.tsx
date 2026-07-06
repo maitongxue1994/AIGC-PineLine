@@ -16,6 +16,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useStudioStore } from '../store'
+import { flashUploadSkipped, readFilesAsDataUrls } from '../mediaUpload'
 import {
   estimateCost,
   IMAGE_MODELS,
@@ -114,13 +115,12 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
     focusNode(id)
   }
 
-  const handleAddRef = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleAddRef = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ''
-    if (!file || !file.type.startsWith('image/')) return
-    const reader = new FileReader()
-    reader.onload = () => attachRef(String(reader.result ?? ''))
-    reader.readAsDataURL(file)
+    const { items, skipped } = await readFilesAsDataUrls(files, { accept: 'image/', max: 1, maxMB: 8 })
+    if (items[0]) attachRef(items[0].dataUrl)
+    flashUploadSkipped(skipped)
   }
 
   const toneLabel: Record<string, string> = {

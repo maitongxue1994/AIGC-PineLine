@@ -10,6 +10,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useStudioStore } from './store'
+import { flashUploadSkipped, readFilesAsDataUrls } from './mediaUpload'
 import { attachSourceVideoAsOmniRef } from './nodes/videoRefs'
 import { useUIStore } from './uiStore'
 import { useAgentStore } from './agent/agentStore'
@@ -302,47 +303,30 @@ export default function StudioCanvas() {
   }, [])
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       // 无条件 preventDefault：拖入其他类型文件时浏览器默认会导航打开该文件
       if (e.dataTransfer.types.includes('Files')) e.preventDefault()
       const all = Array.from(e.dataTransfer.files)
-      // 视频文件 → 视频节点（≤64MB）
-      const videos = all.filter((f) => f.type.startsWith('video/'))
-      videos.slice(0, 2).forEach((file, i) => {
-        if (file.size > 64 * 1024 * 1024) {
-          flash(`「${file.name}」超过 64MB，已跳过`)
-          return
-        }
-        const reader = new FileReader()
-        reader.onload = () => {
-          const pt = avoidMiniMap(e.clientX + i * 48, e.clientY + i * 48)
-          addVideoNode(String(reader.result ?? ''), screenToFlowPosition(pt))
-        }
-        reader.readAsDataURL(file)
-      })
-      const files = all.filter((f) => f.type.startsWith('image/'))
-      if (!files.length) {
-        if (all.length && !videos.length) flash('仅支持拖入图片或视频文件')
-        return
-      }
-
-      if (files.length > MAX_DROP_FILES) {
-        flash(`一次最多拖入 ${MAX_DROP_FILES} 张图片，已取前 ${MAX_DROP_FILES} 张`)
-      }
       const base = { x: e.clientX, y: e.clientY }
-      files.slice(0, MAX_DROP_FILES).forEach((file, i) => {
-        if (file.size > MAX_DROP_BYTES) {
-          flash(`「${file.name}」超过 8MB，已跳过`)
-          return
-        }
-        const reader = new FileReader()
-        reader.onload = () => {
-          const pt = avoidMiniMap(base.x + i * 48, base.y + i * 48)
-          addAssetNode(String(reader.result ?? ''), screenToFlowPosition(pt))
-        }
-        reader.onerror = () => flash(`读取「${file.name}」失败`)
-        reader.readAsDataURL(file)
+      // 视频 → 视频节点（≤64MB）；图片 → 素材节点（≤8MB）
+      const videos = await readFilesAsDataUrls(all, { accept: 'video/', max: 2, maxMB: 64 })
+      videos.items.forEach(({ dataUrl }, i) => {
+        const pt = avoidMiniMap(base.x + i * 48, base.y + i * 48)
+        addVideoNode(dataUrl, screenToFlowPosition(pt))
       })
+      const images = await readFilesAsDataUrls(all, {
+        accept: 'image/',
+        max: MAX_DROP_FILES,
+        maxMB: MAX_DROP_BYTES / (1024 * 1024),
+      })
+      images.items.forEach(({ dataUrl }, i) => {
+        const pt = avoidMiniMap(base.x + i * 48, base.y + i * 48)
+        addAssetNode(dataUrl, screenToFlowPosition(pt))
+      })
+      flashUploadSkipped([...videos.skipped, ...images.skipped])
+      if (all.length && !videos.items.length && !images.items.length && !videos.skipped.length && !images.skipped.length) {
+        flash('仅支持拖入图片或视频文件')
+      }
     },
     [addAssetNode, addVideoNode, flash, screenToFlowPosition, avoidMiniMap],
   )

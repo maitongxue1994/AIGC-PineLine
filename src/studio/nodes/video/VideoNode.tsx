@@ -15,6 +15,7 @@ import {
 import { activeContent, isVideoContent, type PineNode } from '../../types'
 import { TOKENS } from '../../designTokens'
 import { useStudioStore } from '../../store'
+import { flashUploadSkipped, readFilesAsDataUrls } from '../../mediaUpload'
 import NodeShell from '../NodeShell'
 import VideoToolbarBar from './VideoToolbarBar'
 import VideoPromptBar from './VideoPromptBar'
@@ -117,19 +118,12 @@ function VideoNodeInner({ id, data, selected }: NodeProps<PineNode>) {
     setTime(v.currentTime)
   }
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ''
-    if (!file || !file.type.startsWith('video/')) return
-    if (file.size > 64 * 1024 * 1024) {
-      window.dispatchEvent(new CustomEvent('pineline:flash', { detail: '视频超过 64MB，暂不支持' }))
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => {
-      addVideoNodeContent(id, String(reader.result ?? ''))
-    }
-    reader.readAsDataURL(file)
+    const { items, skipped } = await readFilesAsDataUrls(files, { accept: 'video/', max: 1, maxMB: 64 })
+    if (items[0]) addVideoNodeContent(id, items[0].dataUrl)
+    flashUploadSkipped(skipped)
   }
 
   const effDuration = trim ? Math.min(clampEnd, duration) - clampStart : duration

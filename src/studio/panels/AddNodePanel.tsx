@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useStudioStore } from '../store'
 import { useUIStore } from '../uiStore'
+import { flashUploadSkipped, readFilesAsDataUrls } from '../mediaUpload'
 import { SHADOWS, TOKENS } from '../designTokens'
 import type { NodeKind, NodePreset } from '../types'
 
@@ -62,18 +63,16 @@ export default function AddNodePanel() {
   const centerPos = () =>
     screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'))
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ''
-    files.slice(0, 4).forEach((file, i) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const c = centerPos()
-        addAssetNode(String(reader.result ?? ''), { x: c.x + i * 48, y: c.y + i * 48 })
-      }
-      reader.readAsDataURL(file)
-    })
     setActivePanel(null)
+    const { items, skipped } = await readFilesAsDataUrls(files, { accept: 'image/', max: 4, maxMB: 8 })
+    items.forEach(({ dataUrl }, i) => {
+      const c = centerPos()
+      addAssetNode(dataUrl, { x: c.x + i * 48, y: c.y + i * 48 })
+    })
+    flashUploadSkipped(skipped)
   }
 
   return (

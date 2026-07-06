@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import {
   addFolder,
+  inferAssetType,
   isPersistent,
   listAssets,
   listFolders,
@@ -21,6 +22,7 @@ import {
   type LibraryAsset,
   type LibraryFolder,
 } from '../assetdb'
+import { flashUploadSkipped, readFilesAsDataUrls } from '../mediaUpload'
 import { useStudioStore } from '../store'
 import { useUIStore } from '../uiStore'
 import { SHADOWS, TOKENS } from '../designTokens'
@@ -67,21 +69,24 @@ export default function AssetLibraryPanel() {
     input.type = 'file'
     input.accept = 'image/*'
     input.multiple = true
-    input.onchange = () => {
-      const files = Array.from(input.files ?? []).filter((f) => f.type.startsWith('image/'))
-      files.slice(0, 8).forEach((file) => {
-        const reader = new FileReader()
-        reader.onload = async () => {
-          await saveAsset({
-            folderId,
-            name: file.name.replace(/\.[^.]+$/, ''),
-            dataUrl: String(reader.result ?? ''),
-            favorite: false,
-          })
-          reload()
-        }
-        reader.readAsDataURL(file)
+    input.onchange = async () => {
+      const { items, skipped } = await readFilesAsDataUrls(input.files, {
+        accept: 'image/',
+        max: 8,
+        maxMB: 8,
       })
+      for (const { file, dataUrl } of items) {
+        await saveAsset({
+          folderId,
+          name: file.name.replace(/\.[^.]+$/, ''),
+          dataUrl,
+          favorite: false,
+          // 上传进哪个文件夹即得哪类资产类型（角色/场景/道具/风格）
+          type: inferAssetType({ folderId }),
+        })
+      }
+      if (items.length) reload()
+      flashUploadSkipped(skipped)
     }
     input.click()
   }

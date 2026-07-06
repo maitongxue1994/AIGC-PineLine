@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ClipboardPaste, FilePlus2, Redo2, Undo2, Upload } from 'lucide-react'
 import { useStudioStore } from './store'
+import { flashUploadSkipped, readFilesAsDataUrls } from './mediaUpload'
 import { SHADOWS, TOKENS } from './designTokens'
 
 /**
@@ -41,17 +42,15 @@ export default function CanvasContextMenu({
     })
   }, [x, y])
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'))
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
     e.target.value = ''
-    files.slice(0, 4).forEach((file, i) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        addAssetNode(String(reader.result ?? ''), { x: flowPos.x + i * 48, y: flowPos.y + i * 48 })
-      }
-      reader.readAsDataURL(file)
-    })
     onClose()
+    const { items, skipped } = await readFilesAsDataUrls(files, { accept: 'image/', max: 4, maxMB: 8 })
+    items.forEach(({ dataUrl }, i) =>
+      addAssetNode(dataUrl, { x: flowPos.x + i * 48, y: flowPos.y + i * 48 }),
+    )
+    flashUploadSkipped(skipped)
   }
 
   const item =
