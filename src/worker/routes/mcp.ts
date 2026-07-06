@@ -24,7 +24,7 @@ const TOOLS = [
   {
     name: 'apply_ops',
     description:
-      '批量执行画布操作（add_node/set_prompt/set_params/connect/run/derive_shot_images/derive_shot_videos/remember 等，单批 ≤48 条）。搭「剧本→分镜→分镜图→视频」管线时优先用 derive 派生 op。ops schema 详见部署站 /skills/pineline/references/ops.md',
+      '批量执行画布操作（add_node/set_prompt/set_params/connect/run/derive_shot_images/derive_shot_videos/remember 等，单批 ≤48 条）。搭「剧本→分镜→分镜图→视频」管线时优先用 derive 派生 op。ops schema 详见部署站 /assets/skills/pineline/references/ops.md',
     inputSchema: {
       type: 'object',
       properties: {

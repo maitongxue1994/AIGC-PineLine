@@ -108,7 +108,7 @@ export default function BridgeDialog({ onClose }: { onClose: () => void }) {
             </div>
             <p className="text-[11.5px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
               会话码即凭证，断开后立即失效，请勿写入持久配置分享。保持本页面打开；
-              外部工具文档见 /skills/pineline/SKILL.md
+              外部工具文档见 /assets/skills/pineline/SKILL.md
             </p>
             <button
               onClick={disconnect}

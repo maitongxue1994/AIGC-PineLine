@@ -18,7 +18,7 @@ Vite 5 + React 18 + TS 5 + Tailwind 3 + zustand v5(persist) + @xyflow/react v12�
 
 - **Worker 零 npm 依赖（硬约束）**：deploy 分支**没有 package.json**，Cloudflare 直接 bundle `src/worker/` 的 TS——任何 npm 包都进不了 Worker（MCP 处理器因此是手写 JSON-RPC）。
 - **wrangler.jsonc 双分支独立**：sync-deploy 不同步 wrangler.jsonc（两分支 assets.directory 不同）；改 DO binding / run_worker_first 等配置需**分别提交 main 与 deploy/cloudflare**。改 deploy 分支配置前确认 worker 代码已同步过去（否则 DO class 不存在会构建失败）。
-- sync-deploy 同步范围：`dist/assets/*` + `index.html` + `favicon.svg` + `dist/skills/`（Agent Skill 文档包）+ `src/worker/`。
+- sync-deploy 同步范围：`dist/assets/*` + `index.html` + `favicon.svg` + `src/worker/`。
 
 ## 架构要点
 
@@ -50,7 +50,7 @@ Vite 5 + React 18 + TS 5 + Tailwind 3 + zustand v5(persist) + @xyflow/react v12�
 
 ### 隐藏开关与开放生态
 - 管理员模式：`?admin=1` 开 / `?admin=0` 关（localStorage 持久，dev 恒开）——历史面板「日志」tab 只对管理员显示（`src/studio/adminMode.ts`）。
-- Agent Skill 文档包：`public/skills/pineline/`（SKILL.md + 工程 JSON schema / ops / MCP 文档），线上 `/skills/pineline/SKILL.md` 可被外部 agent fetch。
+- Agent Skill 文档包：`public/assets/skills/pineline/`（SKILL.md + 工程 JSON schema / ops / MCP 文档），线上 `/assets/skills/pineline/SKILL.md` 可被外部 agent fetch。
 - 用户记忆：IndexedDB `memory` 库（DB v4，LRU 100），助手 remember op 沉淀 + 记忆管理对话框（可导入 MEMORY.md）；每轮注入「用户长期记忆」。
 
 ## 文档
