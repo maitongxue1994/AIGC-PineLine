@@ -35,6 +35,7 @@ import {
 } from './nodeCatalog'
 import { migrateGraph, migrateLegacyEdge } from './migrate'
 import { buildVideoPrompt, resolveGenerateAudio } from './videoPrompt'
+import { rememberTaskLabel } from './taskLabels'
 import { appendHistory, getProject, isPersistent, putProject } from './assetdb'
 import {
   activeContent,
@@ -495,18 +496,46 @@ async function pollVideoTask(
   }
 }
 
+/**
+ * 视频「下单阶段」并发闸（只限创建任务，不限轮询）：批量成片时 30 个节点同时下单
+ * 会把方舟瞬时并发打满、部分请求 60s 超时报错（任务其实已创建）。限制同时在飞的
+ * 下单请求数，拿到 taskId 立刻放行进入轮询——轮询是长任务，不占闸，30 个可同时轮。
+ */
+function makeGate(max: number) {
+  let active = 0
+  const queue: (() => void)[] = []
+  return async function run<T>(fn: () => Promise<T>): Promise<T> {
+    if (active >= max) await new Promise<void>((r) => queue.push(r))
+    active++
+    try {
+      return await fn()
+    } finally {
+      active--
+      queue.shift()?.()
+    }
+  }
+}
+const videoCreateGate = makeGate(4)
+
 /** 单条视频任务全流程；失败返回带 error 的空版本（多倍数时部分成功可用） */
 async function runOneVideoTask(
   provider: string,
   req: Parameters<typeof createVideoTask>[0],
   onTick?: (elapsedMs: number) => void,
+  label?: string,
 ): Promise<NodeVersion> {
   try {
-    const { taskId } = await createVideoTask(req)
+    // 下单限流：拿到 taskId 后立刻出闸，轮询不占并发
+    const { taskId } = await videoCreateGate(() => createVideoTask(req))
+    if (label) rememberTaskLabel(taskId, label, Date.now())
     return await pollVideoTask(provider, taskId, videoPollTimeoutMs(req), onTick)
   } catch (err) {
-    // 创建任务即失败：无任务可续查
-    return newVersion(null, undefined, err instanceof Error ? err.message : String(err))
+    // 创建任务即失败：无任务可续查。下单超时特判——任务可能已在云端创建，引导用户去找回
+    const msg = err instanceof Error ? err.message : String(err)
+    const friendly = /未响应|超时|timeout|abort/i.test(msg)
+      ? '下单超时：任务可能已在云端创建，请用「云端任务找回」取回，避免重复生成扣费'
+      : msg
+    return newVersion(null, undefined, friendly)
   }
 }
 
@@ -1430,8 +1459,12 @@ export const useStudioStore = create<StudioState>()(
               }
               // 倍数条数并行生成，全部落定后统一入版本（部分失败保留成功条目）
               const count = params.videoMultiplier ?? 1
+              // 云端任务找回辨认用：节点标题 · 提示词摘要
+              const taskLabel = `${node.data.title} · ${prompt.slice(0, 40)}`.trim()
               const results = await Promise.all(
-                Array.from({ length: count }, () => runOneVideoTask(model.provider, req, onTick)),
+                Array.from({ length: count }, () =>
+                  runOneVideoTask(model.provider, req, onTick, taskLabel),
+                ),
               )
               const okIndex = results.findIndex((v) => !!v.content)
               if (okIndex < 0) {

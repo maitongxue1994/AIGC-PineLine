@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { CloudDownload, Loader2, RefreshCw, X } from 'lucide-react'
 import { listVideoTasks } from '../api'
 import { useStudioStore } from '../store'
+import { getTaskLabel } from '../taskLabels'
 import { SHADOWS, TOKENS } from '../designTokens'
 import type { CloudVideoTask } from '../types'
 
@@ -155,12 +156,16 @@ function TaskListBody({ onRecover }: { onRecover: (t: CloudVideoTask) => void })
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px]" style={{ color: TOKENS.textBody }}>
-                {[t.resolution, t.ratio, t.duration ? `${t.duration}s` : '']
-                  .filter(Boolean)
-                  .join(' · ') || t.model}
+                {/* 本地记下的节点标签优先（辨认哪个镜头），否则退回规格 */}
+                {getTaskLabel(t.id) ||
+                  [t.resolution, t.ratio, t.duration ? `${t.duration}s` : '']
+                    .filter(Boolean)
+                    .join(' · ') ||
+                  t.model}
               </span>
               <span className="block truncate text-[11px]" style={{ color: TOKENS.textFaint }}>
-                {fmtTime(t.createdAt)} · {t.model} · {t.id}
+                {[t.resolution, t.ratio, t.duration ? `${t.duration}s` : ''].filter(Boolean).join(' · ')} ·{' '}
+                {fmtTime(t.createdAt)} · {t.id}
                 {t.error ? ` · ${t.error}` : ''}
               </span>
             </span>
