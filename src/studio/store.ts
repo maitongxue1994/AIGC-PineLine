@@ -39,6 +39,7 @@ import { appendHistory, getProject, isPersistent, putProject } from './assetdb'
 import {
   activeContent,
   isImageContent,
+  type ImageQuality,
   type NodeKind,
   type NodeParams,
   type NodePreset,
@@ -175,13 +176,16 @@ type StudioState = {
   deriveShotImageNodes: (
     storyboardId: string,
     indices: number[],
-    opts?: { imageModel?: string },
+    opts?: { imageModel?: string; quality?: ImageQuality },
   ) => Promise<string[]>
   /**
    * 一键生成全部分镜图：对已派生的下游分镜图节点，缺提示词的先补生图提示词，
    * 然后整批运行（全部派生完成后的主入口，替代重复派生）。
    */
-  generateAllShotImages: (storyboardId: string, opts?: { imageModel?: string }) => Promise<void>
+  generateAllShotImages: (
+    storyboardId: string,
+    opts?: { imageModel?: string; quality?: ImageQuality },
+  ) => Promise<void>
   /**
    * 分镜→一键成片：为每个已派生分镜图建下游视频节点（已有视频的跳过），
    * 按 Seedance 官方公式预填提示词（含音色/纯净约束）并连线；
@@ -1742,6 +1746,7 @@ export const useStudioStore = create<StudioState>()(
                 params: {
                   shotIndex: shotIdx,
                   ...(opts?.imageModel ? { imageModel: opts.imageModel } : {}),
+                  ...(opts?.quality ? { quality: opts.quality } : {}),
                 },
               },
             )
@@ -1840,10 +1845,13 @@ export const useStudioStore = create<StudioState>()(
               }),
             )
           }
-          // 面板选了生图模型：批量覆盖所有派生节点的 imageModel 再开跑
-          if (opts?.imageModel) {
+          // 面板选了生图模型/分辨率：批量覆盖所有派生节点参数再开跑
+          if (opts?.imageModel || opts?.quality) {
             for (const n of derived) {
-              get().updateNodeParams(n.id, { imageModel: opts.imageModel })
+              get().updateNodeParams(n.id, {
+                ...(opts.imageModel ? { imageModel: opts.imageModel } : {}),
+                ...(opts.quality ? { quality: opts.quality } : {}),
+              })
             }
           }
           flash(`开始生成 ${derived.length} 张分镜图…`)

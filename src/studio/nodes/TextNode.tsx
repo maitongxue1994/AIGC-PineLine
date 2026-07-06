@@ -17,6 +17,7 @@ import {
   activeContent,
   isImageContent,
   isVideoContent,
+  type ImageQuality,
   type PineNode,
   type PineNodeData,
   type ShotItem,
@@ -123,6 +124,8 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
   const [busy, setBusy] = useState(false)
   // 批量生图模型（undefined = 各节点默认 Gemini）；用户实测要求派生/批量生成可选模型
   const [imageModel, setImageModel] = useState<string | undefined>(undefined)
+  // 批量生图分辨率（undefined = 各节点默认/自适应）
+  const [imageQuality, setImageQuality] = useState<ImageQuality | undefined>(undefined)
 
   const openPanel = () => {
     setChecked(new Set(undived))
@@ -142,7 +145,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
     if (busy || !toDerive.length) return
     setBusy(true)
     try {
-      await deriveShotImageNodes(id, toDerive.sort((a, b) => a - b), { imageModel })
+      await deriveShotImageNodes(id, toDerive.sort((a, b) => a - b), { imageModel, quality: imageQuality })
       setOpen(false)
     } finally {
       setBusy(false)
@@ -153,7 +156,7 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
     if (busy || pipelineRunning) return
     setBusy(true)
     try {
-      await generateAllShotImages(id, { imageModel })
+      await generateAllShotImages(id, { imageModel, quality: imageQuality })
     } finally {
       setBusy(false)
     }
@@ -186,6 +189,31 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
             </button>
           )
         })}
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="shrink-0 text-[10px]" style={{ color: TOKENS.textFaint }}>
+          分辨率
+        </span>
+        {(['1K', '2K', '4K'] as const).map((q) => {
+          const active = imageQuality === q
+          return (
+            <button
+              key={q}
+              onClick={() => setImageQuality(active ? undefined : q)}
+              title={active ? '再点一次恢复默认（自适应）' : `按 ${q} 生成`}
+              className="rounded-full px-2 py-0.5 text-[10px] transition"
+              style={{
+                background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+                color: active ? '#F5F5F7' : TOKENS.textMuted,
+              }}
+            >
+              {q}
+            </button>
+          )
+        })}
+        <span className="text-[10px]" style={{ color: TOKENS.textFaint }}>
+          默认自适应
+        </span>
       </div>
       <div className="text-[10px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
         画面含人物且要生成 Seedance 视频时建议选 Seedream（Seedance 2.0 不接受疑似真人人脸的参考图）
