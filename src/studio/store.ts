@@ -2015,15 +2015,22 @@ export const useStudioStore = create<StudioState>()(
             return []
           }
 
+          // 分镜 shots 用于按节奏估算每镜时长（有长有短）
+          const sbShots = s.nodes.find((n) => n.id === storyboardId)?.data.shots ?? []
           const ids: string[] = []
           for (const img of pending) {
+            const shotIdx = img.data.params.shotIndex!
+            const shotText = sbShots[shotIdx]?.description || img.data.prompt || ''
             const id = get().addNode(
               'video',
               null,
               { x: img.position.x + 460, y: img.position.y },
               {
-                title: `镜头视频 ${img.data.params.shotIndex! + 1}`,
-                ...(opts?.videoModel ? { params: { videoModel: opts.videoModel } } : {}),
+                title: `镜头视频 ${shotIdx + 1}`,
+                params: {
+                  videoDuration: estimateShotDuration(shotText),
+                  ...(opts?.videoModel ? { videoModel: opts.videoModel } : {}),
+                },
               },
             )
             get().onConnect({ source: img.id, sourceHandle: null, target: id, targetHandle: null })
@@ -2499,6 +2506,26 @@ type VideoUpstreamContext = {
 
 const entityKindZh = (p: string | null): string =>
   p === 'char-triview' ? '角色' : p === 'scene-grid' ? '场景' : p === 'prop-triview' ? '道具' : '素材'
+
+/**
+ * 按镜头节奏估算视频时长（Seedance 2.0 支持 4-15s）。官方建议：4-5s 单动作、
+ * 6-10s 2-3 镜、10-15s 复杂叙事。据镜头描述的信息量（字数 + 动作/运镜密度）分档，
+ * 让不同镜头有长有短、贴合内容节奏，而非全部固定 5s。
+ */
+function estimateShotDuration(text: string): number {
+  const t = (text || '').trim()
+  const len = t.length
+  const actions = (
+    t.match(
+      /走|跑|转身|回头|抬|推|拉|挥|跳|坐下|站起|说|讲|看向|指向|拿起|放下|打开|关上|迈出|递|碰|转向|走近|走出|奔|冲|飞|落|升起|降下|环视|扫视/g,
+    ) || []
+  ).length
+  let d = 5
+  if (len > 55 || actions >= 3) d = 8
+  if (len > 95 || actions >= 5) d = 10
+  if (len > 140 || actions >= 7) d = 12
+  return Math.max(4, Math.min(15, d))
+}
 
 /**
  * 视频节点上游语境：沿边上溯 视频 ← 分镜图(shot) ← (分镜 + 角色/场景/道具实体)。
