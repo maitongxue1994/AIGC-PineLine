@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Cable, Download, MoreHorizontal, RotateCcw, Share2, Sparkles, Upload, Zap } from 'lucide-react'
+import { Cable, Download, FileText, MoreHorizontal, Package, RotateCcw, Share2, Sparkles, Upload, Zap } from 'lucide-react'
 import { useStudioStore } from './store'
 import { useBridgeStore } from './bridge/bridgeStore'
 import BridgeDialog from './dialogs/BridgeDialog'
 import { fetchAccount } from './api'
+import { exportDeliveryZip, exportReportOnly } from './exportZip'
 import { getAccessCode, requestAccessCode } from './accessCode'
 import { TOKENS } from './designTokens'
 import { useDismissable } from './hooks/useDismissable'
@@ -267,6 +268,28 @@ function MoreMenu() {
               style={{ color: TOKENS.textBody }}
             >
               <Sparkles size={15} /> {pipelineRunning ? '管线运行中…' : '运行整条管线'}
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false)
+                const s = useStudioStore.getState()
+                void exportDeliveryZip(s.projectName, s.nodes)
+              }}
+              className={item}
+              style={{ color: TOKENS.textBody }}
+            >
+              <Package size={15} /> 导出交付包（zip）
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false)
+                const s = useStudioStore.getState()
+                void exportReportOnly(s.projectName, s.nodes)
+              }}
+              className={item}
+              style={{ color: TOKENS.textBody }}
+            >
+              <FileText size={15} /> 导出创作报告
             </button>
             <button onClick={() => { setOpen(false); handleExport() }} className={item} style={{ color: TOKENS.textBody }}>
               <Download size={15} /> 导出工程 JSON
