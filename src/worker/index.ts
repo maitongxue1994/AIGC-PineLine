@@ -9,6 +9,7 @@ import videoFile from './routes/videoFile'
 import videoTasks from './routes/videoTasks'
 import debugLogs from './routes/debugLogs'
 import { handleBridgeWs, handleMcp } from './routes/mcp'
+import { deliveryError, deliveryUpload, deliveryView } from './routes/delivery'
 import {
   assertAccess,
   assertBodySize,
@@ -43,6 +44,8 @@ export interface Env extends CoreEnv {
   CANVAS_BRIDGE: DurableObjectNamespace
   /** 积分账本 DO（每访问码一实例，预扣制计费） */
   CREDIT_LEDGER: DurableObjectNamespace
+  /** 客户交付页 R2 桶（可选；未配置时交付上传返回 501） */
+  DELIVERY_BUCKET?: R2Bucket
 }
 
 // Durable Object 类导出（wrangler durable_objects.bindings 引用）
@@ -107,6 +110,20 @@ export default {
     // 浏览器侧桥接入（WebSocket Upgrade，同源页面发起）
     if (url.pathname === '/api/bridge/ws') {
       return handleBridgeWs(req, env, url)
+    }
+
+    // 客户交付页：/d/<token> 公开观看（GET）；/api/delivery/upload 管理员上传（POST）
+    if (url.pathname.startsWith('/d/') && req.method === 'GET') {
+      return deliveryView(req, env, url)
+    }
+    if (url.pathname === '/api/delivery/upload' && req.method === 'POST') {
+      try {
+        assertOrigin(req, env)
+        assertBodySize(req, 120 * 1024 * 1024)
+        return await deliveryUpload(req, env)
+      } catch (err) {
+        return deliveryError(err)
+      }
     }
 
     // 积分账户：余额与流水（需访问码；admin 码不记账返回 admin 标记）

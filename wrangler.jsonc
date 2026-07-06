@@ -7,7 +7,7 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/mcp/*"]
+    "run_worker_first": ["/api/*", "/mcp/*", "/d/*"]
   },
   // 画布桥（外部 Agent MCP ↔ 浏览器 WebSocket 中继）+ 积分账本（预扣制计费）；
   // 免费计划要求 SQLite-backed DO。deploy/cloudflare 分支的 wrangler.jsonc 独立维护，需同步等价配置。
@@ -21,6 +21,8 @@
     { "tag": "v1", "new_sqlite_classes": ["CanvasBridge"] },
     { "tag": "v2", "new_sqlite_classes": ["CreditLedger"] }
   ],
+  // 客户交付页 R2 桶（需先在 CF 控制台创建名为 pineline-delivery 的 R2 桶；双分支同步）。
+  "r2_buckets": [{ "binding": "DELIVERY_BUCKET", "bucket_name": "pineline-delivery" }],
   "observability": {
     "enabled": true
   }

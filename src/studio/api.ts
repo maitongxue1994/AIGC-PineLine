@@ -211,3 +211,23 @@ export type AccountInfo = {
 export function fetchAccount(): Promise<AccountInfo> {
   return postJson<Record<string, never>, AccountInfo>('/api/account', {})
 }
+
+// ---------------- 客户交付页（R2；仅管理员码可上传） ----------------
+
+/** 上传一个视频 dataURL 到交付桶，返回可分享的 /d/<token> 链接（相对） */
+export async function uploadDelivery(input: {
+  dataUrl: string
+  filename: string
+  contentType: string
+  expiresDays?: number
+  note?: string
+}): Promise<{ token: string; expiresAt: number; url: string }> {
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(12)))
+    .map((b) => (b % 36).toString(36))
+    .join('')
+  const res = await postJson<
+    { token: string } & typeof input,
+    { token: string; expiresAt: number }
+  >('/api/delivery/upload', { token, ...input })
+  return { ...res, url: `/d/${res.token}` }
+}

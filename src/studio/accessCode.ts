@@ -31,6 +31,11 @@ export function clearAccessCode(): void {
   }
 }
 
+/** 当前是否持管理员码（admin- 前缀）：决定是否显示交付上传等管理入口 */
+export function isAdminAccess(): boolean {
+  return getAccessCode().startsWith('admin-')
+}
+
 /** 生成请求遇到 403 ACCESS_REQUIRED 时派发，AccessCodeDialog 监听后弹出 */
 export function requestAccessCode(): void {
   window.dispatchEvent(new CustomEvent('pineline:access-required'))

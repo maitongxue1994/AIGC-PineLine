@@ -21,6 +21,8 @@ import { PIN_COLORS } from '../../nodeCatalog'
 import { SHADOWS, TOKENS } from '../../designTokens'
 import { downloadDataUrl } from '../shared'
 import { aiFileName } from '../../aigcMark'
+import { uploadDelivery } from '../../api'
+import { isAdminAccess } from '../../accessCode'
 import { TBtn, ToolbarDivider } from '../NodeToolbarBar'
 import { Popover } from '../composerKit'
 import SaveToLibraryDialog from '../../dialogs/SaveToLibraryDialog'
@@ -239,6 +241,32 @@ export default function VideoToolbarBar({
                 >
                   <CloudDownload size={17} /> 云端任务找回
                 </button>
+                {isAdminAccess() && hasVideo && (
+                  <button
+                    onClick={() => {
+                      setMenu(null)
+                      if (!output) return
+                      void uploadDelivery({
+                        dataUrl: output,
+                        filename: aiFileName(`${data.title}.mp4`),
+                        contentType: 'video/mp4',
+                        expiresDays: 30,
+                        note: data.title,
+                      })
+                        .then((r) => {
+                          const full = `${location.origin}${r.url}`
+                          void navigator.clipboard?.writeText(full)
+                          flash(`✓ 交付链接已生成并复制（有效期 30 天）：${full}`)
+                        })
+                        .catch((e) => flash(e instanceof Error ? e.message : '交付上传失败'))
+                    }}
+                    className={menuRow}
+                    style={{ color: TOKENS.textBody }}
+                    title="上传到 R2 生成客户可观看/下载的分享链接（管理员）"
+                  >
+                    <CloudDownload size={17} /> 生成客户交付链接
+                  </button>
+                )}
                 <div className="my-1.5 border-t border-white/[0.07]" />
                 <button
                   onClick={() => {
