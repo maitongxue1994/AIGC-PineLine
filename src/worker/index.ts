@@ -8,6 +8,7 @@ import videoStatus from './routes/videoStatus'
 import videoFile from './routes/videoFile'
 import videoTasks from './routes/videoTasks'
 import debugLogs from './routes/debugLogs'
+import { handleBridgeWs, handleMcp } from './routes/mcp'
 import {
   assertAuth,
   assertBodySize,
@@ -26,7 +27,14 @@ export interface Env extends CoreEnv {
   ARK_BASE_URL?: string
   DASHSCOPE_API_KEY?: string
   KLING_API_KEY?: string
+  /** 聊天联网搜索（MiniMax 通道，tavily.com）：缺失时联网开关返回 501 指引 */
+  TAVILY_API_KEY?: string
+  /** 画布桥 DO（外部 Agent MCP ↔ 浏览器 WebSocket 中继） */
+  CANVAS_BRIDGE: DurableObjectNamespace
 }
+
+// Durable Object 类导出（wrangler durable_objects.bindings 引用）
+export { CanvasBridge } from './bridge/CanvasBridgeDO'
 
 const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
   '/api/generate/script': generateScript,
@@ -49,6 +57,25 @@ function isApiPath(p: string): boolean {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
+
+    // MCP 桥（外部 agent 直连）：无浏览器 Origin，不做 assertOrigin/assertAuth——会话码即凭证
+    if (url.pathname.startsWith('/mcp/')) {
+      if (req.method !== 'POST') {
+        return jsonError('MCP 端点仅支持 POST（Streamable HTTP 单响应模式）', 405)
+      }
+      try {
+        assertBodySize(req)
+      } catch (err) {
+        if (err instanceof PineHttpError) return jsonError(err.message, err.status)
+        throw err
+      }
+      return handleMcp(req, env, url)
+    }
+    // 浏览器侧桥接入（WebSocket Upgrade，同源页面发起）
+    if (url.pathname === '/api/bridge/ws') {
+      return handleBridgeWs(req, env, url)
+    }
+
     const handler = ROUTES[url.pathname]
 
     if (handler) {

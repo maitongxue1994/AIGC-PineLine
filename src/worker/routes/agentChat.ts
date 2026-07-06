@@ -1,18 +1,26 @@
-import { callMinimaxChatFull, type ChatMessage } from '../minimax'
-import { callArkChat } from '../ark'
+import { callMinimaxChatFull, callMinimaxVisionChat, type ChatMessage, type ChatResult } from '../minimax'
+import { callArkChat, type ArkChatMessage } from '../ark'
+import { callArkResponsesSearch, type SearchCitation } from '../arkResponses'
+import { tavilySearch, WEB_SEARCH_TOOL } from '../tavily'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 import { sanitizeOps } from '../agentOps'
+import { PRODUCT_PROFILE } from '../prompts'
 
 /**
  * Agent 编排端点：多轮对话 → 回复文本 + 画布操作列表（JSON patch）+ 思考过程。
  * 前端把操作渲染成预览卡（手动确认）或直接执行（自动模式）。
+ * 附图消息走多模态通道：MiniMax 切 OpenAI 兼容端点 + M3（M2.7 无视觉），豆包原生 parts。
  */
 
 type Body = {
-  messages?: { role: 'user' | 'assistant'; content: string }[]
+  messages?: { role: 'user' | 'assistant'; content: string; images?: string[] }[]
   /** 聊天模型（前端 TEXT_MODELS 的 id）：缺省/minimax-m2.7 走 MiniMax，doubao-* 走方舟 */
   model?: string
+  /** 联网搜索开关 */
+  webSearch?: boolean
+  /** 用户长期记忆条目（前端 IndexedDB memory 库） */
+  memory?: string[]
   canvas?: {
     nodes?: {
       id: string
@@ -56,9 +64,12 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 - 连线 = 上游产出自动作为下游输入（文本喂文本、图作参考图、图作视频首帧）。节点 prompt 留空时自动用上游文本。
 
 ## 完整典型管线（用户要「完整管线/短片管线」时按此搭建）
-剧本(script) → 分镜(storyboard) → N 个分镜图(image/shot) → N 个视频(video)：
-- 每个分镜图节点必须用 params.shotIndex 绑定镜头下标（0 开始）：第 1 个分镜图 {"shotIndex":0}，第 2 个 {"shotIndex":1}……未指定镜头数时默认建 3 个分镜图。
-- 每个分镜图节点各连一个 video 节点（分镜图 → 视频），形成完整生成链。
+剧本(script) → 分镜(storyboard) → N 个分镜图(image/shot) → N 个视频(video)。
+- 首选派生 op（比手工 N×add_node+connect 更稳，坐标/绑定自动处理）：
+  - 分镜已生成（快照节点有 shots/status=done）时：{"op":"derive_shot_images","id":"<分镜节点id>"} 一条即派生全部分镜图并自动生成生图提示词（可选 "indices":[0,2] 只派生部分镜头）。
+  - 分镜图已出图后：{"op":"derive_shot_videos","id":"<分镜节点id>"} 一条即为每个分镜图挂视频节点并按官方公式预填提示词（加 "run":true 立即整批生成）。
+- 从零搭链（画布还没有剧本/分镜）时才手工 add_node：剧本、分镜两个节点 + connect，先 run 到分镜，后续再用派生 op。
+- 手工建分镜图时每个节点必须用 params.shotIndex 绑定镜头下标（0 开始）。
 - 全部建好后用一条 run 按依赖顺序运行整条链。
 
 ## 可用操作（ops）
@@ -67,7 +78,7 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 - {"op":"add_node","ref":"n6","kind":"video","title":"镜头视频 1","params":{"videoDuration":5},"position":{"x":1520,"y":80}}
 - {"op":"set_prompt","id":"<已有节点id或本轮ref>","prompt":"…"}
 - {"op":"set_params","id":"…","params":{…}}：修改节点参数（对已有节点 id 或本轮 ref 均可）。可用键：
-  - 文本节点：tone(cinematic/commercial/drama/documentary)、length(short/medium/long)；图片节点：aspectRatio("16:9" 等)、quality(1K/2K/4K)、batch(1-4)、shotIndex；视频节点：videoDuration(4-15)、videoResolution(480p/720p/1080p)、videoRatio、videoMode、videoAudio。
+  - 文本节点：tone(cinematic/commercial/drama/documentary)、length(short/medium/long)；分镜节点另有 voiceNarration(旁白音色串：性别+年龄+声音属性+语速+情绪基线)、voiceCast(角色音色表，每行「角色名：音色描述」)——用户提出配音/旁白/音色要求时设置，派生视频时自动注入保证音色一致；图片节点：aspectRatio("16:9" 等)、quality(1K/2K/4K)、batch(1-4)、shotIndex；视频节点：videoDuration(4-15)、videoResolution(480p/720p/1080p)、videoRatio、videoMode、videoAudio、videoNoSubtitles/videoNoBgm/videoNoSfx(纯净模式：去字幕/去背景音乐/去音效，用户嫌弃乱码字幕或配乐时开)。
   - 模型键（用户要求换模型时用，值必须原样取自枚举）：
     - textModel：minimax-m2.7(MiniMax M2.7，默认) / minimax-m3(MiniMax M3) / doubao-seed-2.0-pro(豆包 Seed 2.0 Pro) / doubao-seed-2.0-lite(豆包 Seed 2.0 Lite) / doubao-seed-evolving(豆包自进化)
     - imageModel：gemini-3.1-flash(Gemini 3.1 Flash，默认) / seedream-5.0(Seedream 5.0)
@@ -77,6 +88,9 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 - {"op":"delete_node","id":"…"}
 - {"op":"run","ids":["…"]}（按依赖顺序运行这些节点）
 - {"op":"clear_canvas"}（清空画布；前端执行前会向用户二次确认）
+- {"op":"derive_shot_images","id":"<分镜节点id>","indices":[0,1]}（分镜→批量派生分镜图，indices 省略 = 全部未派生镜头）
+- {"op":"derive_shot_videos","id":"<分镜节点id>","run":false}（分镜图→批量挂镜头视频并预填提示词；run:true 立即生成，涉及积分消耗请先确认用户意图）
+- {"op":"remember","content":"…"}（写入用户长期记忆：仅当用户表达了跨对话仍然有效的稳定信息——品牌/产品背景、风格与比例偏好、旁白音色、称呼习惯等；一次性指令不要记。记忆会出现在后续每轮的「用户长期记忆」里）
 
 ## 修改已有节点（含换模型）
 - 画布快照的每个节点带 params（当前模型/参数配置，缺省键 = 用默认模型/默认值）。
@@ -92,7 +106,9 @@ const SYSTEM_PROMPT = `你是 PineLine 画布助手——一个 AIGC 影视创�
 5. 需求不明确时 ops 留空 []，在 reply 里追问。
 6. 不确定的事不要编造；删除节点等破坏性操作要保守，用户明确要求才做。
 7. 用户要求「新建/重新生成一条管线」且画布快照非空时，ops 第一条必须是 {"op":"clear_canvas"}（避免新旧节点叠在一起），并在 reply 里说明会先清空画布；用户只是追加节点/修改现有管线时不要 clear_canvas。
-8. reply 简洁（1-3 句），说明你做了什么或要问什么。`
+8. reply 简洁（1-3 句），说明你做了什么或要问什么。
+
+${PRODUCT_PROFILE}`
 
 function stripFences(s: string): string {
   return s.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
@@ -134,6 +150,34 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
     }
     if (!arkModel && !env.MINIMAX_API_KEY) return jsonError('服务端未配置 MINIMAX_API_KEY', 500)
 
+    // 附图校验：仅 data:image/、单条 ≤4 张、总量 ≤8MB（body 上限 10MB 留文本余量）
+    let imgCount = 0
+    let imgBytes = 0
+    for (const m of history) {
+      if (!m.images?.length) continue
+      if (m.images.length > 4) return jsonError('单条消息最多附 4 张图片')
+      for (const u of m.images) {
+        if (typeof u !== 'string' || !u.startsWith('data:image/')) {
+          return jsonError('图片需为 data:image/ 开头的 dataURL')
+        }
+        imgBytes += Math.ceil((u.length - (u.indexOf(',') + 1)) * 0.75)
+        imgCount++
+      }
+    }
+    if (imgBytes > 8 * 1024 * 1024) return jsonError('图片总量超过 8MB，请减少或压缩后重试')
+    const hasImages = imgCount > 0
+    if (hasImages && !arkModel && body.model !== 'minimax-m3') {
+      return jsonError('MiniMax M2.7 不支持图片理解：请切换 MiniMax M3 或豆包模型', 400)
+    }
+
+    const wantSearch = body.webSearch === true
+    if (wantSearch && !arkModel && !env.TAVILY_API_KEY) {
+      return jsonError(
+        '联网搜索未接入：MiniMax 通道需配置 Worker secret TAVILY_API_KEY（tavily.com 免费注册），或切换豆包模型走方舟官方联网插件',
+        501,
+      )
+    }
+
     // 画布快照摘要（prompt 截断，不含图片数据；params 前端已挑模型/关键参数非空键）
     const nodes = (body.canvas?.nodes ?? []).slice(0, 60).map((n) => ({
       ...n,
@@ -143,35 +187,139 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
     const edges = (body.canvas?.edges ?? []).slice(0, 120)
     const selection = (body.selection ?? []).slice(0, 10)
 
+    // 用户长期记忆：条数/单条/总量三重截断后拼进上下文
+    const memLines: string[] = []
+    let memTotal = 0
+    for (const m of (body.memory ?? []).slice(0, 30)) {
+      const item = String(m).slice(0, 500)
+      if (!item.trim()) continue
+      if (memTotal + item.length > 4000) break
+      memTotal += item.length
+      memLines.push(`- ${item}`)
+    }
+
     // 节点每行一条紧凑 JSON（带 params），LLM 能看到各节点当前模型/参数
     const nodeLines = nodes.length ? nodes.map((n) => JSON.stringify(n)).join('\n') : '（空画布）'
     const contextMsg =
       `当前画布快照：\n节点（每行一个）：\n${nodeLines}\n连线：${JSON.stringify(edges)}\n` +
-      `选中节点：${JSON.stringify(selection)}`
+      `选中节点：${JSON.stringify(selection)}` +
+      (memLines.length
+        ? `\n\n用户长期记忆（跨对话保留的偏好与设定，创作时主动运用）：\n${memLines.join('\n')}`
+        : '')
 
     const messages: ChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: contextMsg },
       { role: 'assistant', content: '{"reply":"已了解当前画布状态。","ops":[]}' },
-      ...history.map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) })),
+      ...history.map((m): ChatMessage => {
+        const text = String(m.content).slice(0, 4000)
+        if (m.images?.length) {
+          return {
+            role: m.role,
+            content: [
+              { type: 'text', text },
+              ...m.images.map((url) => ({ type: 'image_url' as const, image_url: { url } })),
+            ],
+          }
+        }
+        return { role: m.role, content: text }
+      }),
     ]
 
     // 完整管线的 ops JSON 更长（剧本+分镜+N分镜图+N视频），3000 会截断
     const chatOpts = { temperature: 0.3, maxTokens: 4096 }
-    const { content: raw, reasoning } = arkModel
-      ? await callArkChat(arkModel, messages, env.ARK_API_KEY!, chatOpts)
-      : await callMinimaxChatFull(messages, env.MINIMAX_API_KEY, {
-          ...chatOpts,
-          model: body.model ? MINIMAX_CHAT_MODELS[body.model] : undefined,
+    let raw = ''
+    let reasoning: string | undefined
+    let citations: SearchCitation[] | undefined
+    let searchNote: string | undefined
+
+    if (arkModel) {
+      // 豆包通道：联网走 Responses API 内置 web_search（chat completions 无内置联网），
+      // 失败（插件未开通/模型不支持）降级普通 chat 并附说明。
+      // ark 通道不含 tool 角色消息，形状与 ArkChatMessage 兼容
+      const arkMessages = messages as unknown as ArkChatMessage[]
+      let answered = false
+      if (wantSearch) {
+        const sr = await callArkResponsesSearch(arkModel, arkMessages, env.ARK_API_KEY!, {
+          maxTokens: chatOpts.maxTokens,
         })
+        if (sr) {
+          raw = sr.content
+          reasoning = sr.reasoning
+          if (sr.citations.length) citations = sr.citations.slice(0, 5)
+          answered = true
+        } else {
+          searchNote = '方舟联网搜索暂不可用（插件未开通或模型不支持 Responses API），本次回答未联网'
+        }
+      }
+      if (!answered) {
+        const r = await callArkChat(arkModel, arkMessages, env.ARK_API_KEY!, chatOpts)
+        raw = r.content
+        reasoning = r.reasoning
+      }
+    } else {
+      // MiniMax 通道：附图走 OpenAI 兼容端点 + M3；联网走 Tavily function calling 循环
+      const mmOpts = hasImages
+        ? { ...chatOpts, model: 'MiniMax-M3' }
+        : { ...chatOpts, model: body.model ? MINIMAX_CHAT_MODELS[body.model] : undefined }
+      const callMM = (msgs: ChatMessage[], tools?: unknown[]) =>
+        hasImages
+          ? callMinimaxVisionChat(msgs, env.MINIMAX_API_KEY, { ...mmOpts, tools })
+          : callMinimaxChatFull(msgs, env.MINIMAX_API_KEY, { ...mmOpts, tools })
+      if (wantSearch) {
+        // ≤3 轮工具调用；最后一轮不带 tools，逼模型直接产出最终 JSON 回复
+        const loopMsgs = [...messages]
+        const cites: SearchCitation[] = []
+        let result: ChatResult | null = null
+        for (let round = 0; round < 4; round++) {
+          const r = await callMM(loopMsgs, round < 3 ? [WEB_SEARCH_TOOL] : undefined)
+          if (!r.toolCalls?.length) {
+            result = r
+            break
+          }
+          // 官方要求：含 thinking 的 assistant 消息原样回填历史（Interleaved Thinking）
+          loopMsgs.push(r.message)
+          for (const tc of r.toolCalls) {
+            let toolContent: string
+            try {
+              const args = JSON.parse(tc.function.arguments || '{}') as { query?: unknown }
+              const query = String(args.query ?? '').slice(0, 200)
+              const sr = await tavilySearch(query, env.TAVILY_API_KEY!)
+              for (const item of sr.results) {
+                if (item.url && cites.length < 8 && !cites.some((c) => c.url === item.url)) {
+                  cites.push({ title: item.title || item.url, url: item.url })
+                }
+              }
+              toolContent = JSON.stringify(sr).slice(0, 8000)
+            } catch (err) {
+              toolContent = JSON.stringify({
+                error: `搜索失败：${err instanceof Error ? err.message : String(err)}`,
+              })
+            }
+            loopMsgs.push({ role: 'tool', tool_call_id: tc.id, content: toolContent })
+          }
+        }
+        if (!result) return jsonError('MiniMax 联网回答失败，请重试', 502)
+        raw = result.content
+        reasoning = result.reasoning
+        if (cites.length) citations = cites.slice(0, 5)
+      } else {
+        const r = await callMM(messages)
+        raw = r.content
+        reasoning = r.reasoning
+      }
+    }
+
     const parsed = parseAgentJson(raw)
     const { ops, dropped } = sanitizeOps(parsed.ops)
-    const reply =
+    let reply =
       dropped > 0 ? `${parsed.reply}\n（有 ${dropped} 个无效操作已被忽略）` : parsed.reply
+    if (searchNote) reply += `\n\n（${searchNote}）`
 
     return jsonOk({
       reply,
       ops,
+      ...(citations?.length ? { citations } : {}),
       // M2.7 推理模型的思考过程，前端折叠展示
       ...(reasoning ? { thinking: reasoning.slice(0, 4000) } : {}),
     })
