@@ -1084,6 +1084,7 @@ export const useStudioStore = create<StudioState>()(
         duplicateNode: (id) => {
           const src = get().nodes.find((n) => n.id === id)
           if (!src) return null
+          const p = src.data.params
           const copy = buildNode(
             src.data.kind,
             src.data.preset,
@@ -1091,15 +1092,23 @@ export const useStudioStore = create<StudioState>()(
             {
               title: `${src.data.title} 副本`,
               prompt: src.data.prompt,
-              params: { ...src.data.params },
+              // 深拷贝嵌套数组/对象，否则副本与原节点共享同一引用，改一个动另一个（用户反馈）
+              params: {
+                ...p,
+                ...(p.omniRefs ? { omniRefs: [...p.omniRefs] } : {}),
+                ...(p.omniVideos ? { omniVideos: [...p.omniVideos] } : {}),
+                ...(p.omniAudios ? { omniAudios: [...p.omniAudios] } : {}),
+                ...(p.trim ? { trim: { ...p.trim } } : {}),
+                ...(p.enhance ? { enhance: { ...p.enhance } } : {}),
+              },
             },
           )
-          // 所有类型都保留产出（版本引用拷贝，无体积负担）：复制出的剧本/分镜/
-          // 图片不再是空白节点（用户实测反馈）；running 归位 idle
-          copy.data.versions = src.data.versions
+          // 保留产出，但**结构独立**：versions/shots 各建新数组 + 新元素对象（content 大
+          // base64 是不可变字符串，仍引用同一份，无体积翻倍）——杜绝编辑原节点牵连副本
+          copy.data.versions = src.data.versions.map((v) => ({ ...v }))
           copy.data.activeVersion = src.data.activeVersion
           copy.data.status = src.data.status === 'running' ? 'idle' : src.data.status
-          if (src.data.shots) copy.data.shots = src.data.shots
+          if (src.data.shots) copy.data.shots = src.data.shots.map((sh) => ({ ...sh }))
           // 副本接管 React Flow 选中态：原节点选中时 z=1000，若不转移选中，
           // 副本（z=0）会被原节点完全盖住，看起来像「没复制出来」
           copy.selected = true
