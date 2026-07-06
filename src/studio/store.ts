@@ -155,6 +155,8 @@ type StudioState = {
       label?: string
       extraRefs?: string[]
       composite?: (generated: string) => Promise<string>
+      /** 本次垫图临时用的图像模型（IMAGE_MODELS 的 id）；缺省沿用节点 params.imageModel */
+      model?: string
     },
   ) => Promise<void>
   pipelineRunning: boolean
@@ -1548,7 +1550,7 @@ export const useStudioStore = create<StudioState>()(
               referenceImages: [current, ...(opts?.extraRefs ?? [])].slice(0, 6),
               aspectRatio: node.data.params.aspectRatio,
               quality: node.data.params.quality,
-              model: resolveApiModel(IMAGE_MODELS, node.data.params.imageModel),
+              model: resolveApiModel(IMAGE_MODELS, opts?.model ?? node.data.params.imageModel),
             })
             const content = opts?.composite ? await opts.composite(res.image) : res.image
             const v = newVersion(content, opts?.label)

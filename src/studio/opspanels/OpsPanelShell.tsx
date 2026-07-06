@@ -1,6 +1,41 @@
 import type { ReactNode } from 'react'
 import { ArrowUp, Loader2, X, Zap } from 'lucide-react'
+import { IMAGE_MODELS } from '../nodeCatalog'
 import { SHADOWS, TOKENS } from '../designTokens'
+
+/**
+ * 垫图模型分段选择（nano banana 2 / seedream 5.0）：垫图（多角度/打光/摄影机/蒙版）
+ * 与首次生图可用不同模型；value=undefined 表示沿用节点当前模型。放在面板 headerExtra。
+ */
+export function EditModelPicker({
+  value,
+  onChange,
+}: {
+  value: string | undefined
+  onChange: (id: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.05)' }}>
+      {IMAGE_MODELS.map((m) => {
+        const active = value === m.id
+        return (
+          <button
+            key={m.id}
+            onClick={() => onChange(m.id)}
+            title={m.desc}
+            className="rounded-full px-2.5 py-1 text-[11px] transition"
+            style={{
+              background: active ? 'rgba(255,255,255,0.14)' : 'transparent',
+              color: active ? '#F5F5F7' : TOKENS.textMuted,
+            }}
+          >
+            {m.name}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 /**
  * 高级操作面板通用外壳（设计稿 §05）：

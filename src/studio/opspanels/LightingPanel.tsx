@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { RotateCcw, Sun, Thermometer } from 'lucide-react'
 import { useStudioStore } from '../store'
-import { estimateCost } from '../nodeCatalog'
+import { estimateCost, IMAGE_MODELS } from '../nodeCatalog'
 import { TOKENS } from '../designTokens'
 import type { PineNodeData } from '../types'
-import OpsPanelShell, { SliderRow, Toggle } from './OpsPanelShell'
+import OpsPanelShell, { EditModelPicker, SliderRow, Toggle } from './OpsPanelShell'
 
 type LightDir = 'left' | 'top' | 'right' | 'front' | 'bottom' | 'back'
 
@@ -30,6 +30,7 @@ export default function LightingPanel({
   onClose: () => void
 }) {
   const runImageEdit = useStudioStore((s) => s.runImageEdit)
+  const [editModel, setEditModel] = useState(data.params.imageModel ?? IMAGE_MODELS[0].id)
   const [dir, setDir] = useState<LightDir>('left')
   const [brightness, setBrightness] = useState(50)
   const [temp, setTemp] = useState(5600)
@@ -68,8 +69,9 @@ export default function LightingPanel({
       hint="拖动光球或选择主光源方向"
       cost={cost}
       running={running}
+      headerExtra={<EditModelPicker value={editModel} onChange={setEditModel} />}
       onSubmit={() => {
-        void runImageEdit(id, buildPrompt(), { label: '打光' })
+        void runImageEdit(id, buildPrompt(), { label: '打光', model: editModel })
         onClose()
       }}
       onClose={onClose}

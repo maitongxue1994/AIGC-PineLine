@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useStudioStore } from '../store'
-import { estimateCost } from '../nodeCatalog'
+import { estimateCost, IMAGE_MODELS } from '../nodeCatalog'
 import { TOKENS } from '../designTokens'
 import type { PineNodeData } from '../types'
-import OpsPanelShell from './OpsPanelShell'
+import OpsPanelShell, { EditModelPicker } from './OpsPanelShell'
 
 const COLUMNS: { key: string; label: string; options: string[] }[] = [
   { key: 'body', label: '机身', options: ['Sony Venice', 'RED Komodo', 'ARRI Alexa 35', 'Canon C700'] },
@@ -28,6 +28,7 @@ export default function CameraPanel({
 }) {
   const runImageEdit = useStudioStore((s) => s.runImageEdit)
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
+  const [editModel, setEditModel] = useState(data.params.imageModel ?? IMAGE_MODELS[0].id)
   const [idx, setIdx] = useState<number[]>([0, 0, 1, 3])
 
   const running = data.status === 'running'
@@ -56,26 +57,29 @@ export default function CameraPanel({
         void runImageEdit(
           id,
           `Re-render the exact same subject and composition from the reference image with a different cinema camera setup. Keep subject identity and framing identical. ${promptPart}. Photorealistic, cinematic color science.（保持主体与构图一致，仅改变镜头光学特性）`,
-          { label: '摄影机' },
+          { label: '摄影机', model: editModel },
         )
         onClose()
       }}
       onClose={onClose}
       headerExtra={
-        <button
-          title="保存为该节点的摄影机预设（注入后续生成提示词）"
-          onClick={() => {
-            updateNodeParams(id, { camera: promptPart })
-            window.dispatchEvent(
-              new CustomEvent('pineline:flash', { detail: `已保存摄影机预设：${summary}` }),
-            )
-            onClose()
-          }}
-          className="rounded-full px-[18px] py-[7px] text-[13px] transition hover:bg-white/[0.14]"
-          style={{ background: 'rgba(255,255,255,0.08)', color: '#B8B8BF' }}
-        >
-          保存
-        </button>
+        <>
+          <EditModelPicker value={editModel} onChange={setEditModel} />
+          <button
+            title="保存为该节点的摄影机预设（注入后续生成提示词）"
+            onClick={() => {
+              updateNodeParams(id, { camera: promptPart })
+              window.dispatchEvent(
+                new CustomEvent('pineline:flash', { detail: `已保存摄影机预设：${summary}` }),
+              )
+              onClose()
+            }}
+            className="rounded-full px-[18px] py-[7px] text-[13px] transition hover:bg-white/[0.14]"
+            style={{ background: 'rgba(255,255,255,0.08)', color: '#B8B8BF' }}
+          >
+            保存
+          </button>
+        </>
       }
     >
       <div className="flex">

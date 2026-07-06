@@ -269,8 +269,11 @@ export const TEXT_MODELS: ChatModelInfo[] = [
 ]
 
 export const IMAGE_MODELS: ChatModelInfo[] = [
-  { id: 'gemini-3.1-flash', name: 'Gemini 3.1 Flash', provider: 'gemini', desc: '默认 · Nano Banana 2' },
-  { id: 'seedream-5.0', name: 'Seedream 5.0', provider: 'ark', apiModel: 'doubao-seedream-5-0-260128', desc: '字节 · 2K/4K' },
+  { id: 'gemini-3.1-flash', name: 'Nano Banana 2', provider: 'gemini', desc: '默认 · Gemini 3.1 Flash Image' },
+  // 同步 images/generations 端点只支持 5.0 的 lite 变体（官方 API 文档 82379/1541523；
+  // 完整版 doubao-seedream-5-0-260128 是"深度思考"图像模型，传该端点会 400）。
+  // 附带红利：lite 文生图产物是 Seedance 2.0 信任的人像来源（真人人脸限制白名单）。
+  { id: 'seedream-5.0', name: 'Seedream 5.0', provider: 'ark', apiModel: 'doubao-seedream-5-0-lite-260128', desc: '字节 · Seedance 人像信任源' },
 ]
 
 /** 由节点 params 里的模型选择解析出要传给 Worker 的 model 字段（默认通道返回 undefined） */

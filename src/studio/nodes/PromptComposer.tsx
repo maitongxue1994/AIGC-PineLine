@@ -263,7 +263,7 @@ export default function PromptComposer({ id, data }: { id: string; data: PineNod
               {(isImage
                 ? IMAGE_MODELS.find((m) => m.id === data.params.imageModel)
                 : TEXT_MODELS.find((m) => m.id === data.params.textModel)
-              )?.name ?? (isImage ? 'Gemini 3.1 Flash' : 'MiniMax M2.7')}
+              )?.name ?? (isImage ? 'Nano Banana 2' : 'MiniMax M2.7')}
               <ChevronDown size={13} style={{ color: TOKENS.textMuted }} />
             </Chip>
             {openPop === 'model' && (

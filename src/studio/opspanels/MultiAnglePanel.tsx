@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { useStudioStore } from '../store'
-import { estimateCost } from '../nodeCatalog'
+import { estimateCost, IMAGE_MODELS } from '../nodeCatalog'
 import { TOKENS } from '../designTokens'
 import type { PineNodeData } from '../types'
-import OpsPanelShell, { SliderRow, Toggle } from './OpsPanelShell'
+import OpsPanelShell, { EditModelPicker, SliderRow, Toggle } from './OpsPanelShell'
 
 /**
  * 多角度面板（设计稿 §05）：3D 立方体拖拽 + 旋转/倾斜/缩放滑杆双向联动 + 广角开关。
@@ -20,6 +20,7 @@ export default function MultiAnglePanel({
   onClose: () => void
 }) {
   const runImageEdit = useStudioStore((s) => s.runImageEdit)
+  const [editModel, setEditModel] = useState(data.params.imageModel ?? IMAGE_MODELS[0].id)
   const [rotate, setRotate] = useState(0)
   const [tilt, setTilt] = useState(0)
   const [zoom, setZoom] = useState(1)
@@ -64,8 +65,9 @@ export default function MultiAnglePanel({
       hint="拖拽方块调整角度"
       cost={cost}
       running={running}
+      headerExtra={<EditModelPicker value={editModel} onChange={setEditModel} />}
       onSubmit={() => {
-        void runImageEdit(id, buildPrompt(), { label: '多角度' })
+        void runImageEdit(id, buildPrompt(), { label: '多角度', model: editModel })
         onClose()
       }}
       onClose={onClose}
