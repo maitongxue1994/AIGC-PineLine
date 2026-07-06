@@ -738,12 +738,56 @@ export const useStudioStore = create<StudioState>()(
             if (n.data.kind === 'text') return 280
             return 380
           }
-          const placed = new Map<string, Position>()
-          layers.forEach((layer, li) => {
-            let y = 80
-            const ordered = [...layer].sort(
-              (a, b) => (byId.get(a)?.position.y ?? 0) - (byId.get(b)?.position.y ?? 0),
+          // —— 语义列修正：纯拓扑分层会让「没挂参考连线的分镜图」与资产节点同层混排
+          //（资产=分镜下一层；挂了资产参考的分镜图才被推到再下一层），用户找不到
+          // 对应镜头。这里把实体参考节点归拢成一列、全部分镜图统一排在其右一列，
+          // 再沿拓扑序把下游（镜头视频等）只增不减地往右推，保持依赖仍是左→右。
+          const layerOf = new Map<string, number>()
+          layers.forEach((layer, li) => layer.forEach((nid) => layerOf.set(nid, li)))
+          const isEntityNode = (n?: PineNode) =>
+            !!n && n.data.kind === 'image' && isEntityPreset(n.data.preset)
+          const isShotNode = (n?: PineNode) =>
+            !!n && n.data.kind === 'image' && n.data.preset === 'shot'
+          const entityIds = nodes.filter((n) => isEntityNode(n)).map((n) => n.id)
+          const shotIds = nodes.filter((n) => isShotNode(n)).map((n) => n.id)
+          if (shotIds.length && entityIds.length) {
+            const entityCol = Math.max(...entityIds.map((nid) => layerOf.get(nid) ?? 0))
+            entityIds.forEach((nid) => layerOf.set(nid, entityCol))
+            const shotCol = Math.max(
+              entityCol + 1,
+              ...shotIds.map((nid) => layerOf.get(nid) ?? 0),
             )
+            shotIds.forEach((nid) => layerOf.set(nid, shotCol))
+            const adj = new Map<string, string[]>()
+            for (const e of edges) {
+              if (!byId.has(e.source) || !byId.has(e.target)) continue
+              adj.set(e.source, [...(adj.get(e.source) ?? []), e.target])
+            }
+            for (const nid of layers.flat()) {
+              const base = layerOf.get(nid) ?? 0
+              for (const t of adj.get(nid) ?? []) {
+                layerOf.set(t, Math.max(layerOf.get(t) ?? 0, base + 1))
+              }
+            }
+          }
+          // 重组列（压掉修正后可能出现的空列），层内排序：分镜图按镜头号，其余按原 y
+          const colValues = [...new Set([...layerOf.values()])].sort((a, b) => a - b)
+          const colIndex = new Map(colValues.map((v, i) => [v, i]))
+          const columns: string[][] = colValues.map(() => [])
+          for (const n of nodes) {
+            columns[colIndex.get(layerOf.get(n.id) ?? 0) ?? 0].push(n.id)
+          }
+          const sortKey = (nid: string) => {
+            const n = byId.get(nid)
+            if (!n) return Number.MAX_SAFE_INTEGER
+            if (isShotNode(n) && n.data.params.shotIndex != null)
+              return n.data.params.shotIndex
+            return n.position.y
+          }
+          const placed = new Map<string, Position>()
+          columns.forEach((column, li) => {
+            let y = 80
+            const ordered = [...column].sort((a, b) => sortKey(a) - sortKey(b))
             for (const nid of ordered) {
               const n = byId.get(nid)
               if (!n) continue
@@ -1618,7 +1662,12 @@ export const useStudioStore = create<StudioState>()(
             window.dispatchEvent(new CustomEvent('pineline:flash', { detail: msg }))
 
           // 第一步：派生节点 + 连线（commit 由 addNode/onConnect 的 150ms 合并窗归并成一步撤销）
-          const baseX = sb.position.x + 460
+          // 落点让开实体参考列：分镜与分镜图之间通常已有一列角色/场景/道具节点，
+          // 从分镜节点 +460 起排会压在资产上、分镜图穿插进资产列（用户实测反馈）
+          const entityRightX = state.nodes
+            .filter((n) => n.data.kind === 'image' && isEntityPreset(n.data.preset))
+            .reduce((m, n) => Math.max(m, n.position.x), sb.position.x)
+          const baseX = entityRightX + 460
           const baseY = sb.position.y
           // 槽位从「已派生数量」续排：分批派生时 k 从 0 重数会让第二批与第一批
           // 坐标完全重叠、逐个叠死（用户实测反馈）；行距 560 给竖版分镜图留高度
