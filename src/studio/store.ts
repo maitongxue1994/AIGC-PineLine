@@ -56,8 +56,9 @@ type Position = { x: number; y: number }
  * localStorage 写入容错：zustand persist 的 setItem 无 try/catch，配额超限
  * （QuotaExceededError）会让异常穿透进**每一个** store action——表现为整套
  * UI 流程卡死（如项目页 busy 永久 true）。降级为仅内存 + console 告警。
+ * （agentStore 同样复用；消息带缩略图后其体积也可能逼近配额）
  */
-const guardedLocalStorage = {
+export const guardedLocalStorage = {
   getItem: (k: string) => localStorage.getItem(k),
   setItem: (k: string, v: string) => {
     try {

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { agentChat } from '../api'
 import { canvasSnapshot, executeOps } from './executeOps'
-import { useStudioStore } from '../store'
+import { guardedLocalStorage, useStudioStore } from '../store'
 import type { AttachedImage } from './imageAttach'
 import type { AgentMessage, AgentSession } from './types'
 
@@ -284,7 +284,8 @@ export const useAgentStore = create<AgentState>()(
     {
       name: 'pineline-agent-v1',
       version: 2,
-      storage: createJSONStorage(() => localStorage),
+      // 消息带缩略图后体积上涨：写入容错防 QuotaExceededError 穿透卡死所有 action
+      storage: createJSONStorage(() => guardedLocalStorage),
       // v1→v2：新增 webSearch（缺省 false）与消息缩略图字段，均向后兼容直接沿用
       migrate: (persisted) => persisted as AgentState,
       partialize: (s) =>
