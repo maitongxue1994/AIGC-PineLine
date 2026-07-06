@@ -9,6 +9,7 @@ import NodeToolbarBar, { type OpsPanelKind } from './NodeToolbarBar'
 import PromptComposer from './PromptComposer'
 import PreviewLightbox from '../components/PreviewLightbox'
 import SaveToLibraryDialog from '../dialogs/SaveToLibraryDialog'
+import ImageCropDialog from '../dialogs/ImageCropDialog'
 import MultiAnglePanel from '../opspanels/MultiAnglePanel'
 import LightingPanel from '../opspanels/LightingPanel'
 import CameraPanel from '../opspanels/CameraPanel'
@@ -32,9 +33,11 @@ function placeholderHeight(aspect?: string): number {
 function ImageNodeInner({ id, data, selected }: NodeProps<PineNode>) {
   const [preview, setPreview] = useState(false)
   const [saveOpen, setSaveOpen] = useState(false)
-  const [opsPanel, setOpsPanel] = useState<Exclude<OpsPanelKind, 'inpaint'> | null>(null)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [opsPanel, setOpsPanel] = useState<Exclude<OpsPanelKind, 'inpaint' | 'crop'> | null>(null)
   const [maskMode, setMaskMode] = useState(false)
   const setActiveVersion = useStudioStore((s) => s.setActiveVersion)
+  const addImageVersion = useStudioStore((s) => s.addImageVersion)
 
   const meta = presetMeta(data.preset)
   const output = activeContent(data)
@@ -48,6 +51,10 @@ function ImageNodeInner({ id, data, selected }: NodeProps<PineNode>) {
     if (panel === 'inpaint') {
       setOpsPanel(null)
       setMaskMode(true)
+    } else if (panel === 'crop') {
+      setMaskMode(false)
+      setOpsPanel(null)
+      setCropOpen(true)
     } else {
       setMaskMode(false)
       setOpsPanel((cur) => (cur === panel ? null : panel))
@@ -160,6 +167,13 @@ function ImageNodeInner({ id, data, selected }: NodeProps<PineNode>) {
           defaultName={data.title}
           sourceNodeId={id}
           onClose={() => setSaveOpen(false)}
+        />
+      )}
+      {cropOpen && output && (
+        <ImageCropDialog
+          src={output}
+          onApply={(dataUrl) => addImageVersion(id, dataUrl, '裁剪')}
+          onClose={() => setCropOpen(false)}
         />
       )}
     </NodeShell>

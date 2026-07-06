@@ -130,6 +130,8 @@ type StudioState = {
   updateNodeTitle: (id: string, title: string) => void
   /** 编辑当前激活版本的正文（文本节点产出可改写） */
   updateActiveContent: (id: string, content: string) => void
+  /** 追加一个图片版本（本地裁剪/编辑结果）：activeVersion 指向新版本，保留原图可切回 */
+  addImageVersion: (id: string, dataUrl: string, label?: string) => void
   /** 编辑分镜镜头（title/description）：写回 shots 并同步版本拼接文本，派生分镜图/视频用新内容 */
   updateShot: (
     id: string,
@@ -969,6 +971,25 @@ export const useStudioStore = create<StudioState>()(
               return { ...n, data: { ...n.data, versions, status: 'done' as const } }
             }),
           })),
+
+        addImageVersion: (id, dataUrl, label) => {
+          commit()
+          set((s) => ({
+            nodes: s.nodes.map((n) => {
+              if (n.id !== id) return n
+              const versions = [...n.data.versions, newVersion(dataUrl, label)]
+              return {
+                ...n,
+                data: {
+                  ...n.data,
+                  versions,
+                  activeVersion: versions.length - 1,
+                  status: 'done' as const,
+                },
+              }
+            }),
+          }))
+        },
 
         updateShot: (id, shotIndex, patch) =>
           set((s) => ({

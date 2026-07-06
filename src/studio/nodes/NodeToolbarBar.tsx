@@ -30,7 +30,7 @@ import { aiFileName, markImageDataUrl } from '../aigcMark'
 import { Popover } from './composerKit'
 import type { NodeKind, PinColor } from '../types'
 
-export type OpsPanelKind = 'angle' | 'inpaint' | 'light' | 'camera'
+export type OpsPanelKind = 'angle' | 'inpaint' | 'light' | 'camera' | 'crop'
 
 /** 44px 圆形图标按钮 + 上方 400ms 延迟 tooltip（设计稿 §03）；视频工具栏等复用 */
 export function TBtn({
@@ -138,7 +138,7 @@ export default function NodeToolbarBar({
       >
         {isImage && (
           <>
-            <TBtn tip="裁剪（规划中）" disabled>
+            <TBtn tip="裁剪" disabled={!hasImage} onClick={() => onOpenPanel?.('crop')}>
               <Crop size={18} strokeWidth={1.8} />
             </TBtn>
             <TBtn tip="多角度" disabled={!hasImage} onClick={() => onOpenPanel?.('angle')}>
