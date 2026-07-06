@@ -29,7 +29,8 @@ type AgentState = {
   sending: boolean
   newSession: () => void
   switchSession: (id: string) => void
-  send: (text: string) => Promise<void>
+  /** 返回是否已受理（false = 发送前被拦截，如 M2.7 带图，调用方据此保留输入框内容） */
+  send: (text: string) => Promise<boolean>
   /** 中止本次发送（发送按钮在 sending 期变为停止按钮） */
   stop: () => void
   confirmOps: (messageId: string) => Promise<void>
@@ -106,15 +107,16 @@ export const useAgentStore = create<AgentState>()(
 
         send: async (text) => {
           const content = text.trim()
-          if (!content || get().sending) return
+          if (!content || get().sending) return false
           const attached = get().pendingImages
           if (attached.length && get().model === 'minimax-m2.7') {
+            // 发送前拦截：返回 false，调用方保留输入框内容（不清空）
             window.dispatchEvent(
               new CustomEvent('pineline:flash', {
                 detail: 'MiniMax M2.7 不支持图片理解，请切换 MiniMax M3 或豆包模型后再发送',
               }),
             )
-            return
+            return false
           }
           if (!activeSession()) get().newSession()
           const session = activeSession()!
@@ -219,6 +221,7 @@ export const useAgentStore = create<AgentState>()(
             sendAbort = null
             set({ sending: false })
           }
+          return true
         },
 
         stop: () => {

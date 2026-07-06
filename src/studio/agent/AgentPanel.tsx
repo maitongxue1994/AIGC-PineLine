@@ -159,8 +159,11 @@ export default function AgentPanel() {
   const handleSend = () => {
     const text = draft.trim()
     if (!text || sending) return
+    // 乐观清空（正常发送即时反馈）；send 返回 false = 发送前被拦截（如 M2.7 带图），还原输入
     setDraft('')
-    void send(text)
+    void send(text).then((accepted) => {
+      if (!accepted) setDraft(text)
+    })
   }
 
   // 附图（按钮多选 / 粘贴共用）：压缩到长边 1280 后进待发队列，上限 4 张
