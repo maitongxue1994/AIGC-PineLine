@@ -10,7 +10,13 @@
 
 export type ScriptTone = 'cinematic' | 'commercial' | 'drama' | 'documentary'
 export type ScriptLength = 'short' | 'medium' | 'long'
-export type ScriptPreset = 'script' | 'ad-copy' | 'free' | 'image-prompt' | 'extract-entities'
+export type ScriptPreset =
+  | 'script'
+  | 'ad-copy'
+  | 'free'
+  | 'image-prompt'
+  | 'extract-entities'
+  | 'shot-compose'
 
 export const TONE_LABEL: Record<ScriptTone, string> = {
   cinematic: '电影级 · 注重人物内心、氛围、视听化动作描写',
@@ -65,6 +71,18 @@ export function buildScriptSystemPrompt(
       '要求：明确主体与动作、环境与时间、光线氛围、景别与构图、材质细节与整体风格；',
       '写成一段 60~120 字的连续描述，信息密度高、可直接喂给文生图模型。',
       '只输出提示词本身：不要编号、不要引号、不要解释、不要 markdown。',
+    ].join('\n')
+  }
+  if (preset === 'shot-compose') {
+    // 分镜图派生（实体感知）：镜头描述 + 可用素材清单 → 生图提示词 + 本镜真正用到的素材
+    // 用于精确挂载角色/场景/道具参考图（替代脆弱的文本子串匹配）
+    return [
+      '你是一位文生图提示词专家 + 美术指导。用户会给你一个镜头描述，以及一份「可用素材清单」（每项形如「角色:小明」「场景:咖啡厅」「道具:手机」）。',
+      `画面风格基调：${toneDesc}。请完成两件事：`,
+      '1) 写一条 60~120 字的高质量中文生图提示词（明确主体动作、环境时间、光线氛围、景别构图、材质风格）；',
+      '2) 从清单里挑出这一镜真正出现/需要的素材（只能从清单原样选取，名称必须与清单完全一致；本镜没用到就给空数组）。',
+      '输出严格为一个 JSON 对象，不要 markdown、不要解释、不要在 JSON 外写任何字符：',
+      '{"prompt":"生图提示词","assets":["角色:小明","场景:咖啡厅"]}',
     ].join('\n')
   }
   const scenes = LENGTH_SCENES[length]

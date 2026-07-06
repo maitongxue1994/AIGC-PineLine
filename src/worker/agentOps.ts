@@ -12,8 +12,8 @@ export type AgentOp =
   | { op: 'delete_node'; id: string }
   | { op: 'run'; ids: string[] }
   | { op: 'clear_canvas' }
-  /** 分镜两段式派生（单条 op 替代 N×add_node+connect）：id 为 storyboard 节点 */
-  | { op: 'derive_shot_images'; id: string; indices?: number[] }
+  /** 分镜两段式派生（支持等待上游产出后接续）：id 为 storyboard 节点；generate=派生后自动批量生图 */
+  | { op: 'derive_shot_images'; id: string; indices?: number[]; generate?: boolean }
   | { op: 'derive_shot_videos'; id: string; run?: boolean }
   /** 把用户的稳定偏好/项目设定写入本地长期记忆 */
   | { op: 'remember'; content: string }
@@ -134,7 +134,12 @@ export function sanitizeOps(rawOps: unknown[]): { ops: AgentOp[]; dropped: numbe
         const indices = Array.isArray(o.indices)
           ? (o.indices.filter((x) => typeof x === 'number' && Number.isInteger(x) && x >= 0) as number[]).slice(0, MAX_OPS)
           : undefined
-        ops.push({ op: 'derive_shot_images', id: o.id, ...(indices?.length ? { indices } : {}) })
+        ops.push({
+          op: 'derive_shot_images',
+          id: o.id,
+          ...(indices?.length ? { indices } : {}),
+          ...(o.generate === true ? { generate: true } : {}),
+        })
         break
       }
       case 'derive_shot_videos':
