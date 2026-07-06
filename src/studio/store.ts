@@ -1566,7 +1566,18 @@ export const useStudioStore = create<StudioState>()(
             const t = state.nodes.find((n) => n.id === e.target)
             return t?.data.kind === 'image' && t.data.preset === 'shot'
           }).length
+          // 一致性自动挂载候选：画布上有产出的实体参考节点（角色三视图/场景宫格/道具三视图）
+          const GENERIC_TITLES = new Set(['角色三视图', '场景四宫格', '道具三视图', '图片', '新图片'])
+          const entityNodes = state.nodes.filter((n) => {
+            if (n.data.kind !== 'image') return false
+            if (!['char-triview', 'scene-grid', 'prop-triview'].includes(n.data.preset ?? '')) return false
+            if (!n.data.versions.some((v) => isImageContent(v.content))) return false
+            const name = n.data.title.trim()
+            return name.length >= 2 && !GENERIC_TITLES.has(name)
+          })
+
           const ids: string[] = []
+          let mounted = 0
           chosen.forEach((shotIdx, k) => {
             const slot = existing + k
             const shot = shots[shotIdx]
@@ -1584,9 +1595,17 @@ export const useStudioStore = create<StudioState>()(
               },
             )
             get().onConnect({ source: storyboardId, sourceHandle: null, target: id, targetHandle: null })
+            // 实体名出现在镜头文本 → 自动连作参考图（collectUpstreamImages ≤6 天然限流）
+            const shotText = `${shot.title} ${shot.description}`
+            for (const en of entityNodes) {
+              if (!shotText.includes(en.data.title.trim())) continue
+              get().onConnect({ source: en.id, sourceHandle: null, target: id, targetHandle: null })
+              mounted++
+            }
             ids.push(id)
           })
           get().requestFitView()
+          if (mounted) flash(`已自动连接 ${mounted} 处角色/场景/道具参考（不需要的可手动断开连线）`)
 
           // 第二步：逐镜生成生图提示词回填（节点保持 idle，等用户确认后再生图）
           flash(`正在为 ${chosen.length} 个镜头生成生图提示词…`)
