@@ -20,3 +20,5 @@ yarn-error.log*
 .dev.vars
 .wrangler
 dist-worker-types
+# 本地 demo 大视频，不入库（历史上曾被误卷入需手术剥除）
+docs/agentation-demo/
