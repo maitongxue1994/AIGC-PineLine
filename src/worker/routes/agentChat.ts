@@ -1,5 +1,7 @@
-import { callMinimaxChatFull, callMinimaxVisionChat, type ChatMessage } from '../minimax'
+import { callMinimaxChatFull, callMinimaxVisionChat, type ChatMessage, type ChatResult } from '../minimax'
 import { callArkChat, type ArkChatMessage } from '../ark'
+import { callArkResponsesSearch, type SearchCitation } from '../arkResponses'
+import { tavilySearch, WEB_SEARCH_TOOL } from '../tavily'
 import type { Env } from '../index'
 import { jsonError, jsonOk, readJson, runRoute } from '../utils'
 import { sanitizeOps } from '../agentOps'
@@ -162,6 +164,14 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
       return jsonError('MiniMax M2.7 不支持图片理解：请切换 MiniMax M3 或豆包模型', 400)
     }
 
+    const wantSearch = body.webSearch === true
+    if (wantSearch && !arkModel && !env.TAVILY_API_KEY) {
+      return jsonError(
+        '联网搜索未接入：MiniMax 通道需配置 Worker secret TAVILY_API_KEY（tavily.com 免费注册），或切换豆包模型走方舟官方联网插件',
+        501,
+      )
+    }
+
     // 画布快照摘要（prompt 截断，不含图片数据；params 前端已挑模型/关键参数非空键）
     const nodes = (body.canvas?.nodes ?? []).slice(0, 60).map((n) => ({
       ...n,
@@ -198,26 +208,98 @@ export default function agentChat(req: Request, env: Env): Promise<Response> {
 
     // 完整管线的 ops JSON 更长（剧本+分镜+N分镜图+N视频），3000 会截断
     const chatOpts = { temperature: 0.3, maxTokens: 4096 }
-    const { content: raw, reasoning } = arkModel
-      ? // ark 通道不含 tool 角色消息，形状与 ArkChatMessage 兼容
-        await callArkChat(arkModel, messages as unknown as ArkChatMessage[], env.ARK_API_KEY!, chatOpts)
-      : hasImages
-        ? await callMinimaxVisionChat(messages, env.MINIMAX_API_KEY, {
-            ...chatOpts,
-            model: 'MiniMax-M3',
-          })
-        : await callMinimaxChatFull(messages, env.MINIMAX_API_KEY, {
-            ...chatOpts,
-            model: body.model ? MINIMAX_CHAT_MODELS[body.model] : undefined,
-          })
+    let raw = ''
+    let reasoning: string | undefined
+    let citations: SearchCitation[] | undefined
+    let searchNote: string | undefined
+
+    if (arkModel) {
+      // 豆包通道：联网走 Responses API 内置 web_search（chat completions 无内置联网），
+      // 失败（插件未开通/模型不支持）降级普通 chat 并附说明。
+      // ark 通道不含 tool 角色消息，形状与 ArkChatMessage 兼容
+      const arkMessages = messages as unknown as ArkChatMessage[]
+      let answered = false
+      if (wantSearch) {
+        const sr = await callArkResponsesSearch(arkModel, arkMessages, env.ARK_API_KEY!, {
+          maxTokens: chatOpts.maxTokens,
+        })
+        if (sr) {
+          raw = sr.content
+          reasoning = sr.reasoning
+          if (sr.citations.length) citations = sr.citations.slice(0, 5)
+          answered = true
+        } else {
+          searchNote = '方舟联网搜索暂不可用（插件未开通或模型不支持 Responses API），本次回答未联网'
+        }
+      }
+      if (!answered) {
+        const r = await callArkChat(arkModel, arkMessages, env.ARK_API_KEY!, chatOpts)
+        raw = r.content
+        reasoning = r.reasoning
+      }
+    } else {
+      // MiniMax 通道：附图走 OpenAI 兼容端点 + M3；联网走 Tavily function calling 循环
+      const mmOpts = hasImages
+        ? { ...chatOpts, model: 'MiniMax-M3' }
+        : { ...chatOpts, model: body.model ? MINIMAX_CHAT_MODELS[body.model] : undefined }
+      const callMM = (msgs: ChatMessage[], tools?: unknown[]) =>
+        hasImages
+          ? callMinimaxVisionChat(msgs, env.MINIMAX_API_KEY, { ...mmOpts, tools })
+          : callMinimaxChatFull(msgs, env.MINIMAX_API_KEY, { ...mmOpts, tools })
+      if (wantSearch) {
+        // ≤3 轮工具调用；最后一轮不带 tools，逼模型直接产出最终 JSON 回复
+        const loopMsgs = [...messages]
+        const cites: SearchCitation[] = []
+        let result: ChatResult | null = null
+        for (let round = 0; round < 4; round++) {
+          const r = await callMM(loopMsgs, round < 3 ? [WEB_SEARCH_TOOL] : undefined)
+          if (!r.toolCalls?.length) {
+            result = r
+            break
+          }
+          // 官方要求：含 thinking 的 assistant 消息原样回填历史（Interleaved Thinking）
+          loopMsgs.push(r.message)
+          for (const tc of r.toolCalls) {
+            let toolContent: string
+            try {
+              const args = JSON.parse(tc.function.arguments || '{}') as { query?: unknown }
+              const query = String(args.query ?? '').slice(0, 200)
+              const sr = await tavilySearch(query, env.TAVILY_API_KEY!)
+              for (const item of sr.results) {
+                if (item.url && cites.length < 8 && !cites.some((c) => c.url === item.url)) {
+                  cites.push({ title: item.title || item.url, url: item.url })
+                }
+              }
+              toolContent = JSON.stringify(sr).slice(0, 8000)
+            } catch (err) {
+              toolContent = JSON.stringify({
+                error: `搜索失败：${err instanceof Error ? err.message : String(err)}`,
+              })
+            }
+            loopMsgs.push({ role: 'tool', tool_call_id: tc.id, content: toolContent })
+          }
+        }
+        if (!result) return jsonError('MiniMax 联网回答失败，请重试', 502)
+        raw = result.content
+        reasoning = result.reasoning
+        if (cites.length) citations = cites.slice(0, 5)
+      } else {
+        const r = await callMM(messages)
+        raw = r.content
+        reasoning = r.reasoning
+      }
+    }
+
     const parsed = parseAgentJson(raw)
     const { ops, dropped } = sanitizeOps(parsed.ops)
-    const reply =
+    let reply =
       dropped > 0 ? `${parsed.reply}\n（有 ${dropped} 个无效操作已被忽略）` : parsed.reply
+    if (searchNote) reply += `\n\n（${searchNote}）`
 
     return jsonOk({
       reply,
       ops,
+      ...(citations?.length ? { citations } : {}),
       // M2.7 推理模型的思考过程，前端折叠展示
       ...(reasoning ? { thinking: reasoning.slice(0, 4000) } : {}),
     })

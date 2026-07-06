@@ -3,8 +3,10 @@ import {
   Check,
   ChevronDown,
   Clock,
+  Globe,
   Hand,
   ImagePlus,
+  Link as LinkIcon,
   Loader2,
   Play,
   Plus,
@@ -115,6 +117,8 @@ export default function AgentPanel() {
   const pendingImages = useAgentStore((s) => s.pendingImages)
   const addPendingImages = useAgentStore((s) => s.addPendingImages)
   const removePendingImage = useAgentStore((s) => s.removePendingImage)
+  const webSearch = useAgentStore((s) => s.webSearch)
+  const setWebSearch = useAgentStore((s) => s.setWebSearch)
 
   const selectedNode = useStudioStore((s) =>
     s.selectedNodeId ? s.nodes.find((n) => n.id === s.selectedNodeId) ?? null : null,
@@ -300,6 +304,26 @@ export default function AgentPanel() {
                   )}
                   {m.role === 'assistant' ? <MarkdownMessage text={m.content} /> : m.content}
                 </div>
+
+                {/* 联网搜索引用来源 */}
+                {m.citations && m.citations.length > 0 && (
+                  <div className="mt-1.5 flex max-w-[92%] flex-wrap gap-1.5">
+                    {m.citations.map((c, i) => (
+                      <a
+                        key={i}
+                        href={c.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={c.url}
+                        className="flex max-w-[200px] items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition hover:bg-white/[0.1]"
+                        style={{ background: 'rgba(255,255,255,0.05)', color: TOKENS.textMuted }}
+                      >
+                        <LinkIcon size={10} className="shrink-0" />
+                        <span className="truncate">{c.title || c.url}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
 
                 {/* 操作预览卡 */}
                 {m.ops && m.ops.length > 0 && (
@@ -503,6 +527,21 @@ export default function AgentPanel() {
               </div>
             )}
           </div>
+          <button
+            title={
+              webSearch
+                ? '联网搜索：开（豆包走方舟官方插件，MiniMax 走 Tavily）'
+                : '联网搜索：关'
+            }
+            onClick={() => setWebSearch(!webSearch)}
+            className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[12px] transition hover:bg-white/[0.08]"
+            style={{
+              color: webSearch ? '#8AB8FF' : TOKENS.textFaint,
+              background: webSearch ? 'rgba(46,155,255,0.12)' : undefined,
+            }}
+          >
+            <Globe size={13} /> 联网
+          </button>
           <button
             title="添加图片（可多选，也可直接粘贴）——M3/豆包模型可分析参考"
             onClick={() => fileInputRef.current?.click()}

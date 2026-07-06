@@ -26,6 +26,8 @@ export interface Env extends CoreEnv {
   ARK_BASE_URL?: string
   DASHSCOPE_API_KEY?: string
   KLING_API_KEY?: string
+  /** 聊天联网搜索（MiniMax 通道，tavily.com）：缺失时联网开关返回 501 指引 */
+  TAVILY_API_KEY?: string
 }
 
 const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
