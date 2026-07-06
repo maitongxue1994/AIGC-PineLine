@@ -114,7 +114,7 @@ export const IMAGE_PRESETS: PresetMeta[] = [
     label: '场景四宫格',
     typeLabel: 'Scene grid',
     defaultTitle: '新场景',
-    promptPlaceholder: '描述场景，一次生成全景/侧视/特写/俯瞰四张',
+    promptPlaceholder: '描述场景，先生成主视图，再基于主视图合成一张多视角总览（16:9）',
     defaultParams: { aspectRatio: '16:9', quality: '1K' },
     maxChars: 2000,
   },
@@ -124,7 +124,7 @@ export const IMAGE_PRESETS: PresetMeta[] = [
     label: '角色三视图',
     typeLabel: 'Character sheet',
     defaultTitle: '新角色',
-    promptPlaceholder: '描述角色外形与服装，生成前/侧/背三视图',
+    promptPlaceholder: '描述角色外形与服装，先生成主视图，再合成一张多视角设定图（16:9）',
     defaultParams: { quality: '1K' },
     maxChars: 2000,
   },
@@ -134,7 +134,7 @@ export const IMAGE_PRESETS: PresetMeta[] = [
     label: '道具三视图',
     typeLabel: 'Prop sheet',
     defaultTitle: '新道具',
-    promptPlaceholder: '描述道具/产品，生成正面/侧角/俯视三视图',
+    promptPlaceholder: '描述道具/产品，先生成主视图，再合成一张多视角参考图（16:9）',
     defaultParams: { quality: '1K' },
     maxChars: 2000,
   },
@@ -150,40 +150,51 @@ export function presetMeta(preset: NodePreset | null): PresetMeta | null {
 /** asset 节点的外置类型标签 */
 export const ASSET_TYPE_LABEL = 'Asset'
 
-// ---------------- 多图预设的视角 prompt 组与版本标签 ----------------
+// ---------------- 实体参考预设（两段式）的 prompt 与版本标签 ----------------
 
-export const GRID_VIEW_LABELS: Record<
-  Extract<ImagePreset, 'scene-grid' | 'char-triview' | 'prop-triview'>,
-  string[]
-> = {
+export type EntityPreset = Extract<ImagePreset, 'scene-grid' | 'char-triview' | 'prop-triview'>
+
+export const ENTITY_PRESETS: EntityPreset[] = ['scene-grid', 'char-triview', 'prop-triview']
+
+export function isEntityPreset(preset: string | null | undefined): preset is EntityPreset {
+  return !!preset && (ENTITY_PRESETS as string[]).includes(preset)
+}
+
+/** 旧版多视角并列生成的版本标签：仅供 migrate.ts 迁移 v3 前存档使用 */
+export const GRID_VIEW_LABELS: Record<EntityPreset, string[]> = {
   'scene-grid': ['全景', '侧视', '特写', '俯瞰'],
   'char-triview': ['前视', '侧视', '背视'],
   'prop-triview': ['正面', '侧角', '俯视'],
 }
 
-export function gridPrompts(preset: ImagePreset, desc: string): string[] | null {
+/** 两段式版本标签：主视图 → 基于主视图合成的 16:9 多视角图 */
+export const ENTITY_STAGE_LABELS = ['主视图', '多视角'] as const
+
+/**
+ * 实体参考两段式 prompt：
+ * 第一段生成单张主视图；第二段以主视图为参考图，把不同视角融合进同一张 16:9 画面，
+ * 强调与参考图完全一致（一致性资产的核心诉求）。
+ */
+export function entityStagePrompts(
+  preset: EntityPreset,
+  desc: string,
+): { main: string; fusion: string } {
   switch (preset) {
     case 'scene-grid':
-      return [
-        `${desc}，wide establishing shot, cinematic lighting`,
-        `${desc}，medium shot looking in from the side, soft shadows`,
-        `${desc}，close-up detail with shallow depth of field`,
-        `${desc}，bird's-eye overhead view at night`,
-      ]
+      return {
+        main: `${desc}，wide establishing shot, cinematic lighting, master scene reference`,
+        fusion: `${desc}。基于参考图中的同一场景，生成一张 16:9 的场景多视角总览：同一画面内拼合全景/侧视/特写/俯瞰四个视角，空间结构、光线与陈设与参考图完全一致，参考图集式排版`,
+      }
     case 'char-triview':
-      return [
-        `${desc}，full-body front view, neutral pose, plain light-grey background, character reference sheet`,
-        `${desc}，full-body side profile view, neutral pose, plain light-grey background, character reference sheet`,
-        `${desc}，full-body back view, neutral pose, plain light-grey background, character reference sheet`,
-      ]
+      return {
+        main: `${desc}，full-body front view, neutral pose, plain light-grey background, character reference`,
+        fusion: `${desc}。基于参考图中的同一角色，生成一张 16:9 的角色设定图（character sheet）：同一画面内并排展示前视/侧视/背视全身形象，五官、发型、服装与身材比例与参考图完全一致，纯浅灰背景`,
+      }
     case 'prop-triview':
-      return [
-        `${desc}，studio product photo, front view, plain white background, soft shadow`,
-        `${desc}，studio product photo, three-quarter angle view, plain white background, soft shadow`,
-        `${desc}，studio product photo, top-down view, plain white background, soft shadow`,
-      ]
-    default:
-      return null
+      return {
+        main: `${desc}，studio product photo, front view, plain white background, soft shadow`,
+        fusion: `${desc}。基于参考图中的同一道具，生成一张 16:9 的道具多视角参考图：同一画面内并排展示正面/侧角/俯视三个视角，材质、颜色与细节与参考图完全一致，纯白背景棚拍`,
+      }
   }
 }
 
@@ -329,9 +340,8 @@ export function estimateCost(
     return Math.round(VIDEO_PER_SEC * dur * resMult) * (params.videoMultiplier ?? 1)
   }
   const per = IMAGE_COST[params.quality ?? '1K']
-  const gridCount =
-    preset === 'scene-grid' ? 4 : preset === 'char-triview' || preset === 'prop-triview' ? 3 : 0
-  if (gridCount) return per * gridCount
+  // 实体参考两段式：主视图 + 多视角融合图共 2 张
+  if (isEntityPreset(preset)) return per * 2
   const batch: BatchCount = params.batch ?? 1
   return per * batch
 }

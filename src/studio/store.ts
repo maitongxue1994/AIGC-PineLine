@@ -22,10 +22,11 @@ import {
 import {
   buildNode,
   DEFAULT_VIDEO_MODEL,
+  ENTITY_STAGE_LABELS,
+  entityStagePrompts,
   estimateCost,
-  gridPrompts,
-  GRID_VIEW_LABELS,
   IMAGE_MODELS,
+  isEntityPreset,
   INITIAL_CREDITS,
   presetMeta,
   resolveApiModel,
@@ -1076,34 +1077,56 @@ export const useStudioStore = create<StudioState>()(
             } else if (kind === 'image') {
               const upstreamText = getUpstreamTextOutput(state.nodes, state.edges, id)
               const refImgs = collectUpstreamImages(state.nodes, state.edges, id)
-              const gridLabels =
-                preset && preset in GRID_VIEW_LABELS
-                  ? GRID_VIEW_LABELS[preset as keyof typeof GRID_VIEW_LABELS]
-                  : null
 
-              if (gridLabels) {
-                // 三视图/四宫格：固定视角 prompt 组
+              if (isEntityPreset(preset)) {
+                // 实体参考两段式：先出单张主视图，再以主视图为参考合成一张
+                // 多视角融合图（16:9）——而不是一次并发生成多张离散视角图
                 const desc = node.data.prompt.trim()
                 if (!desc) throw new Error('请先填写描述')
-                const prompts = gridPrompts(preset as never, desc)!
-                const res = await generateImageGrid({
-                  prompts,
+                const stages = entityStagePrompts(preset, desc)
+                const imageModel = resolveApiModel(IMAGE_MODELS, params.imageModel)
+                const main = await generateImage({
+                  prompt: stages.main,
                   referenceImages: refImgs.length ? refImgs : undefined,
                   aspectRatio: params.aspectRatio,
                   quality: params.quality,
-                  model: resolveApiModel(IMAGE_MODELS, params.imageModel),
+                  model: imageModel,
                 })
-                const gridVersions = res.images.map((img, i) =>
-                  newVersion(img, gridLabels[i], res.errors?.[i] ?? null),
-                )
+                const mainVersion = newVersion(main.image, ENTITY_STAGE_LABELS[0])
+                // 主视图先落节点：融合阶段再失败也保得住第一张，且用户能看到进度
+                safeSet(g, (s) => ({
+                  nodes: mutateNode(s.nodes, id, {
+                    versions: [mainVersion],
+                    activeVersion: 0,
+                  }),
+                }))
+                let fusionVersion: NodeVersion
+                try {
+                  const fusion = await generateImage({
+                    prompt: stages.fusion,
+                    referenceImages: [main.image, ...refImgs].slice(0, 6),
+                    aspectRatio: '16:9',
+                    quality: params.quality,
+                    model: imageModel,
+                  })
+                  fusionVersion = newVersion(fusion.image, ENTITY_STAGE_LABELS[1])
+                } catch (err) {
+                  fusionVersion = newVersion(
+                    null,
+                    ENTITY_STAGE_LABELS[1],
+                    err instanceof Error ? err.message : String(err),
+                  )
+                }
+                const entityVersions = [mainVersion, fusionVersion]
                 safeSet(g, (s) => ({
                   nodes: mutateNode(s.nodes, id, {
                     status: 'done',
-                    versions: gridVersions,
-                    activeVersion: Math.max(0, res.images.findIndex((x) => !!x)),
+                    versions: entityVersions,
+                    // 融合图是下游一致性参考的默认版本；失败则回退主视图
+                    activeVersion: fusionVersion.content ? 1 : 0,
                   }),
                 }))
-                recordHistory(id, 'image', preset, desc, gridVersions)
+                recordHistory(id, 'image', preset, desc, entityVersions)
               } else {
                 const fallback =
                   preset === 'shot'
@@ -1608,7 +1631,7 @@ export const useStudioStore = create<StudioState>()(
           const GENERIC_TITLES = new Set(['角色三视图', '场景四宫格', '道具三视图', '图片', '新图片'])
           const entityNodes = state.nodes.filter((n) => {
             if (n.data.kind !== 'image') return false
-            if (!['char-triview', 'scene-grid', 'prop-triview'].includes(n.data.preset ?? '')) return false
+            if (!isEntityPreset(n.data.preset)) return false
             if (!n.data.versions.some((v) => isImageContent(v.content))) return false
             const name = n.data.title.trim()
             return name.length >= 2 && !GENERIC_TITLES.has(name)
