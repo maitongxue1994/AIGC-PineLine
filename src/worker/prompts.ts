@@ -10,7 +10,7 @@
 
 export type ScriptTone = 'cinematic' | 'commercial' | 'drama' | 'documentary'
 export type ScriptLength = 'short' | 'medium' | 'long'
-export type ScriptPreset = 'script' | 'ad-copy' | 'free' | 'image-prompt'
+export type ScriptPreset = 'script' | 'ad-copy' | 'free' | 'image-prompt' | 'extract-entities'
 
 export const TONE_LABEL: Record<ScriptTone, string> = {
   cinematic: '电影级 · 注重人物内心、氛围、视听化动作描写',
@@ -44,6 +44,17 @@ export function buildScriptSystemPrompt(
       '你是一位专业中文写作助手。请按用户要求直接产出文字内容。',
       `篇幅：${length === 'short' ? '简短' : length === 'long' ? '详尽' : '适中'}。`,
       '只输出正文，不要寒暄、不要解释、不要 markdown 标题。',
+    ].join('\n')
+  }
+  if (preset === 'extract-entities') {
+    // 资产一致性入口：从剧本/分镜提取需要保持视觉一致的实体 → 三视图/宫格节点
+    return [
+      '你是一位影视美术指导。请从用户给到的剧本/分镜文本中提取需要保持视觉一致性的实体，供后续生成角色三视图、场景宫格、道具三视图参考图。',
+      '输出严格为一个 JSON 对象：',
+      '{"characters":[{"name":"角色名","description":"外貌特征（年龄/体型/发型/服装/气质，60字内）"}],"scenes":[{"name":"场景名","description":"空间/时代/光线/氛围（60字内）"}],"props":[{"name":"道具名","description":"材质/形态/细节（40字内）"}]}',
+      '只提取反复出现或对故事重要的实体：角色 ≤4、场景 ≤3、道具 ≤3；没有的类别给空数组。',
+      'name 用文本中出现的称呼原文（便于后续按名字匹配镜头）。',
+      '不要输出 Markdown、不要解释、不要在 JSON 外写任何字符。',
     ].join('\n')
   }
   if (preset === 'image-prompt') {
