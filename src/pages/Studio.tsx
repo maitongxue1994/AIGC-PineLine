@@ -9,6 +9,7 @@ import BottomControls from '../studio/BottomControls'
 import EmptyViewportHint from '../studio/EmptyViewportHint'
 import SearchDialog from '../studio/SearchDialog'
 import AgentPanel, { AgentLauncher } from '../studio/agent/AgentPanel'
+import AccessCodeDialog from '../studio/dialogs/AccessCodeDialog'
 import { TOKENS } from '../studio/designTokens'
 
 /**
@@ -39,6 +40,7 @@ export default function Studio() {
         <SearchDialog />
         <AgentLauncher />
         <AgentPanel />
+        <AccessCodeDialog />
       </motion.main>
     </ReactFlowProvider>
   )

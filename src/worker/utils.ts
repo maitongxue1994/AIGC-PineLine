@@ -3,13 +3,19 @@
  *
  * 设计原则：
  * - 失败抛 PineHttpError，由路由的 try/catch 转 JSON 响应
- * - 默认行为是「宽松」：环境变量缺失时跳过对应保护，便于本地调试
- *   生产部署在 CF Dashboard 把 PINELINE_API_KEY / PINELINE_ALLOWED_ORIGINS 设上，保护自动开启
+ * - assertOrigin 缺配时「宽松」跳过（本地调试用，CSRF 防线非成本防线）
+ * - assertAccess 缺配时「fail-closed」锁死（生成会烧真实模型费，绝不能因忘配 secret 而敞开）
  */
 
 export interface CoreEnv {
-  PINELINE_API_KEY?: string
+  /** 生成访问码（逗号分隔，可多码）；`admin-` 前缀 = 管理员码（免限流/免扣费/放开上限） */
+  PINELINE_ACCESS_CODES?: string
   PINELINE_ALLOWED_ORIGINS?: string
+}
+
+/** 访问码是否为管理员码（自用/代工，免限流免扣费） */
+export function isAdminCode(code: string | null | undefined): boolean {
+  return !!code && code.startsWith('admin-')
 }
 
 export class PineHttpError extends Error {
@@ -20,8 +26,8 @@ export class PineHttpError extends Error {
   }
 }
 
-export function jsonError(msg: string, status = 400): Response {
-  return new Response(JSON.stringify({ error: msg }), {
+export function jsonError(msg: string, status = 400, code?: string): Response {
+  return new Response(JSON.stringify({ error: msg, ...(code ? { code } : {}) }), {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
@@ -108,27 +114,55 @@ export function assertBodySize(req: Request, max: number = DEFAULT_MAX_BODY_BYTE
   }
 }
 
+/** 取请求来源的 origin（无端口差异归一），失败返回 '' */
+function requestOrigin(req: Request): string {
+  const raw = req.headers.get('origin') || req.headers.get('referer') || ''
+  if (!raw) return ''
+  try {
+    return new URL(raw).origin
+  } catch {
+    return ''
+  }
+}
+
 export function assertOrigin(req: Request, env: CoreEnv): void {
   const allow = env.PINELINE_ALLOWED_ORIGINS?.trim()
   if (!allow) return
-  const origin = req.headers.get('origin') || req.headers.get('referer') || ''
+  const origin = requestOrigin(req)
   if (!origin) {
     throw new PineHttpError(403, '缺少 Origin')
   }
+  // 全等匹配（此前 startsWith 有前缀漏洞：allowed.evil.com 可绕过）。
+  // Origin 头 curl 可伪造，这是浏览器场景的 CSRF 防线，真正的成本防线是 assertAccess + 限流。
   const list = allow.split(',').map((s) => s.trim()).filter(Boolean)
-  const ok = list.some((entry) => origin.startsWith(entry))
+  const ok = list.some((entry) => {
+    try {
+      return new URL(entry).origin === origin
+    } catch {
+      return false
+    }
+  })
   if (!ok) {
     throw new PineHttpError(403, '来源不在白名单')
   }
 }
 
-export function assertAuth(req: Request, env: CoreEnv): void {
-  const expected = env.PINELINE_API_KEY?.trim()
-  if (!expected) return
-  const got = req.headers.get('x-pineline-auth')?.trim()
-  if (!got || got !== expected) {
-    throw new PineHttpError(401, '未授权')
+/**
+ * 生成访问门：校验 X-Pineline-Access ∈ PINELINE_ACCESS_CODES，返回命中的码值。
+ * **fail-closed**：secret 未配置时锁死（503）——生成路由会烧真实模型费，
+ * 绝不能因忘配而对公众敞开（与 assertOrigin 的宽松惯例相反，刻意为之）。
+ */
+export function assertAccess(req: Request, env: CoreEnv): string {
+  const configured = env.PINELINE_ACCESS_CODES?.trim()
+  if (!configured) {
+    throw new PineHttpError(503, '服务端未配置访问码（PINELINE_ACCESS_CODES），生成能力暂不可用')
   }
+  const got = req.headers.get('x-pineline-access')?.trim()
+  const codes = configured.split(',').map((s) => s.trim()).filter(Boolean)
+  if (!got || !codes.includes(got)) {
+    throw new PineHttpError(403, 'ACCESS_REQUIRED')
+  }
+  return got
 }
 
 export async function readJson<T>(req: Request): Promise<T> {

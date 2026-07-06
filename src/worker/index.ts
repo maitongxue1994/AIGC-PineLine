@@ -10,7 +10,7 @@ import videoTasks from './routes/videoTasks'
 import debugLogs from './routes/debugLogs'
 import { handleBridgeWs, handleMcp } from './routes/mcp'
 import {
-  assertAuth,
+  assertAccess,
   assertBodySize,
   assertOrigin,
   jsonError,
@@ -50,6 +50,22 @@ const ROUTES: Record<string, (req: Request, env: Env) => Promise<Response>> = {
   '/api/debug/logs': debugLogs,
 }
 
+/**
+ * 上锁路由：会烧真实模型费的生成/编排端点 + 调试日志。
+ * 需过 assertAccess（访问码）。画布浏览/项目/素材全在浏览器本地，无端点、天然不设门。
+ */
+const GATED_ROUTES = new Set([
+  '/api/generate/script',
+  '/api/generate/image',
+  '/api/generate/storyboard',
+  '/api/generate/image-grid',
+  '/api/generate/video',
+  '/api/agent/chat',
+  '/api/debug/logs',
+])
+// 只读/取件类端点（不直接触发上游生成付费）：轮询状态、取件代理、云端任务列表、就绪态
+// 保持仅 Origin 防护，避免正常轮询被访问门拦住
+
 function isApiPath(p: string): boolean {
   return p.startsWith('/api/')
 }
@@ -84,11 +100,18 @@ export default {
       }
       try {
         assertOrigin(req, env)
-        assertAuth(req, env)
+        // 生成/编排类端点过访问门（ACCESS_REQUIRED → 前端弹输码/购买层）
+        if (GATED_ROUTES.has(url.pathname)) assertAccess(req, env)
         assertBodySize(req)
       } catch (err) {
         if (err instanceof PineHttpError) {
-          return jsonError(err.message, err.status)
+          // 403 ACCESS_REQUIRED 透出 code，前端据此弹访问码弹层
+          const code = err.status === 403 && err.message === 'ACCESS_REQUIRED' ? 'ACCESS_REQUIRED' : undefined
+          const msg =
+            code
+              ? '当前为邀请制试用：请输入访问码，或前往定价页购买积分套餐'
+              : err.message
+          return jsonError(msg, err.status, code)
         }
         throw err
       }

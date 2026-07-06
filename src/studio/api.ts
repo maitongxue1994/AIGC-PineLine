@@ -17,8 +17,7 @@ import type {
 } from './types'
 import type { AgentChatRequest, AgentChatResponse } from './agent/types'
 import { appendGenLog } from './assetdb'
-
-const AUTH_TOKEN = (import.meta.env.VITE_PINELINE_API_KEY as string | undefined)?.trim()
+import { getAccessCode, requestAccessCode } from './accessCode'
 
 /** 从请求体里挑提示词/模型摘要（生成日志用，非生成类字段自然为空） */
 function reqSummary(body: unknown): { prompt?: string; model?: string } {
@@ -46,7 +45,8 @@ async function postJson<TReq, TRes>(
   signal?: AbortSignal,
 ): Promise<TRes> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (AUTH_TOKEN) headers['X-Pineline-Auth'] = AUTH_TOKEN
+  const accessCode = getAccessCode()
+  if (accessCode) headers['X-Pineline-Access'] = accessCode
 
   const shouldLog = path.startsWith('/api/generate/')
   const startedAt = Date.now()
@@ -63,9 +63,11 @@ async function postJson<TReq, TRes>(
       ...(signal ? { signal } : {}),
     })
     if (!res.ok) {
-      const err = (await res.json().catch(() => ({}))) as ApiError
+      const err = (await res.json().catch(() => ({}))) as ApiError & { code?: string }
       const msg = err.error || err.detail || `${res.status} ${res.statusText}`
       log(false, { error: msg })
+      // 无访问码/码失效 → 弹输码层（画布仍可浏览，仅生成受限）
+      if (err.code === 'ACCESS_REQUIRED') requestAccessCode()
       throw new Error(msg)
     }
     const data = (await res.json()) as TRes
@@ -164,7 +166,8 @@ export async function fetchVideoFile(req: {
   taskId: string
 }): Promise<Blob> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (AUTH_TOKEN) headers['X-Pineline-Auth'] = AUTH_TOKEN
+  const accessCode = getAccessCode()
+  if (accessCode) headers['X-Pineline-Access'] = accessCode
   const startedAt = Date.now()
   const log = (ok: boolean, error?: string) =>
     void appendGenLog({
