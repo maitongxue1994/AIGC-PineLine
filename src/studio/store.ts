@@ -135,6 +135,8 @@ type StudioState = {
     shotIndex: number,
     patch: Partial<Pick<ShotItem, 'title' | 'description'>>,
   ) => void
+  /** 整体编辑分镜全文：解析「#n 标题 + 描述」文本块重建 shots（可增删镜头），保留原顺序 id */
+  replaceShotsFromText: (id: string, text: string) => void
   setActiveVersion: (id: string, index: number) => void
   setPin: (id: string, pin: PinColor | null) => void
   clearNodeError: (id: string) => void
@@ -958,6 +960,40 @@ export const useStudioStore = create<StudioState>()(
               return { ...n, data: { ...n.data, shots, versions } }
             }),
           })),
+
+        replaceShotsFromText: (id, text) => {
+          commit()
+          set((s) => ({
+            nodes: s.nodes.map((n) => {
+              if (n.id !== id || n.data.preset !== 'storyboard') return n
+              const prev = n.data.shots ?? []
+              // 按空行分段；每段首行为标题（去 #n 前缀），其余为描述
+              const shots: ShotItem[] = text
+                .split(/\n{2,}/)
+                .map((b) => b.trim())
+                .filter(Boolean)
+                .map((block, i) => {
+                  const nl = block.indexOf('\n')
+                  const rawTitle = (nl === -1 ? block : block.slice(0, nl)).trim()
+                  const description = nl === -1 ? '' : block.slice(nl + 1).trim()
+                  return {
+                    id: prev[i]?.id ?? `shot-${crypto.randomUUID()}`,
+                    title: rawTitle.replace(/^#\s*\d+\s*/, '').trim() || `镜头 ${i + 1}`,
+                    description,
+                  }
+                })
+              const vtext = shots
+                .map((sh, i) => `#${i + 1} ${sh.title}\n${sh.description}`)
+                .join('\n\n')
+              const versions = n.data.versions.length
+                ? n.data.versions.map((v, i) =>
+                    i === n.data.activeVersion ? { ...v, content: vtext } : v,
+                  )
+                : [newVersion(vtext)]
+              return { ...n, data: { ...n.data, shots, versions } }
+            }),
+          }))
+        },
 
         setActiveVersion: (id, index) =>
           set((s) => ({

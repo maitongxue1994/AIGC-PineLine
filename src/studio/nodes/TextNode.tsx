@@ -28,6 +28,7 @@ import NodeShell from './NodeShell'
 import NodeToolbarBar from './NodeToolbarBar'
 import PromptComposer from './PromptComposer'
 import PromptEditorDialog from '../dialogs/PromptEditorDialog'
+import StoryboardEditorDialog from '../dialogs/StoryboardEditorDialog'
 import EntityExtractDialog from '../dialogs/EntityExtractDialog'
 import { CopyButton, SyncInput, SyncTextarea } from './composerKit'
 
@@ -437,7 +438,9 @@ function VoicePanel({ id, data }: { id: string; data: PineNodeData }) {
 function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
   const updateActiveContent = useStudioStore((s) => s.updateActiveContent)
   const updateShot = useStudioStore((s) => s.updateShot)
+  const replaceShotsFromText = useStudioStore((s) => s.replaceShotsFromText)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [shotEditorOpen, setShotEditorOpen] = useState(false)
   const [extractOpen, setExtractOpen] = useState(false)
 
   const meta = presetMeta(data.preset)
@@ -478,6 +481,20 @@ function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
           </div>
         ) : shots.length > 0 ? (
           <>
+            <div className="group/shots relative">
+            {/* 整体编辑全文：弹大编辑器一次改全部镜头（可增删、调顺序） */}
+            <button
+              title="整体编辑全文（增删镜头 / 调顺序）"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShotEditorOpen(true)
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="nodrag absolute right-3 top-2 z-10 flex items-center gap-1 rounded-[8px] bg-black/50 px-2 py-1.5 text-[11px] opacity-0 backdrop-blur-sm transition hover:bg-white/[0.14] group-hover/shots:opacity-100"
+              style={{ color: TOKENS.textMuted }}
+            >
+              <Maximize2 size={12} /> 整体编辑
+            </button>
             <div className="nowheel max-h-[280px] space-y-2 overflow-y-auto p-4">
               {/* 镜头可编辑（半受控 SyncInput/SyncTextarea，IME 安全）：改动写回 shots，
                   派生分镜图/视频将使用编辑后的内容 */}
@@ -510,9 +527,18 @@ function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
                 </div>
               ))}
             </div>
+            </div>
             <VoicePanel id={id} data={data} />
             {/* key=镜头数：分镜重跑后面板重挂载，勾选态回到全选 */}
             <ShotDerivePanel key={shots.length} id={id} shots={shots} />
+            {shotEditorOpen && (
+              <StoryboardEditorDialog
+                title={`${data.title} · 分镜脚本`}
+                shots={shots}
+                onSave={(text) => replaceShotsFromText(id, text)}
+                onClose={() => setShotEditorOpen(false)}
+              />
+            )}
           </>
         ) : output != null ? (
           <div className="group/body relative">
