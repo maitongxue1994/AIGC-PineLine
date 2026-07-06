@@ -34,7 +34,7 @@ const VALID_PRESETS = new Set([
 const VALID_PARAM_KEYS = new Set([
   'shotIndex', 'aspectRatio', 'quality', 'batch', 'tone', 'length', 'splitMode', 'splitter',
   'videoMode', 'videoRatio', 'videoDuration', 'videoResolution', 'videoModel', 'videoAudio',
-  'videoNoSubtitles', 'videoNoBgm', 'videoNoSfx', 'voiceNarration', 'voiceCast',
+  'videoNoSubtitles', 'videoNoBgm', 'videoNoSfx', 'voiceNarration', 'voiceCast', 'videoStyle',
   'textModel', 'imageModel',
 ])
 /**
@@ -48,6 +48,10 @@ const MODEL_VALUE_WHITELIST: Record<string, ReadonlySet<string>> = {
   videoModel: new Set([
     'seedance-2.0', 'seedance-2.0-fast', 'seedance-2.0-mini',
     'hailuo-2.3', 'hailuo-02', 'wan-2.7', 'kling-v2-6', 'veo-3.1-fast',
+  ]),
+  // 视频风格（对齐前端 VIDEO_STYLES id，字面量维护——本模块零依赖不 import 前端）
+  videoStyle: new Set([
+    'realistic', '3d-animation', 'cg-render', '2d-anime', 'cyberpunk', 'ink-wash', 'clay',
   ]),
 }
 // 完整管线（剧本+分镜+N分镜图+N视频+连线+run）很容易超 20 条，放宽到 48

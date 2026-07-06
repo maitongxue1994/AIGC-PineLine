@@ -112,6 +112,8 @@ export type NodeParams = {
   voiceNarration?: string
   /** 分镜节点：角色音色表（每行「角色名：音色描述」），随旁白一并注入派生视频提示词 */
   voiceCast?: string
+  /** 视频视觉风格 id（VIDEO_STYLES）：挂分镜节点则全片统一，视频节点自身可覆盖 */
+  videoStyle?: string
   /** 首尾帧参考的 ⇄ 交换态（进 params 供 runNode 读取，而非组件局部态） */
   framesSwapped?: boolean
   /** 软剪辑区间（秒）：播放范围 clamp；由剪辑模式确认写入 */

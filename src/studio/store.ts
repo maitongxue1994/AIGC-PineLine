@@ -35,6 +35,7 @@ import {
 } from './nodeCatalog'
 import { migrateGraph, migrateLegacyEdge } from './migrate'
 import { buildVideoPrompt, resolveGenerateAudio } from './videoPrompt'
+import { styleKeywords } from './videoStyles'
 import { rememberTaskLabel } from './taskLabels'
 import { appendHistory, getProject, isPersistent, putProject } from './assetdb'
 import {
@@ -1408,6 +1409,10 @@ export const useStudioStore = create<StudioState>()(
                 shotText: vctx.shotText,
                 voiceNarration: vctx.voiceNarration,
                 voiceCast: vctx.voiceCast,
+                // 节点自身风格覆盖分镜全局风格
+                ...(styleKeywords(params.videoStyle ?? vctx.style)
+                  ? { style: styleKeywords(params.videoStyle ?? vctx.style) }
+                  : {}),
                 ...(entityRefs.length
                   ? { refBindings: entityRefs.map((e) => ({ kind: e.kind, name: e.name })) }
                   : {}),
@@ -1547,6 +1552,9 @@ export const useStudioStore = create<StudioState>()(
             shotText: vctx.shotText,
             voiceNarration: vctx.voiceNarration,
             voiceCast: vctx.voiceCast,
+            ...(styleKeywords(params.videoStyle ?? vctx.style)
+              ? { style: styleKeywords(params.videoStyle ?? vctx.style) }
+              : {}),
             purity,
             audioOn: resolveGenerateAudio(params.videoAudio, purity, hasVoice),
           })
@@ -2483,6 +2491,8 @@ type VideoUpstreamContext = {
   shotText?: string
   voiceNarration?: string
   voiceCast?: string
+  /** 分镜节点上的全片统一视觉风格 id（VIDEO_STYLES） */
+  style?: string
   /** 该镜头用到的角色/场景/道具实体（沿分镜图上游收集，供 Seedance @图片N 引用） */
   entityRefs?: EntityRef[]
 }
@@ -2507,6 +2517,7 @@ function videoContextFor(
     if (!ctx.voiceNarration && d.params.voiceNarration?.trim())
       ctx.voiceNarration = d.params.voiceNarration.trim()
     if (!ctx.voiceCast && d.params.voiceCast?.trim()) ctx.voiceCast = d.params.voiceCast.trim()
+    if (!ctx.style && d.params.videoStyle) ctx.style = d.params.videoStyle
   }
   const collectEntity = (n: PineNode) => {
     if (seenEntity.has(n.id)) return

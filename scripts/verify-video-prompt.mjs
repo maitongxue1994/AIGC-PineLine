@@ -106,4 +106,24 @@ check('refBindings 幂等（回填后再组装不翻倍）', () => {
   assert.equal(twice, once)
 })
 
+// ---- 7. 视觉风格 + 防双胞胎 ----
+check('style 注入「整体风格」段', () => {
+  const out = buildVideoPrompt({ userPrompt: '男人走过街道', style: '赛博朋克风格，霓虹冷蓝紫色调' })
+  assert.ok(out.includes('整体风格：赛博朋克风格，霓虹冷蓝紫色调'))
+  assert.ok(out.includes('人物面部稳定不变形'))
+})
+check('style 幂等（回填后再组装不翻倍）', () => {
+  const once = buildVideoPrompt({ userPrompt: '画面', style: '真人写实风格' })
+  const twice = buildVideoPrompt({ userPrompt: once, style: '真人写实风格' })
+  assert.equal(twice, once)
+})
+check('有主体参考时注入防双胞胎约束', () => {
+  const out = buildVideoPrompt({ userPrompt: '两人对话', refBindings: [{ kind: '角色', name: '小明' }] })
+  assert.ok(out.includes('禁止分身'))
+})
+check('无参考时不注入防双胞胎', () => {
+  const out = buildVideoPrompt({ userPrompt: '空镜头' })
+  assert.ok(!out.includes('禁止分身'))
+})
+
 console.log(`\nverify-video-prompt: ${pass} checks passed`)

@@ -35,6 +35,11 @@ export type VideoPromptInput = {
    * 注入 Seedance 官方主体定义「将<图片N>中的[X]定义为<主体N>」，绑定素材与画面主体。
    */
   refBindings?: RefBinding[]
+  /**
+   * 视觉风格关键词串（VIDEO_STYLES.keywords）。官方指南：必须显式写风格约束词，
+   * 否则 2D/3D 画面会漂成真人写实。注入提示词「视觉风格」位，全片统一。
+   */
+  style?: string
   purity?: PurityOpts
   /** generate_audio 关闭时不注入音色/音频类约束（默认 true） */
   audioOn?: boolean
@@ -72,6 +77,12 @@ function assemble(base: string, input: VideoPromptInput): string {
     }
   }
 
+  // 视觉风格 + 画质稳定（官方公式的「风格 + 画质」位，尾部统一收紧；幂等标记「整体风格：」）
+  const style = input.style?.trim()
+  if (style && !base.includes('整体风格：')) {
+    segs.push(`整体风格：${style}；人物面部稳定不变形，动作自然流畅，无卡顿无闪烁。`)
+  }
+
   const p = input.purity ?? {}
   const constraints: string[] = []
   if (p.noSubtitles && !base.includes('保持无字幕')) {
@@ -86,6 +97,11 @@ function assemble(base: string, input: VideoPromptInput): string {
     else if (p.noSfx) constraints.push('无音效')
   }
   if (constraints.length) segs.push(`${constraints.join('；')}。`)
+
+  // 防双胞胎（官方推荐全局约束）：有主体参考时，禁止分身/撞脸干扰主体一致性
+  if (binds.length && !base.includes('禁止分身')) {
+    segs.push('全程禁止出现外形、着装完全一致的多余人物，禁止分身、双胞胎效果，同一画面仅保留单个对应主体。')
+  }
 
   return segs.join('\n')
 }

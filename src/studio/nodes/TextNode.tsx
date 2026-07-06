@@ -23,6 +23,7 @@ import {
   type ShotItem,
 } from '../types'
 import { IMAGE_MODELS, presetMeta } from '../nodeCatalog'
+import { VIDEO_STYLES } from '../videoStyles'
 import { TOKENS } from '../designTokens'
 import NodeShell from './NodeShell'
 import NodeToolbarBar from './NodeToolbarBar'
@@ -396,7 +397,11 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
  */
 function VoicePanel({ id, data }: { id: string; data: PineNodeData }) {
   const updateNodeParams = useStudioStore((s) => s.updateNodeParams)
-  const configured = !!(data.params.voiceNarration?.trim() || data.params.voiceCast?.trim())
+  const configured = !!(
+    data.params.voiceNarration?.trim() ||
+    data.params.voiceCast?.trim() ||
+    data.params.videoStyle
+  )
   const [open, setOpen] = useState(false)
 
   return (
@@ -407,9 +412,9 @@ function VoicePanel({ id, data }: { id: string; data: PineNodeData }) {
         style={{ color: TOKENS.textBody }}
       >
         <Mic size={12} style={{ color: TOKENS.textMuted }} />
-        音色设定
+        音色与风格
         <span className="font-normal" style={{ color: configured ? '#4BBF6B' : TOKENS.textFaint }}>
-          {configured ? '已设置' : '· 保证多镜头声音一致'}
+          {configured ? '已设置' : '· 全片统一声音与风格'}
         </span>
         <ChevronDown
           size={12}
@@ -439,6 +444,29 @@ function VoicePanel({ id, data }: { id: string; data: PineNodeData }) {
           />
           <div className="text-[10px] leading-relaxed" style={{ color: TOKENS.textFaint }}>
             官方音色公式：性别 + 年龄区间 + 声音属性 + 语速 + 情绪基线；派生镜头视频时自动注入提示词
+          </div>
+          {/* 视频风格：挂分镜节点全片统一，派生每个镜头视频都注入同一风格词，防止风格漂移 */}
+          <div className="flex flex-wrap items-center gap-1 border-t border-white/[0.05] pt-2">
+            <span className="mr-0.5 text-[10px]" style={{ color: TOKENS.textFaint }}>
+              视频风格
+            </span>
+            {VIDEO_STYLES.map((st) => {
+              const active = data.params.videoStyle === st.id
+              return (
+                <button
+                  key={st.id}
+                  onClick={() => updateNodeParams(id, { videoStyle: active ? undefined : st.id })}
+                  title={st.desc}
+                  className="rounded-full px-2 py-0.5 text-[10px] transition"
+                  style={{
+                    background: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+                    color: active ? '#F5F5F7' : TOKENS.textMuted,
+                  }}
+                >
+                  {st.name}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
