@@ -23,6 +23,8 @@ export type AgentOp =
   /** 分镜派生自动化（支持等待上游产出后接续）：id 为 storyboard 节点；generate=派生后自动批量生图 */
   | { op: 'derive_shot_images'; id: string; indices?: number[]; generate?: boolean }
   | { op: 'derive_shot_videos'; id: string; run?: boolean }
+  /** 把本轮上传的第 imageIndex 张图落成命名实体参考节点（角色/场景/道具），派生分镜图时按名挂载 */
+  | { op: 'add_reference'; imageIndex: number; kind: 'char' | 'scene' | 'prop'; name: string }
   /** 把用户的稳定偏好/项目设定写入本地长期记忆（IndexedDB memory 库） */
   | { op: 'remember'; content: string }
 
@@ -118,6 +120,10 @@ export function describeOp(op: AgentOp): string {
       return `派生分镜图${op.indices?.length ? `（镜头 ${op.indices.map((i) => i + 1).join('、')}）` : '（全部镜头）'}${op.generate ? ' 并自动批量生成' : ''}`
     case 'derive_shot_videos':
       return `一键成片：派生镜头视频${op.run ? '并立即生成' : '（预填提示词，确认后生成）'}`
+    case 'add_reference': {
+      const kindLabel = op.kind === 'scene' ? '场景' : op.kind === 'prop' ? '道具' : '角色'
+      return `📎 将上传的第 ${op.imageIndex + 1} 张图设为${kindLabel}参考「${op.name}」`
+    }
     case 'remember':
       return `📌 记住：${op.content.slice(0, 40)}${op.content.length > 40 ? '…' : ''}`
   }

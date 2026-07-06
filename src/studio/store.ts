@@ -102,6 +102,16 @@ type StudioState = {
     init?: { title?: string; prompt?: string; params?: NodeParams },
   ) => string
   addAssetNode: (dataUrl: string, position?: Position) => string
+  /**
+   * 用户上传的参考图 → 命名实体参考节点（角色/场景/道具），供分镜图派生按名精确挂载。
+   * Agent 把「这张图作为主讲人/场景/道具」落地到画布的通道。
+   */
+  addReferenceNode: (
+    dataUrl: string,
+    kind: 'char' | 'scene' | 'prop',
+    name: string,
+    position?: Position,
+  ) => string
   /** 上传视频 → 视频节点（内容即本体） */
   addVideoNode: (dataUrl: string, position?: Position) => string
   /** 剪辑/增强派生下游视频节点并连线 */
@@ -835,6 +845,18 @@ export const useStudioStore = create<StudioState>()(
         addAssetNode: (dataUrl, position) => {
           const node = buildNode('asset', null, positionFor(320, position))
           // 版本内容即素材本体，节点天然处于 done 态，可直接被下游引用
+          node.data.versions = [newVersion(dataUrl)]
+          node.data.status = 'done'
+          return pushNode(node)
+        },
+
+        addReferenceNode: (dataUrl, kind, name, position) => {
+          const preset =
+            kind === 'scene' ? 'scene-grid' : kind === 'prop' ? 'prop-triview' : 'char-triview'
+          // image + 实体 preset + 有图版本 → deriveShotImageNodes 的 shot-compose 会按 title 精确挂载
+          const node = buildNode('image', preset, positionFor(320, position), {
+            title: name.slice(0, 24) || '参考',
+          })
           node.data.versions = [newVersion(dataUrl)]
           node.data.status = 'done'
           return pushNode(node)

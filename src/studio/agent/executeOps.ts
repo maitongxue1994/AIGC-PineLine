@@ -57,8 +57,9 @@ async function waitShotImages(sbId: string): Promise<boolean> {
 /**
  * Agent 操作执行器：ref → 真实节点 id 映射后逐条调 store actions。
  * 调用方在执行前先 commit 一次撤销历史（store 的 150ms 合并窗口使整批 ⌘Z 一步可撤）。
+ * images = 本轮用户上传的原图（data URL），供 add_reference 落地为实体参考节点。
  */
-export async function executeOps(ops: AgentOp[]): Promise<string> {
+export async function executeOps(ops: AgentOp[], images: string[] = []): Promise<string> {
   const store = useStudioStore.getState()
   const refMap = new Map<string, string>()
   const resolve = (idOrRef: string) => refMap.get(idOrRef) ?? idOrRef
@@ -193,6 +194,19 @@ export async function executeOps(ops: AgentOp[]): Promise<string> {
             fail('derive_shot_videos: 没有可挂视频的分镜图，请先派生并生成分镜图')
             break
           }
+          ok++
+          break
+        }
+        case 'add_reference': {
+          const img = images[op.imageIndex]
+          if (!img) {
+            fail(`add_reference: 第 ${op.imageIndex + 1} 张图不存在（刷新后原图会失效，请重新上传）`)
+            break
+          }
+          // 落成命名实体节点（角色/场景/道具）；派生分镜图时 shot-compose 按名精确挂载
+          const id = s.addReferenceNode(img, op.kind, op.name, { x: autoX, y: baseY })
+          autoX += 480
+          refMap.set(`ref:${op.name}`, id)
           ok++
           break
         }

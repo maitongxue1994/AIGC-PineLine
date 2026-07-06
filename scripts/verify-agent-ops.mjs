@@ -176,4 +176,27 @@ check('remember 空内容拒绝', () => {
   assert.equal(r.dropped, 2)
 })
 
+// ---- 10. add_reference 参考图落地 ----
+check('add_reference 透传（char/scene/prop，name 截 24）', () => {
+  const r = sanitizeOps([
+    { op: 'add_reference', imageIndex: 0, kind: 'char', name: `主讲人${'长'.repeat(40)}` },
+    { op: 'add_reference', imageIndex: 2, kind: 'scene', name: '咖啡厅' },
+  ])
+  assert.equal(r.ops.length, 2)
+  assert.equal(r.ops[0].op, 'add_reference')
+  assert.equal(r.ops[0].imageIndex, 0)
+  assert.equal(r.ops[0].kind, 'char')
+  assert.equal(r.ops[0].name.length, 24)
+  assert.equal(r.ops[1].kind, 'scene')
+})
+check('add_reference 非法 kind / 负 index / 空 name 拒绝', () => {
+  const r = sanitizeOps([
+    { op: 'add_reference', imageIndex: 0, kind: 'person', name: 'x' },
+    { op: 'add_reference', imageIndex: -1, kind: 'char', name: 'x' },
+    { op: 'add_reference', imageIndex: 0, kind: 'prop', name: '  ' },
+  ])
+  assert.equal(r.ops.length, 0)
+  assert.equal(r.dropped, 3)
+})
+
 console.log(`\n✅ Agent ops 白名单校验全部通过：${pass} 项`)

@@ -269,7 +269,15 @@ export const useAgentStore = create<AgentState>()(
               return
             }
           }
-          const result = await executeOps(message.ops)
+          // add_reference 需要本轮用户上传的原图：从该 assistant 消息往前找最近的 user 消息
+          const msgIdx = session.messages.findIndex((m) => m.id === messageId)
+          let roundImages: string[] = []
+          for (let i = msgIdx - 1; i >= 0; i--) {
+            if (session.messages[i].role !== 'user') continue
+            roundImages = fullImagesByMsg.get(session.messages[i].id) ?? []
+            break
+          }
+          const result = await executeOps(message.ops, roundImages)
           patchSession(session.id, (s) => ({
             ...s,
             messages: s.messages.map((m) =>
