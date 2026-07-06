@@ -8,11 +8,21 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  RotateCcw,
   Rows3,
   Search,
   Trash2,
+  X,
 } from 'lucide-react'
-import { listProjects, putProject, removeProject, type ProjectRecord } from '../studio/assetdb'
+import {
+  listDeletedProjects,
+  listProjects,
+  purgeProject,
+  putProject,
+  removeProject,
+  restoreProject,
+  type ProjectRecord,
+} from '../studio/assetdb'
 import { useStudioStore } from '../studio/store'
 import { SHADOWS, TOKENS } from '../studio/designTokens'
 
@@ -49,6 +59,8 @@ export default function Projects() {
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [recycleOpen, setRecycleOpen] = useState(false)
+  const [deleted, setDeleted] = useState<ProjectRecord[] | null>(null)
 
   useEffect(() => {
     // 先从档案恢复完整画布（刷新后 localStorage 是剥离版），再落档并刷新列表——
@@ -90,10 +102,25 @@ export default function Projects() {
   }
 
   const handleDelete = async (p: ProjectRecord) => {
-    if (!window.confirm(`删除项目「${p.name}」？此操作不可恢复。`)) return
-    await removeProject(p.id)
+    if (!window.confirm(`将「${p.name}」移到回收站？30 天内可在回收站恢复。`)) return
+    await removeProject(p.id) // 软删除：移入回收站，不再硬删
     detachProject(p.id)
     setProjects((prev) => (prev ?? []).filter((x) => x.id !== p.id))
+  }
+
+  const openRecycle = async () => {
+    setRecycleOpen(true)
+    setDeleted(await listDeletedProjects())
+  }
+  const handleRestore = async (p: ProjectRecord) => {
+    await restoreProject(p.id)
+    setDeleted((prev) => (prev ?? []).filter((x) => x.id !== p.id))
+    void listProjects().then(setProjects)
+  }
+  const handlePurge = async (p: ProjectRecord) => {
+    if (!window.confirm(`彻底删除「${p.name}」？此操作不可恢复！`)) return
+    await purgeProject(p.id)
+    setDeleted((prev) => (prev ?? []).filter((x) => x.id !== p.id))
   }
 
   const handleRename = async (p: ProjectRecord, name: string) => {
@@ -120,6 +147,14 @@ export default function Projects() {
           项目
         </h1>
         <span className="flex-1" />
+        <button
+          onClick={() => void openRecycle()}
+          title="回收站（删除的项目 30 天内可恢复）"
+          className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] transition hover:bg-white/[0.08]"
+          style={{ color: TOKENS.textMuted }}
+        >
+          <Trash2 size={14} /> 回收站
+        </button>
         <button
           onClick={() => void handleCreate()}
           className="flex items-center gap-1.5 rounded-full px-4 py-2 text-[14px] font-semibold transition hover:opacity-90"
@@ -301,6 +336,87 @@ export default function Projects() {
           </div>
         )}
       </div>
+
+      {recycleOpen && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-6"
+          onClick={() => setRecycleOpen(false)}
+        >
+          <div
+            className="flex max-h-[76vh] w-[560px] max-w-[94vw] flex-col rounded-[20px] border border-white/[0.08]"
+            style={{ background: TOKENS.panelBg, boxShadow: SHADOWS.modal }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 border-b border-white/[0.07] px-5 py-3.5">
+              <Trash2 size={16} style={{ color: TOKENS.textMuted }} />
+              <span className="text-[15px] font-semibold" style={{ color: TOKENS.textTitle }}>
+                回收站
+              </span>
+              <span className="text-[12px]" style={{ color: TOKENS.textFaint }}>
+                删除的项目保留 30 天，可恢复
+              </span>
+              <span className="flex-1" />
+              <button
+                title="关闭"
+                onClick={() => setRecycleOpen(false)}
+                className="rounded-full p-1.5 transition hover:bg-white/[0.08]"
+                style={{ color: TOKENS.textMuted }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {deleted === null ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 size={20} className="animate-spin" style={{ color: TOKENS.textMuted }} />
+                </div>
+              ) : deleted.length === 0 ? (
+                <div className="py-12 text-center text-[13px]" style={{ color: TOKENS.textFaint }}>
+                  回收站是空的
+                </div>
+              ) : (
+                deleted.map((p) => (
+                  <div
+                    key={p.id}
+                    className="mb-1.5 flex items-center gap-3 rounded-[12px] bg-white/[0.03] px-3.5 py-2.5"
+                  >
+                    {p.thumb ? (
+                      <img src={p.thumb} alt="" className="h-10 w-14 shrink-0 rounded-[6px] object-cover" />
+                    ) : (
+                      <span
+                        className="h-10 w-14 shrink-0 rounded-[6px]"
+                        style={{ background: TOKENS.brandGradient }}
+                      />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px]" style={{ color: TOKENS.textBody }}>
+                        {p.name}
+                      </span>
+                      <span className="block text-[11px]" style={{ color: TOKENS.textFaint }}>
+                        {p.deletedAt ? `${timeAgo(p.deletedAt)}删除` : ''}
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => void handleRestore(p)}
+                      className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-semibold transition hover:opacity-90"
+                      style={{ background: '#F5F5F7', color: '#0B0B0C' }}
+                    >
+                      <RotateCcw size={12} /> 恢复
+                    </button>
+                    <button
+                      onClick={() => void handlePurge(p)}
+                      title="彻底删除（不可恢复）"
+                      className="shrink-0 rounded-full p-2 text-red-300 transition hover:bg-red-500/10"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

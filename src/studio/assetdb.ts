@@ -98,7 +98,12 @@ export type ProjectRecord = {
   thumb: string | null
   graph: { nodes: unknown[]; edges: unknown[] }
   credits: number
+  /** 回收站标记：软删除时间戳（存在 = 在回收站，列表默认隐藏，超期自动清理） */
+  deletedAt?: number
 }
+
+/** 回收站保留期：超过则永久清除（媒体完整占空间，不宜久留） */
+const RECYCLE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 const DB_NAME = 'pineline-studio'
 const DB_VERSION = 4
@@ -317,8 +322,20 @@ export async function removeAsset(id: string): Promise<void> {
 
 export async function listProjects(): Promise<ProjectRecord[]> {
   const rows = await tx<ProjectRecord[]>('projects', 'readonly', (s) => s.getAll())
-  if (rows) return rows.sort((a, b) => b.updatedAt - a.updatedAt)
-  return [...memProjects.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+  const all = rows ?? [...memProjects.values()]
+  // 顺带清理超期回收站（fire-and-forget，不阻塞列表返回）
+  const now = Date.now()
+  for (const p of all) {
+    if (p.deletedAt && now - p.deletedAt > RECYCLE_TTL_MS) void purgeProject(p.id)
+  }
+  return all.filter((p) => !p.deletedAt).sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+/** 回收站列表：已软删除的项目，按删除时间倒序 */
+export async function listDeletedProjects(): Promise<ProjectRecord[]> {
+  const rows = await tx<ProjectRecord[]>('projects', 'readonly', (s) => s.getAll())
+  const all = rows ?? [...memProjects.values()]
+  return all.filter((p) => p.deletedAt).sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0))
 }
 
 export async function getProject(id: string): Promise<ProjectRecord | null> {
@@ -332,7 +349,24 @@ export async function putProject(record: ProjectRecord): Promise<void> {
   if (ok === null) memProjects.set(record.id, record)
 }
 
+/** 删除 = 移入回收站（软删除，可恢复；杜绝硬删除无法找回的误删事故） */
 export async function removeProject(id: string): Promise<void> {
+  const p = await getProject(id)
+  if (!p) return
+  await putProject({ ...p, deletedAt: Date.now() })
+}
+
+/** 从回收站恢复：清除 deletedAt 标记 */
+export async function restoreProject(id: string): Promise<void> {
+  const p = await getProject(id)
+  if (!p?.deletedAt) return
+  const { deletedAt: _drop, ...rest } = p
+  void _drop
+  await putProject(rest)
+}
+
+/** 永久删除（回收站里手动清除 / 超期自动清理）：真正从 IndexedDB 抹除，不可恢复 */
+export async function purgeProject(id: string): Promise<void> {
   await tx('projects', 'readwrite', (s) => s.delete(id))
   memProjects.delete(id)
 }
