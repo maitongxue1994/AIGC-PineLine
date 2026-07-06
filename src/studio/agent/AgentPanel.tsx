@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  BookMarked,
   Check,
   ChevronDown,
   Clock,
@@ -22,6 +23,7 @@ import { TEXT_MODELS } from '../nodeCatalog'
 import { activeContent, isImageContent } from '../types'
 import { describeOp } from './types'
 import MarkdownMessage from './MarkdownMessage'
+import MemoryDialog from './MemoryDialog'
 import { compressImageFile, imagesFromClipboard } from './imageAttach'
 import { MAX_ATTACH_IMAGES } from './agentStore'
 import { SHADOWS, TOKENS } from '../designTokens'
@@ -126,6 +128,7 @@ export default function AgentPanel() {
 
   const [draft, setDraft] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [memoryOpen, setMemoryOpen] = useState(false)
   const [modeOpen, setModeOpen] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -199,6 +202,14 @@ export default function AgentPanel() {
           style={{ color: TOKENS.textMuted }}
         >
           <Plus size={16} />
+        </button>
+        <button
+          title="助手记忆（跨对话保留的偏好与设定，可导入 MEMORY.md）"
+          onClick={() => setMemoryOpen(true)}
+          className="rounded-full p-2 transition hover:bg-white/[0.08]"
+          style={{ color: TOKENS.textMuted }}
+        >
+          <BookMarked size={15} />
         </button>
         <div ref={historyRef} className="relative">
           <button
@@ -585,6 +596,7 @@ export default function AgentPanel() {
           )}
         </div>
       </div>
+      {memoryOpen && <MemoryDialog onClose={() => setMemoryOpen(false)} />}
     </div>
   )
 }
