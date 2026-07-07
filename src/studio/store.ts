@@ -211,6 +211,11 @@ type StudioState = {
    */
   remountShotAssets: (storyboardId: string) => Promise<void>
   /**
+   * 从剧本/分镜文本提取角色/场景/道具，非阻断地自动建实体参考节点并生成（不弹模态框）。
+   * 进度走 flash 提示，用户可继续操作画布。
+   */
+  extractEntities: (sourceNodeId: string) => Promise<void>
+  /**
    * 分镜→一键成片：为每个已派生分镜图建下游视频节点（已有视频的跳过），
    * 按 Seedance 官方公式预填提示词（含音色/纯净约束）并连线；
    * opts.run 时立即整批运行。返回新建视频节点 id。
@@ -2094,6 +2099,56 @@ export const useStudioStore = create<StudioState>()(
           flash(`✓ 已重新精确挂载 ${mounted} 处角色/场景/道具参考（每镜只连真正用到的）`)
         },
 
+        extractEntities: async (sourceNodeId) => {
+          const src = get().nodes.find((n) => n.id === sourceNodeId)
+          const text = src ? activeContent(src.data) : null
+          const flash = (m: string) =>
+            window.dispatchEvent(new CustomEvent('pineline:flash', { detail: m }))
+          if (!src || !text?.trim()) {
+            flash('该节点还没有可提取的文本')
+            return
+          }
+          flash('正在分析文本，提取角色/场景/道具…（不影响继续操作）')
+          let parsed: ExtractedEntities
+          try {
+            const res = await generateScript({
+              brief: text.slice(0, 12000),
+              tone: src.data.params.tone,
+              preset: 'extract-entities',
+              model: resolveApiModel(TEXT_MODELS, src.data.params.textModel),
+            })
+            parsed = parseEntities(res.script)
+          } catch (err) {
+            flash(`资产提取失败：${err instanceof Error ? err.message : String(err)}`)
+            return
+          }
+          // 自动全部创建并连线（放在源节点左侧一列），随即自动生成参考图
+          const baseX = src.position.x - 460
+          const baseY = src.position.y
+          let slot = 0
+          const ids: string[] = []
+          for (const g of ENTITY_GROUPS) {
+            for (const e of parsed[g.key]) {
+              const id = get().addNode(
+                'image',
+                g.preset,
+                { x: baseX, y: baseY + slot * 620 },
+                { title: e.name, prompt: e.description },
+              )
+              get().onConnect({ source: sourceNodeId, sourceHandle: null, target: id, targetHandle: null })
+              ids.push(id)
+              slot++
+            }
+          }
+          get().requestFitView()
+          if (!ids.length) {
+            flash('未提取到可用的角色/场景/道具')
+            return
+          }
+          flash(`✓ 已提取并创建 ${ids.length} 个资产节点，开始生成参考图…`)
+          void get().runPipeline(ids)
+        },
+
         deriveShotVideoNodes: async (storyboardId, opts) => {
           const s = get()
           const flash = (msg: string) =>
@@ -2546,6 +2601,46 @@ async function recordVideoHistory(nodeId: string, prompt: string, versions: Node
     })
   }
   if (entries.length) void appendHistory(entries)
+}
+
+// ---- 实体提取（资产一致性）：从对话框搬到 store，供非阻断的 extractEntities 复用 ----
+type ExtractedEntity = { name: string; description: string }
+type ExtractedEntities = { characters: ExtractedEntity[]; scenes: ExtractedEntity[]; props: ExtractedEntity[] }
+
+const ENTITY_GROUPS: { key: keyof ExtractedEntities; preset: 'char-triview' | 'scene-grid' | 'prop-triview' }[] = [
+  { key: 'characters', preset: 'char-triview' },
+  { key: 'scenes', preset: 'scene-grid' },
+  { key: 'props', preset: 'prop-triview' },
+]
+
+/** 容错解析 extract-entities 返回：剥 think/围栏 → 截取 {…} → 规整 */
+function parseEntities(raw: string): ExtractedEntities {
+  const cleaned = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+  const attempts: string[] = [cleaned]
+  const first = cleaned.indexOf('{')
+  const last = cleaned.lastIndexOf('}')
+  if (first >= 0 && last > first) attempts.push(cleaned.slice(first, last + 1))
+  for (const text of attempts) {
+    try {
+      const obj = JSON.parse(text) as Partial<Record<keyof ExtractedEntities, Array<Partial<ExtractedEntity>>>>
+      const norm = (list?: Array<Partial<ExtractedEntity>>): ExtractedEntity[] =>
+        (Array.isArray(list) ? list : [])
+          .map((e) => ({
+            name: String(e?.name ?? '').trim().slice(0, 24),
+            description: String(e?.description ?? '').trim().slice(0, 200),
+          }))
+          .filter((e) => e.name)
+      const out = { characters: norm(obj.characters), scenes: norm(obj.scenes), props: norm(obj.props) }
+      if (out.characters.length + out.scenes.length + out.props.length > 0) return out
+    } catch {
+      /* 尝试下一种切法 */
+    }
+  }
+  throw new Error('实体提取结果解析失败，请重试')
 }
 
 /**

@@ -32,7 +32,6 @@ import PromptComposer from './PromptComposer'
 import PromptEditorDialog from '../dialogs/PromptEditorDialog'
 import StoryboardEditorDialog from '../dialogs/StoryboardEditorDialog'
 import VideoGenConfirmDialog from '../dialogs/VideoGenConfirmDialog'
-import EntityExtractDialog from '../dialogs/EntityExtractDialog'
 import { CopyButton, SyncInput, SyncTextarea } from './composerKit'
 
 const CARD_W = 340
@@ -519,7 +518,8 @@ function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
   const replaceShotsFromText = useStudioStore((s) => s.replaceShotsFromText)
   const [editorOpen, setEditorOpen] = useState(false)
   const [shotEditorOpen, setShotEditorOpen] = useState(false)
-  const [extractOpen, setExtractOpen] = useState(false)
+  const [extracting, setExtracting] = useState(false)
+  const extractEntities = useStudioStore((s) => s.extractEntities)
 
   const meta = presetMeta(data.preset)
   const output = activeContent(data)
@@ -669,20 +669,22 @@ function TextNodeInner({ id, data, selected }: NodeProps<PineNode>) {
         {extractable && (
           <div className="nodrag border-t border-white/[0.06] p-2">
             <button
-              onClick={() => setExtractOpen(true)}
-              title="提取需保持视觉一致性的实体，批量生成三视图/宫格参考节点"
-              className="flex w-full items-center justify-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold transition hover:bg-white/[0.07]"
+              disabled={extracting}
+              onClick={() => {
+                if (extracting) return
+                setExtracting(true)
+                void extractEntities(id).finally(() => setExtracting(false))
+              }}
+              title="提取需保持视觉一致性的实体，自动批量生成三视图/宫格参考节点（后台进行，不打断操作）"
+              className="flex w-full items-center justify-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold transition hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-60"
               style={{ background: 'rgba(255,255,255,0.04)', color: TOKENS.textBody }}
             >
-              <UsersRound size={12} />
-              提取角色 / 场景 / 道具
+              {extracting ? <Loader2 size={12} className="animate-spin" /> : <UsersRound size={12} />}
+              {extracting ? '提取中…' : '提取角色 / 场景 / 道具'}
             </button>
           </div>
         )}
       </div>
-      {extractOpen && output && (
-        <EntityExtractDialog sourceNodeId={id} text={output} onClose={() => setExtractOpen(false)} />
-      )}
     </NodeShell>
   )
 }
