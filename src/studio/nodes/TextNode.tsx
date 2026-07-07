@@ -199,7 +199,12 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
           return (
             <button
               key={m.id}
-              onClick={() => setImageModel(active ? undefined : m.id)}
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                setImageModel(active ? undefined : m.id)
+              }}
               title={active ? '再点一次恢复默认' : m.desc}
               className="rounded-full px-2 py-0.5 text-[10px] transition"
               style={{
@@ -221,7 +226,12 @@ function ShotDerivePanel({ id, shots }: { id: string; shots: ShotItem[] }) {
           return (
             <button
               key={q}
-              onClick={() => setImageQuality(active ? undefined : q)}
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                setImageQuality(active ? undefined : q)
+              }}
               title={active ? '再点一次恢复默认（自适应）' : `按 ${q} 生成`}
               className="rounded-full px-2 py-0.5 text-[10px] transition"
               style={{
