@@ -304,7 +304,7 @@ export default function AgentPanel() {
 
   return (
     <div
-      className="absolute bottom-0 right-0 top-0 z-40 flex w-[480px] max-w-[92vw] flex-col border-l border-white/[0.08]"
+      className="pl-slide-in-right absolute bottom-0 right-0 top-0 z-40 flex w-[480px] max-w-[92vw] flex-col border-l border-white/[0.08]"
       style={{ background: 'rgba(16,16,18,0.98)', boxShadow: SHADOWS.modal }}
     >
       {/* 头部 */}

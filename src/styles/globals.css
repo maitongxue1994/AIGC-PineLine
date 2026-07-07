@@ -222,3 +222,18 @@
 .pl-pop-in {
   animation: plPopIn 130ms ease-out;
 }
+
+/* 右侧助手面板入场（进入页发送后「缩到右侧边栏」：从右缘滑入 + 渐显） */
+@keyframes plSlideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.pl-slide-in-right {
+  animation: plSlideInRight 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}

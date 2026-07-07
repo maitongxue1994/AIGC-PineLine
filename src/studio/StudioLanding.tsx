@@ -16,7 +16,6 @@ import { SHADOWS, TOKENS } from './designTokens'
 export default function StudioLanding() {
   // localStorage persist 已存画布结构（媒体后补），故已有项目挂载即 nodes>0 → 不显示
   const isEmpty = useStudioStore((s) => s.nodes.length === 0)
-  const [dismissed, setDismissed] = useState(false)
   const [draft, setDraft] = useState('')
   const [modelOpen, setModelOpen] = useState(false)
   const modelRef = useRef<HTMLDivElement | null>(null)
@@ -34,8 +33,9 @@ export default function StudioLanding() {
   const addPendingImages = useAgentStore((s) => s.addPendingImages)
   const removePendingImage = useAgentStore((s) => s.removePendingImage)
 
-  // AgentPanel 打开时不显示进入页，避免两个助手输入框重叠（用户反馈）
-  const open = isEmpty && !dismissed && !panelOpen
+  // 空画布即进入页（不是浮层、无关闭按钮）；发送后 setPanelOpen(true) 收起并缩到右侧面板，
+  // 画布出现节点后 isEmpty 转 false 自然隐去。无 dismiss——进入页本身就是空画布的形态。
+  const open = isEmpty && !panelOpen
   if (!open) return null
 
   const attachFiles = async (files: File[]) => {
@@ -50,29 +50,22 @@ export default function StudioLanding() {
   const go = (text: string) => {
     const t = text.trim()
     if (!t) return
-    setPanelOpen(true) // 打开对话面板承接后续
-    setDraft('') // 乐观清空
+    // 进入页鼓励上传参考图，而默认 M2.7 不支持图片——预判到会被 send 前置拦截时不收起进入页，
+    // 留住输入与参考图、等用户切 M3/豆包（flash 由 send 统一发）；其余情况乐观收起、缩到右侧面板
+    const willReject = pendingImages.length > 0 && chatModel === 'minimax-m2.7'
+    if (!willReject) {
+      setPanelOpen(true) // 收起进入页、缩到右侧面板承接后续
+      setDraft('') // 乐观清空
+    }
     void send(t).then((accepted) => {
-      if (accepted) setDismissed(true)
-      else setDraft(t) // 被拦截（如 M2.7 带图）→ 还原输入，落地层保留
+      if (!accepted) setDraft(t) // 兜底还原（预判外的意外拦截）
     })
   }
 
   return (
-    <div
-      className="absolute inset-0 z-[35] flex flex-col items-center justify-center px-6"
-      style={{ background: 'rgba(11,11,12,0.72)', backdropFilter: 'blur(2px)' }}
-    >
-      <button
-        title="关闭，进入空白画布"
-        onClick={() => setDismissed(true)}
-        className="absolute right-5 top-5 rounded-full p-2 transition hover:bg-white/[0.08]"
-        style={{ color: TOKENS.textMuted }}
-      >
-        <X size={18} />
-      </button>
-
-      <div className="w-full max-w-[720px] -translate-y-6">
+    <div className="pointer-events-none absolute inset-0 z-[35] flex flex-col items-center justify-center px-6">
+      {/* 就在画布里（非浮层、无遮罩、无关闭按钮）：外层穿透点击让画布/左栏/顶栏照常可用，仅内容卡片可交互 */}
+      <div className="pointer-events-auto w-full max-w-[720px] -translate-y-6">
         <div className="mb-5 flex items-center gap-2.5">
           <span className="h-8 w-8 rounded-[10px]" style={{ background: TOKENS.brandGradient }} />
           <span className="text-[24px] font-bold" style={{ color: TOKENS.textTitle }}>
