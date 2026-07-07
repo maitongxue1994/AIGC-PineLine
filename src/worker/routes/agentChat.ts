@@ -125,7 +125,39 @@ function stripFences(s: string): string {
   return s.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
 }
 
-/** 容错解析：直接 parse → 提取首个 {...} → 降级为纯回复（保证对话不断流） */
+/** M2.7 等推理模型会把工具调用写进正文（[TOOL_CALL] / <tool_call> 等标记 + 载荷） */
+const TOOL_CALL_MARKER = /\[TOOL_CALL\]|<\/?minimax:tool_call>|<\/?tool_call>|<\/?tool_calls>/i
+
+/** 从 start 处的 '[' 起按方括号配平截出完整数组子串 */
+function balancedArray(s: string, start: number): string | null {
+  let depth = 0
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i]
+    if (ch === '[') depth++
+    else if (ch === ']') {
+      depth--
+      if (depth === 0) return s.slice(start, i + 1)
+    }
+  }
+  return null
+}
+
+/** 从工具调用文本里尽力抽出 ops 数组（优先 "ops":[ 键，否则第一个 '['） */
+function extractOpsFromToolCall(text: string): unknown[] {
+  const m = text.match(/["']?ops["']?\s*[:=]\s*\[/)
+  const at = m && m.index != null ? text.indexOf('[', m.index) : text.indexOf('[')
+  if (at < 0) return []
+  const arr = balancedArray(text, at)
+  if (!arr) return []
+  try {
+    const p = JSON.parse(arr)
+    return Array.isArray(p) ? p : []
+  } catch {
+    return []
+  }
+}
+
+/** 容错解析：直接 parse → 提取首个 {...} → 工具调用文本恢复 → 降级为纯回复（保证对话不断流） */
 function parseAgentJson(raw: string): { reply: string; ops: unknown[] } {
   const cleaned = stripFences(raw)
   const attempts: string[] = [cleaned]
@@ -141,6 +173,13 @@ function parseAgentJson(raw: string): { reply: string; ops: unknown[] } {
     } catch {
       /* 尝试下一种 */
     }
+  }
+  // M2.7 把工具调用写进正文（截图泄漏 [TOOL_CALL]{...ops...}）：剥前导人话作 reply、配平抽 ops
+  const marker = cleaned.match(TOOL_CALL_MARKER)
+  if (marker && marker.index != null) {
+    const ops = extractOpsFromToolCall(cleaned.slice(marker.index))
+    const lead = cleaned.slice(0, marker.index).trim()
+    if (ops.length) return { reply: lead || '好的，正在为你操作画布。', ops }
   }
   return { reply: raw.slice(0, 1200), ops: [] }
 }
