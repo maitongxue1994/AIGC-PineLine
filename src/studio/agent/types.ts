@@ -128,3 +128,63 @@ export function describeOp(op: AgentOp): string {
       return `📌 记住：${op.content.slice(0, 40)}${op.content.length > 40 ? '…' : ''}`
   }
 }
+
+/**
+ * 每个 op 依赖的更早 op 下标：其引用的 ref 由更早的 add_node/add_reference 定义时才算
+ * batch 内依赖（否则视为画布已有节点 id，无 batch 依赖）。供多选执行时补全依赖闭包。
+ */
+export function opDependencies(ops: AgentOp[]): number[][] {
+  const producerOf = new Map<string, number>()
+  ops.forEach((op, i) => {
+    if (op.op === 'add_node') producerOf.set(op.ref, i)
+    else if (op.op === 'add_reference') producerOf.set(`ref:${op.name}`, i)
+  })
+  const refsUsed = (op: AgentOp): string[] => {
+    switch (op.op) {
+      case 'set_prompt':
+      case 'set_params':
+      case 'rename':
+      case 'delete_node':
+      case 'derive_shot_images':
+      case 'derive_shot_videos':
+        return [op.id]
+      case 'connect':
+        return [op.source, op.target]
+      case 'run':
+        return op.ids
+      default:
+        return []
+    }
+  }
+  return ops.map((op) => {
+    const deps: number[] = []
+    for (const r of refsUsed(op)) {
+      const p = producerOf.get(r)
+      if (p != null) deps.push(p)
+    }
+    return deps
+  })
+}
+
+/** 对用户勾选集做依赖传递闭包：选了 connect 就自动带上它引用的 add_node，保证子集可执行 */
+export function completeSelection(
+  ops: AgentOp[],
+  selected: Set<number>,
+  deps?: number[][],
+): Set<number> {
+  const d = deps ?? opDependencies(ops)
+  const result = new Set(selected)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const i of [...result]) {
+      for (const dep of d[i] ?? []) {
+        if (!result.has(dep)) {
+          result.add(dep)
+          changed = true
+        }
+      }
+    }
+  }
+  return result
+}

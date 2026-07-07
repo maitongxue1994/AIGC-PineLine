@@ -183,6 +183,8 @@ type StudioState = {
   /** 一键整理：按拓扑层从左到右分列、层内纵向堆叠，可 ⌘Z 撤销 */
   autoLayout: () => void
   runPipeline: (ids?: string[]) => Promise<void>
+  /** 停止一切在飞生成：bump 代际让 runPipeline/runNode 的写回失效，并复位 running 节点为 idle */
+  interruptGeneration: () => void
   createPipelineFromBrief: (brief: string) => string[]
   /**
    * 分镜两段式派生：为选中镜头各建一个分镜图节点并连线，
@@ -1805,6 +1807,20 @@ export const useStudioStore = create<StudioState>()(
             // 代际已切换时新画布的 pipelineRunning 由新一轮运行管理，不越权清除
             if (g === generation) set({ pipelineRunning: false })
           }
+        },
+
+        interruptGeneration: () => {
+          // 与 import/reset 同一停机机制：bump 后 runPipeline 循环 g!==generation break、
+          // runNode 的 safeSet 因代际过期丢弃写回；再复位 running 节点，防其卡在转圈
+          generation++
+          set((s) => ({
+            pipelineRunning: false,
+            nodes: s.nodes.map((n) =>
+              n.data.status === 'running'
+                ? { ...n, data: { ...n.data, status: 'idle' as const, progressNote: undefined } }
+                : n,
+            ),
+          }))
         },
 
         createPipelineFromBrief: (brief) => {

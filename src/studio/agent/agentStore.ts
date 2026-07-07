@@ -5,6 +5,7 @@ import { listMemories } from '../assetdb'
 import { canvasSnapshot, executeOps } from './executeOps'
 import { guardedLocalStorage, useStudioStore } from '../store'
 import type { AttachedImage } from './imageAttach'
+import { completeSelection } from './types'
 import type { AgentMessage, AgentSession } from './types'
 
 type AgentState = {
@@ -33,7 +34,7 @@ type AgentState = {
   send: (text: string) => Promise<boolean>
   /** 中止本次发送（发送按钮在 sending 期变为停止按钮） */
   stop: () => void
-  confirmOps: (messageId: string) => Promise<void>
+  confirmOps: (messageId: string, selectedIndices?: number[]) => Promise<void>
   dismissOps: (messageId: string) => void
 }
 
@@ -49,6 +50,8 @@ const IMG_HISTORY_BUDGET = 8 * 1024 * 1024
 
 /** 当前在飞请求的中止器（模块级，不持久化） */
 let sendAbort: AbortController | null = null
+/** ops 执行阶段（confirmOps→executeOps）的中止器：停止按钮要能中断执行中的长任务 */
+let opsAbort: AbortController | null = null
 
 /**
  * 消息附图原图（模块级内存，不进 localStorage——原图 base64 会瞬间打爆 5MB 配额）。
@@ -225,14 +228,22 @@ export const useAgentStore = create<AgentState>()(
         },
 
         stop: () => {
-          sendAbort?.abort()
+          sendAbort?.abort() // 中止在飞的 agentChat 请求
+          opsAbort?.abort() // 中止 executeOps 的协作式长轮询（ensureStoryboardShots/waitShotImages）
+          useStudioStore.getState().interruptGeneration() // 停 store 在飞的 runPipeline/runNode 生成
         },
 
-        confirmOps: async (messageId) => {
+        confirmOps: async (messageId, selectedIndices) => {
           const session = activeSession()
           if (!session) return
           const message = session.messages.find((m) => m.id === messageId)
           if (!message?.ops || message.opsState === 'executed') return
+          // 多选执行：补全依赖闭包（选了 connect 就带上它引用的 add_node），按原顺序取子集
+          const chosen = selectedIndices
+            ? completeSelection(message.ops, new Set(selectedIndices))
+            : new Set(message.ops.map((_, i) => i))
+          const subset = message.ops.filter((_, i) => chosen.has(i))
+          if (!subset.length) return
           // 跨项目防护：ops 针对生成时的画布，切项目后 ref 失效且可能误改新项目
           if (message.projectId && message.projectId !== useStudioStore.getState().currentProjectId) {
             patchSession(session.id, (s) => ({
@@ -249,9 +260,9 @@ export const useAgentStore = create<AgentState>()(
             }))
             return
           }
-          // 清空画布是破坏性操作：无论手动/自动模式，画布非空时都必须经用户确认
+          // 清空画布是破坏性操作：无论手动/自动模式，画布非空时都必须经用户确认（只看选中子集）
           if (
-            message.ops.some((o) => o.op === 'clear_canvas') &&
+            subset.some((o) => o.op === 'clear_canvas') &&
             useStudioStore.getState().nodes.length > 0
           ) {
             const okToClear = window.confirm(
@@ -277,7 +288,16 @@ export const useAgentStore = create<AgentState>()(
             roundImages = fullImagesByMsg.get(session.messages[i].id) ?? []
             break
           }
-          const result = await executeOps(message.ops, roundImages)
+          // ops 执行阶段建专用中止器：停止按钮据此中断长任务（轮询/派生）
+          opsAbort = new AbortController()
+          let result: string
+          try {
+            result = await executeOps(subset, roundImages, opsAbort.signal)
+          } finally {
+            opsAbort = null
+          }
+          const skippedCount = message.ops.length - subset.length
+          if (skippedCount > 0) result = `${result}（另跳过未选 ${skippedCount} 项）`
           patchSession(session.id, (s) => ({
             ...s,
             messages: s.messages.map((m) =>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BookMarked,
   Check,
@@ -21,7 +21,8 @@ import { useAgentStore } from './agentStore'
 import { useStudioStore } from '../store'
 import { TEXT_MODELS } from '../nodeCatalog'
 import { activeContent, isImageContent } from '../types'
-import { describeOp } from './types'
+import { completeSelection, describeOp, opDependencies } from './types'
+import type { AgentMessage } from './types'
 import { SUGGESTIONS } from './suggestions'
 import MarkdownMessage from './MarkdownMessage'
 import MemoryDialog from './MemoryDialog'
@@ -63,6 +64,118 @@ function SendingIndicator() {
   return (
     <div className="flex items-center gap-2 text-[13px]" style={{ color: TOKENS.textMuted }}>
       <Loader2 size={14} className="animate-spin" /> {SENDING_STAGES[stage]}
+    </div>
+  )
+}
+
+/**
+ * 画布操作预览卡：每个 op 可勾选，默认全选；补依赖闭包（选了 connect 自动带上其 add_node）。
+ * pending 态显示勾选框 + 「执行所选/全部执行」；已执行/已放弃显示结果。
+ */
+function OpsPreviewCard({
+  message,
+  onConfirm,
+  onDismiss,
+}: {
+  message: AgentMessage
+  onConfirm: (id: string, indices?: number[]) => Promise<void>
+  onDismiss: (id: string) => void
+}) {
+  const ops = message.ops!
+  const deps = useMemo(() => opDependencies(ops), [ops])
+  const [selected, setSelected] = useState<Set<number>>(() => new Set(ops.map((_, i) => i)))
+  const effective = useMemo(() => completeSelection(ops, selected, deps), [ops, selected, deps])
+  const pending = message.opsState === 'pending'
+  const allOn = selected.size === ops.length
+  const toggle = (i: number) =>
+    setSelected((prev) => {
+      const n = new Set(prev)
+      if (n.has(i)) n.delete(i)
+      else n.add(i)
+      return n
+    })
+
+  return (
+    <div
+      className="mt-2 max-w-[92%] rounded-[14px] border border-white/[0.08] p-3"
+      style={{ background: TOKENS.chipBg }}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[12px] font-semibold" style={{ color: TOKENS.textMuted }}>
+          画布操作 · {ops.length} 项
+        </span>
+        {pending && (
+          <button
+            onClick={() => setSelected(allOn ? new Set() : new Set(ops.map((_, i) => i)))}
+            className="text-[11px] transition hover:opacity-80"
+            style={{ color: TOKENS.accent }}
+          >
+            {allOn ? '取消全选' : '全选'}
+          </button>
+        )}
+      </div>
+      <div className="space-y-1">
+        {ops.map((op, i) => {
+          const on = selected.has(i)
+          const auto = !on && effective.has(i) // 被依赖闭包自动带上
+          return (
+            <div key={i} className="flex items-start gap-2 text-[13px]" style={{ color: TOKENS.textBody }}>
+              {pending ? (
+                <button
+                  onClick={() => toggle(i)}
+                  className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border text-[10px]"
+                  style={{
+                    borderColor: on || auto ? TOKENS.accent : 'rgba(255,255,255,0.25)',
+                    background: on ? TOKENS.accent : auto ? 'rgba(46,155,255,0.28)' : 'transparent',
+                    color: '#fff',
+                  }}
+                >
+                  {on || auto ? '✓' : ''}
+                </button>
+              ) : (
+                <Zap size={12} className="mt-1 shrink-0" style={{ color: TOKENS.accent }} />
+              )}
+              <span className={auto ? 'opacity-70' : ''}>
+                {describeOp(op)}
+                {auto && (
+                  <span className="ml-1 text-[11px]" style={{ color: TOKENS.textFaint }}>
+                    · 依赖必选
+                  </span>
+                )}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      {pending && (
+        <div className="mt-3 flex gap-2">
+          <button
+            disabled={effective.size === 0}
+            onClick={() => void onConfirm(message.id, allOn ? undefined : [...effective])}
+            className="flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold text-white transition enabled:hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+            style={{ background: TOKENS.accent }}
+          >
+            <Play size={12} /> {allOn ? '全部执行' : `执行所选（${effective.size}）`}
+          </button>
+          <button
+            onClick={() => onDismiss(message.id)}
+            className="rounded-full px-4 py-2 text-[13px] transition hover:bg-white/[0.1]"
+            style={{ background: 'rgba(255,255,255,0.06)', color: TOKENS.textMuted }}
+          >
+            放弃
+          </button>
+        </div>
+      )}
+      {message.opsState === 'executed' && (
+        <div className="mt-2 flex items-center gap-1.5 text-[12px]" style={{ color: '#4BBF6B' }}>
+          <Check size={13} /> {message.result ?? '已执行'}（⌘Z 可整批撤销）
+        </div>
+      )}
+      {message.opsState === 'dismissed' && (
+        <div className="mt-2 text-[12px]" style={{ color: TOKENS.textFaint }}>
+          已放弃
+        </div>
+      )}
     </div>
   )
 }
@@ -338,50 +451,7 @@ export default function AgentPanel() {
 
                 {/* 操作预览卡 */}
                 {m.ops && m.ops.length > 0 && (
-                  <div
-                    className="mt-2 max-w-[92%] rounded-[14px] border border-white/[0.08] p-3"
-                    style={{ background: TOKENS.chipBg }}
-                  >
-                    <div className="mb-2 text-[12px] font-semibold" style={{ color: TOKENS.textMuted }}>
-                      画布操作 · {m.ops.length} 项
-                    </div>
-                    <div className="space-y-1.5">
-                      {m.ops.map((op, i) => (
-                        <div key={i} className="flex items-start gap-2 text-[13px]" style={{ color: TOKENS.textBody }}>
-                          <Zap size={12} className="mt-1 shrink-0" style={{ color: TOKENS.accent }} />
-                          {describeOp(op)}
-                        </div>
-                      ))}
-                    </div>
-                    {m.opsState === 'pending' && (
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          onClick={() => void confirmOps(m.id)}
-                          className="flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold text-white transition hover:opacity-90"
-                          style={{ background: TOKENS.accent }}
-                        >
-                          <Play size={12} /> 全部执行
-                        </button>
-                        <button
-                          onClick={() => dismissOps(m.id)}
-                          className="rounded-full px-4 py-2 text-[13px] transition hover:bg-white/[0.1]"
-                          style={{ background: 'rgba(255,255,255,0.06)', color: TOKENS.textMuted }}
-                        >
-                          放弃
-                        </button>
-                      </div>
-                    )}
-                    {m.opsState === 'executed' && (
-                      <div className="mt-2 flex items-center gap-1.5 text-[12px]" style={{ color: '#4BBF6B' }}>
-                        <Check size={13} /> {m.result ?? '已执行'}（⌘Z 可整批撤销）
-                      </div>
-                    )}
-                    {m.opsState === 'dismissed' && (
-                      <div className="mt-2 text-[12px]" style={{ color: TOKENS.textFaint }}>
-                        已放弃
-                      </div>
-                    )}
-                  </div>
+                  <OpsPreviewCard message={m} onConfirm={confirmOps} onDismiss={dismissOps} />
                 )}
               </div>
             ))}

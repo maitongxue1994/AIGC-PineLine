@@ -3,13 +3,22 @@ import { putMemory } from '../assetdb'
 import { isImageContent, type NodeParams, type NodePreset } from '../types'
 import type { AgentOp } from './types'
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+/** 可中断 sleep：abort 时立即 resolve（不 reject，避免被 op 的 try/catch 误记为失败） */
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve()
+    const t = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => { clearTimeout(t); resolve() }, { once: true })
+  })
 
 /**
  * 确保分镜节点已产出 shots（自动执行链用）：已有直接返回；正在跑则轮询等待；
  * 否则主动把「上游文本节点 + 分镜」一起 runPipeline 跑出来。最长约 3 分钟。
  */
-async function ensureStoryboardShots(sbId: string): Promise<import('../types').ShotItem[]> {
+async function ensureStoryboardShots(
+  sbId: string,
+  signal?: AbortSignal,
+): Promise<import('../types').ShotItem[]> {
   const getSb = () => useStudioStore.getState().nodes.find((n) => n.id === sbId)
   if (getSb()?.data.shots?.length) return getSb()!.data.shots!
 
@@ -27,17 +36,19 @@ async function ensureStoryboardShots(sbId: string): Promise<import('../types').S
   }
   // 轮询等待 shots 出现（并发 run 场景 / runPipeline 已返回但状态未落）
   for (let i = 0; i < 90; i++) {
+    if (signal?.aborted) return getSb()?.data.shots ?? []
     const sb = getSb()
     if (sb?.data.shots?.length) return sb.data.shots
     if (sb?.data.status === 'error' && !useStudioStore.getState().pipelineRunning) break
-    await sleep(2000)
+    await sleep(2000, signal)
   }
   return getSb()?.data.shots ?? []
 }
 
 /** 等派生的分镜图节点出图（一键成片前置）：最长约 5 分钟 */
-async function waitShotImages(sbId: string): Promise<boolean> {
+async function waitShotImages(sbId: string, signal?: AbortSignal): Promise<boolean> {
   for (let i = 0; i < 150; i++) {
+    if (signal?.aborted) return false
     const s = useStudioStore.getState()
     const shotNodes = s.edges
       .filter((e) => e.source === sbId)
@@ -49,7 +60,7 @@ async function waitShotImages(sbId: string): Promise<boolean> {
       // 都不在跑了：有图返回 true，全无图返回 false
       return shotNodes.some((n) => n!.data.versions.some((v) => isImageContent(v.content)))
     }
-    await sleep(2000)
+    await sleep(2000, signal)
   }
   return true
 }
@@ -59,7 +70,11 @@ async function waitShotImages(sbId: string): Promise<boolean> {
  * 调用方在执行前先 commit 一次撤销历史（store 的 150ms 合并窗口使整批 ⌘Z 一步可撤）。
  * images = 本轮用户上传的原图（data URL），供 add_reference 落地为实体参考节点。
  */
-export async function executeOps(ops: AgentOp[], images: string[] = []): Promise<string> {
+export async function executeOps(
+  ops: AgentOp[],
+  images: string[] = [],
+  signal?: AbortSignal,
+): Promise<string> {
   const store = useStudioStore.getState()
   const refMap = new Map<string, string>()
   const resolve = (idOrRef: string) => refMap.get(idOrRef) ?? idOrRef
@@ -80,6 +95,7 @@ export async function executeOps(ops: AgentOp[], images: string[] = []): Promise
   let autoX = 80
 
   for (const op of ops) {
+    if (signal?.aborted) break
     try {
       const s = useStudioStore.getState()
       switch (op.op) {
@@ -158,7 +174,7 @@ export async function executeOps(ops: AgentOp[], images: string[] = []): Promise
             break
           }
           // 自动执行链：分镜还没产出就先等/跑上游剧本+分镜，无需用户手动
-          const shots = await ensureStoryboardShots(id)
+          const shots = await ensureStoryboardShots(id, signal)
           if (!shots.length) {
             fail('derive_shot_images: 分镜生成失败或超时，请检查剧本/分镜节点')
             break
@@ -188,7 +204,7 @@ export async function executeOps(ops: AgentOp[], images: string[] = []): Promise
             break
           }
           // run 且分镜图还在生成：等其出图再派生视频（自动成片链）
-          if (op.run) await waitShotImages(id)
+          if (op.run) await waitShotImages(id, signal)
           const made = await useStudioStore.getState().deriveShotVideoNodes(id, { run: op.run })
           if (!made.length) {
             fail('derive_shot_videos: 没有可挂视频的分镜图，请先派生并生成分镜图')
@@ -239,6 +255,9 @@ export async function executeOps(ops: AgentOp[], images: string[] = []): Promise
     }
   }
 
+  if (signal?.aborted) {
+    return ok > 0 ? `已停止：完成 ${ok} 项后中断` : '已停止本次画布操作'
+  }
   const summary =
     skipped > 0 ? `已执行 ${ok} 项，跳过 ${skipped} 项无效操作` : `已执行 ${ok} 项操作`
   return errors.length ? `${summary}（${errors.join('；')}）` : summary
