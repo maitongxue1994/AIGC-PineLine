@@ -10,6 +10,7 @@ import videoTasks from './routes/videoTasks'
 import debugLogs from './routes/debugLogs'
 import { handleBridgeWs, handleMcp } from './routes/mcp'
 import { deliveryError, deliveryUpload, deliveryView } from './routes/delivery'
+import { backupError, backupRoute } from './routes/backup'
 import { paddleWebhook } from './routes/paddleWebhook'
 import {
   assertAccess,
@@ -142,6 +143,17 @@ export default {
         return await deliveryUpload(req, env)
       } catch (err) {
         return deliveryError(err)
+      }
+    }
+
+    // 付费用户项目云备份（R2）：PUT 存 / GET 列表或下载 / DELETE 删除。自带访问码鉴权 +
+    // 路由内 80MB 上限（不走默认 assertBodySize，备份体积大）
+    if (url.pathname === '/api/backup') {
+      try {
+        assertOrigin(req, env)
+        return await backupRoute(req, env, url)
+      } catch (err) {
+        return backupError(err)
       }
     }
 
