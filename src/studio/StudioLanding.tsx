@@ -24,6 +24,7 @@ export default function StudioLanding() {
   useDismissable(modelOpen, () => setModelOpen(false), () => [modelRef.current])
 
   const send = useAgentStore((s) => s.send)
+  const panelOpen = useAgentStore((s) => s.open)
   const setPanelOpen = useAgentStore((s) => s.setOpen)
   const webSearch = useAgentStore((s) => s.webSearch)
   const setWebSearch = useAgentStore((s) => s.setWebSearch)
@@ -33,7 +34,8 @@ export default function StudioLanding() {
   const addPendingImages = useAgentStore((s) => s.addPendingImages)
   const removePendingImage = useAgentStore((s) => s.removePendingImage)
 
-  const open = isEmpty && !dismissed
+  // AgentPanel 打开时不显示进入页，避免两个助手输入框重叠（用户反馈）
+  const open = isEmpty && !dismissed && !panelOpen
   if (!open) return null
 
   const attachFiles = async (files: File[]) => {
