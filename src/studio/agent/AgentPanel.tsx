@@ -9,6 +9,7 @@ import {
   ImagePlus,
   Link as LinkIcon,
   Loader2,
+  Maximize2,
   Play,
   Plus,
   Send,
@@ -26,6 +27,7 @@ import type { AgentMessage } from './types'
 import { SUGGESTIONS } from './suggestions'
 import MarkdownMessage from './MarkdownMessage'
 import MemoryDialog from './MemoryDialog'
+import ChatInputExpandDialog from './ChatInputExpandDialog'
 import { compressImageFile, imagesFromClipboard } from './imageAttach'
 import { MAX_ATTACH_IMAGES } from './agentStore'
 import { SHADOWS, TOKENS } from '../designTokens'
@@ -237,6 +239,7 @@ export default function AgentPanel() {
   )
 
   const [draft, setDraft] = useState('')
+  const [expandOpen, setExpandOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [memoryOpen, setMemoryOpen] = useState(false)
   const [modeOpen, setModeOpen] = useState(false)
@@ -266,13 +269,15 @@ export default function AgentPanel() {
     : null
   const selText = selectedNode ? activeContent(selectedNode.data) : null
 
-  const handleSend = () => {
+  const handleSend = (): Promise<boolean> => {
     const text = draft.trim()
-    if (!text || sending) return
+    if (!text || sending) return Promise.resolve(false)
     // 乐观清空（正常发送即时反馈）；send 返回 false = 发送前被拦截（如 M2.7 带图），还原输入
     setDraft('')
-    void send(text).then((accepted) => {
+    // 返回 accepted 供扩展编辑窗判断——仅在真发出去后才收起大窗（被拦截则留在大窗继续改）
+    return send(text).then((accepted) => {
       if (!accepted) setDraft(text)
+      return accepted
     })
   }
 
@@ -508,27 +513,37 @@ export default function AgentPanel() {
             </span>
           </div>
         )}
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            e.stopPropagation()
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              handleSend()
-            }
-          }}
-          onPaste={(e) => {
-            const files = imagesFromClipboard(e)
-            if (files.length) {
-              e.preventDefault()
-              void attachFiles(files)
-            }
-          }}
-          placeholder="描述创意或需求，选中节点自动进入上下文…"
-          className="min-h-[64px] w-full resize-none rounded-[14px] border border-white/[0.08] bg-white/[0.04] px-3.5 py-2.5 text-[14px] leading-relaxed outline-none transition focus:border-white/25"
-          style={{ color: TOKENS.textBody }}
-        />
+        <div className="group relative">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                handleSend()
+              }
+            }}
+            onPaste={(e) => {
+              const files = imagesFromClipboard(e)
+              if (files.length) {
+                e.preventDefault()
+                void attachFiles(files)
+              }
+            }}
+            placeholder="描述创意或需求，选中节点自动进入上下文…"
+            className="min-h-[64px] w-full resize-none rounded-[14px] border border-white/[0.08] bg-white/[0.04] py-2.5 pl-3.5 pr-10 text-[14px] leading-relaxed outline-none transition focus:border-white/25"
+            style={{ color: TOKENS.textBody }}
+          />
+          <button
+            title="扩展编辑（大窗里从容写长需求）"
+            onClick={() => setExpandOpen(true)}
+            className="absolute right-2 top-2 rounded-[8px] p-1.5 opacity-60 transition hover:bg-white/[0.1] hover:opacity-100 group-focus-within:opacity-100"
+            style={{ color: TOKENS.textMuted }}
+          >
+            <Maximize2 size={14} />
+          </button>
+        </div>
         <div className="mt-2 flex items-center gap-2">
           <div ref={modeRef} className="relative">
             <button
@@ -667,6 +682,17 @@ export default function AgentPanel() {
         </div>
       </div>
       {memoryOpen && <MemoryDialog onClose={() => setMemoryOpen(false)} />}
+      {expandOpen && (
+        <ChatInputExpandDialog
+          value={draft}
+          sending={sending}
+          attachedCount={pendingImages.length}
+          onChange={setDraft}
+          onSend={handleSend}
+          onClose={() => setExpandOpen(false)}
+          onPasteFiles={(files) => void attachFiles(files)}
+        />
+      )}
     </div>
   )
 }
