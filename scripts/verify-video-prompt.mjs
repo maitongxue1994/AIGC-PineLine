@@ -83,8 +83,8 @@ check('无BGM+无音效但有音色诉求 → 保留音频轨', () =>
   assert.equal(resolveGenerateAudio(undefined, { noBgm: true, noSfx: true }, true), true))
 check('默认开', () => assert.equal(resolveGenerateAudio(undefined, {}, false), true))
 
-// ---- 6. @图片N 主体绑定（Seedance 官方元素引用）----
-check('refBindings 注入官方主体定义 @图片N', () => {
+// ---- 6. @图片N 引用（Seedance 官方元素引用，at 符号）----
+check('refBindings 注入 @图片N 引用', () => {
   const out = buildVideoPrompt({
     userPrompt: '主角走进店里',
     refBindings: [
@@ -92,13 +92,20 @@ check('refBindings 注入官方主体定义 @图片N', () => {
       { kind: '场景', name: '咖啡厅' },
     ],
   })
-  assert.ok(out.includes('将<图片1>中的角色[小明]定义为<主体1>'))
-  assert.ok(out.includes('将<图片2>中的场景[咖啡厅]定义为<主体2>'))
+  assert.ok(out.includes('@图片1') && out.includes('角色[小明]'))
+  assert.ok(out.includes('@图片2') && out.includes('场景[咖啡厅]'))
   assert.ok(out.includes('主角走进店里'))
 })
-check('无 refBindings 时不注入主体定义（默认 frames 不受影响）', () => {
+check('frame 标记的绑定输出分镜画面参照句', () => {
+  const out = buildVideoPrompt({
+    userPrompt: '主角站立',
+    refBindings: [{ kind: '分镜画面', name: '#1', frame: true }],
+  })
+  assert.ok(out.includes('@图片1为本镜分镜画面'))
+})
+check('无 refBindings 时不注入 @图片', () => {
   const out = buildVideoPrompt({ userPrompt: '画面' })
-  assert.ok(!out.includes('定义为<主体'))
+  assert.ok(!out.includes('@图片'))
 })
 check('refBindings 幂等（回填后再组装不翻倍）', () => {
   const once = buildVideoPrompt({ userPrompt: '画面', refBindings: [{ kind: '角色', name: '小明' }] })

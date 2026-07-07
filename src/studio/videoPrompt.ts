@@ -18,8 +18,8 @@ export type PurityOpts = {
   noSfx?: boolean
 }
 
-/** 参考素材绑定（Seedance @图片N）：按 content 数组顺序，N 从 1 起 */
-export type RefBinding = { kind: string; name: string }
+/** 参考素材绑定（Seedance @图片N）：按 content 数组 reference_image 顺序，N 从 1 起。frame=该图是本镜分镜画面 */
+export type RefBinding = { kind: string; name: string; frame?: boolean }
 
 export type VideoPromptInput = {
   /** 用户手输提示词（非空时作为画面描述主体，行为护栏：原语义不变） */
@@ -55,15 +55,18 @@ const SOFT_LIMIT = 500
 
 function assemble(base: string, input: VideoPromptInput): string {
   const segs: string[] = []
-  // Seedance 官方主体定义放最前：将<图片N>中的[素材]定义为<主体N>（@图片N = content 里第 N 张 reference_image）
+  // Seedance 官方 @图片N 引用（@图片N = content 里第 N 张 reference_image，与 refBindings 同序）
   const binds = input.refBindings ?? []
-  if (binds.length && !base.includes('定义为<主体')) {
-    const defs = binds
-      .map((b, i) => `将<图片${i + 1}>中的${b.kind}[${b.name}]定义为<主体${i + 1}>`)
-      .join('；')
-    segs.push(`${defs}。以下画面中提到对应${binds.map((_, i) => `<主体${i + 1}>`).join('、')}时，保持其形象与参考素材完全一致。`)
+  if (binds.length && !base.includes('@图片')) {
+    const defs = binds.map((b, i) => {
+      const tag = `@图片${i + 1}`
+      return b.frame
+        ? `${tag}为本镜分镜画面，严格参照${tag}的构图、主体位置、场景布置与色调`
+        : `将${tag}中的${b.kind}[${b.name}]作为参考主体，全程保持外形、着装与${tag}完全一致`
+    })
+    segs.push(defs.join('；') + '。')
   }
-  // 无实体参考但有分镜图：让视频严格以分镜图画面为准（首帧模式下分镜图即首帧，用自然语言引用而非 @图片N）
+  // 兜底：frames 首帧模式下分镜图当 first_frame（非 reference_image、无法 @），用自然语言引用
   if (input.frameRef && !binds.length && !base.includes('参考所提供的分镜图')) {
     segs.push('本镜画面严格参考所提供的分镜图，保持主体外形、构图与场景布置与之一致。')
   }

@@ -1422,10 +1422,15 @@ export const useStudioStore = create<StudioState>()(
               }
               const hasVoice = !!(vctx.voiceNarration || vctx.voiceCast)
               const generateAudio = resolveGenerateAudio(params.videoAudio, purity, hasVoice)
-              // 全能参考模式：把上游角色/场景/道具实体图作 reference_image + Seedance @图片N 主体绑定
-              // （首帧模式与多模态参考互斥，故仅 omni 生效；frames 默认走分镜图首帧继承一致性）
+              // 全能参考模式：分镜图作 @图片1、角色/场景/道具实体接续 @图片2..（reference_image）；
+              // Seedance @图片N 只能寻址 reference_image，与 first_frame 互斥，故 @引用仅 omni 生效。
               const omni = videoMode === 'omni'
-              const entityRefs = omni ? (vctx.entityRefs ?? []) : []
+              const refs = omni
+                ? [
+                    ...(vctx.frameRefs ?? []).map((f) => ({ ...f, frame: true })),
+                    ...(vctx.entityRefs ?? []),
+                  ].slice(0, 9)
+                : []
               const prompt = buildVideoPrompt({
                 userPrompt,
                 shotText: vctx.shotText,
@@ -1435,9 +1440,15 @@ export const useStudioStore = create<StudioState>()(
                 ...(styleKeywords(params.videoStyle ?? vctx.style)
                   ? { style: styleKeywords(params.videoStyle ?? vctx.style) }
                   : {}),
-                ...(entityRefs.length
-                  ? { refBindings: entityRefs.map((e) => ({ kind: e.kind, name: e.name })) }
-                  : vctx.hasShotFrame
+                ...(refs.length
+                  ? {
+                      refBindings: refs.map((r) => ({
+                        kind: r.kind,
+                        name: r.name,
+                        ...('frame' in r && r.frame ? { frame: true } : {}),
+                      })),
+                    }
+                  : !omni && vctx.hasShotFrame
                     ? { frameRef: true }
                     : {}),
                 purity,
@@ -1461,9 +1472,9 @@ export const useStudioStore = create<StudioState>()(
               }
               const [firstFrame, lastFrame] = frames
 
-              // 全能参考图 = 上游实体图（@图片1..N，顺序与 refBindings 一致）+ 用户手动上传，≤9
+              // 全能参考图 = 分镜图@图片1 + 实体@图片2..（顺序与 refBindings 一致）+ 用户手动上传，≤9
               const omniRefs = omni
-                ? [...entityRefs.map((e) => e.image), ...(params.omniRefs ?? [])].slice(0, 9)
+                ? [...refs.map((r) => r.image), ...(params.omniRefs ?? [])].slice(0, 9)
                 : []
               const omniVideos = omni ? (params.omniVideos ?? []) : []
               const omniAudios = omni ? (params.omniAudios ?? []) : []
@@ -1571,6 +1582,14 @@ export const useStudioStore = create<StudioState>()(
             noSfx: params.videoNoSfx,
           }
           const hasVoice = !!(vctx.voiceNarration || vctx.voiceCast)
+          // 与 runNode video 分支同构：omni 模式下分镜图@图片1+实体接续，预填即带 @图片N
+          const omni = (params.videoMode ?? 'frames') === 'omni'
+          const refs = omni
+            ? [
+                ...(vctx.frameRefs ?? []).map((f) => ({ ...f, frame: true })),
+                ...(vctx.entityRefs ?? []),
+              ].slice(0, 9)
+            : []
           const prompt = buildVideoPrompt({
             userPrompt: node.data.prompt,
             shotText: vctx.shotText,
@@ -1579,7 +1598,17 @@ export const useStudioStore = create<StudioState>()(
             ...(styleKeywords(params.videoStyle ?? vctx.style)
               ? { style: styleKeywords(params.videoStyle ?? vctx.style) }
               : {}),
-            ...(vctx.hasShotFrame ? { frameRef: true } : {}),
+            ...(refs.length
+              ? {
+                  refBindings: refs.map((r) => ({
+                    kind: r.kind,
+                    name: r.name,
+                    ...('frame' in r && r.frame ? { frame: true } : {}),
+                  })),
+                }
+              : !omni && vctx.hasShotFrame
+                ? { frameRef: true }
+                : {}),
             purity,
             audioOn: resolveGenerateAudio(params.videoAudio, purity, hasVoice),
           })
@@ -2188,6 +2217,10 @@ export const useStudioStore = create<StudioState>()(
 
           // 分镜 shots 用于按节奏估算每镜时长（有长有短）
           const sbShots = s.nodes.find((n) => n.id === storyboardId)?.data.shots ?? []
+          // 默认走全能参考模式（分镜图作 @图片1 reference_image），让派生视频提示词带 @图片N；
+          // 仅当所选模型支持全能参考（Seedance 2.0 系列）时启用，否则回落首帧模式
+          const vModel = VIDEO_MODELS.find((m) => m.id === (opts?.videoModel ?? DEFAULT_VIDEO_MODEL))
+          const useOmni = !!vModel?.omniReference
           const ids: string[] = []
           for (const img of pending) {
             const shotIdx = img.data.params.shotIndex!
@@ -2200,6 +2233,7 @@ export const useStudioStore = create<StudioState>()(
                 title: `镜头视频 ${shotIdx + 1}`,
                 params: {
                   videoDuration: estimateShotDuration(shotText),
+                  ...(useOmni ? { videoMode: 'omni' as const } : {}),
                   ...(opts?.videoModel ? { videoModel: opts.videoModel } : {}),
                 },
               },
@@ -2713,6 +2747,8 @@ type VideoUpstreamContext = {
   style?: string
   /** 上游连着分镜图（可作首帧/参考）：无实体资产时提示词引用分镜图画面保持一致 */
   hasShotFrame?: boolean
+  /** 直连的分镜图（omni 模式作 reference_image @图片1，与实体接续编号） */
+  frameRefs?: EntityRef[]
   /** 该镜头用到的角色/场景/道具实体（沿分镜图上游收集，供 Seedance @图片N 引用） */
   entityRefs?: EntityRef[]
 }
@@ -2752,6 +2788,7 @@ function videoContextFor(
 ): VideoUpstreamContext {
   const ctx: VideoUpstreamContext = {}
   const entityRefs: EntityRef[] = []
+  const frameRefs: EntityRef[] = []
   const seenEntity = new Set<string>()
   const takeVoice = (d: PineNodeData) => {
     if (!ctx.voiceNarration && d.params.voiceNarration?.trim())
@@ -2772,7 +2809,12 @@ function videoContextFor(
     if (!src) continue
     const d = src.data
     if (d.kind === 'image' && d.preset === 'shot') {
-      if (d.versions.some((v) => isImageContent(v.content))) ctx.hasShotFrame = true
+      const shotImg = d.versions.find((v) => isImageContent(v.content))?.content
+      if (shotImg) {
+        ctx.hasShotFrame = true
+        // 直连分镜图作 omni 参考图（@图片1），实体接续编号
+        frameRefs.push({ image: shotImg, kind: '分镜画面', name: src.data.title.trim() })
+      }
       if (!ctx.shotText) {
         ctx.shotText =
           d.prompt.trim() ||
@@ -2801,6 +2843,7 @@ function videoContextFor(
   }
   // Seedance 参考图 ≤9
   if (entityRefs.length) ctx.entityRefs = entityRefs.slice(0, 9)
+  if (frameRefs.length) ctx.frameRefs = frameRefs
   return ctx
 }
 
